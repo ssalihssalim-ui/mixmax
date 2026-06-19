@@ -1,7 +1,7 @@
-// ==================== SERVICE WORKER - ALMA COFFEE SHOP ====================
-const CACHE_NAME = 'alma-coffee-v1';
-const STATIC_CACHE = 'alma-coffee-static-v1';
-const DYNAMIC_CACHE = 'alma-coffee-dynamic-v1';
+// ==================== SERVICE WORKER - MIXMAX MINIMARKET ====================
+const CACHE_NAME = 'mixmax-minimarket-v1';
+const STATIC_CACHE = 'mixmax-minimarket-static-v1';
+const DYNAMIC_CACHE = 'mixmax-minimarket-dynamic-v1';
 
 const STATIC_FILES = [
   '/',
@@ -95,4 +95,4 @@ self.addEventListener('fetch', event => {
   );
 });
 
-console.log('☕ Alma Coffee Shop - Service Worker OK');
+console.log('🛒 Mixmax Minimarket - Service Worker OK');
