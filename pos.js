@@ -1,4 +1,4 @@
-// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET AVEC RECHERCHE CORRIGÉE) ====================
+// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET AVEC RECHERCHE VOCALE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -173,11 +173,130 @@ async function loadPosPage(c) {
     renderPOS();
 }
 
-// ==================== RECHERCHE DE PRODUITS (Version corrigée - sans perte de focus) ====================
+// ==================== RECHERCHE DE PRODUITS ====================
 function posSearchProducts(query) {
     posSearchQuery = query.toLowerCase().trim();
     filterProductGrid();
 }
+
+// ==================== RECHERCHE VOCALE ====================
+function posStartVoiceSearch() {
+    // Vérifier si le navigateur supporte la reconnaissance vocale
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('❌ Votre navigateur ne supporte pas la recherche vocale.\nUtilisez Chrome, Edge ou Safari.');
+        return;
+    }
+
+    // Récupérer les éléments
+    var searchInput = document.getElementById('posSearchInput');
+    var audioBtn = document.querySelector('.btn-audio') || document.querySelector('[onclick="posStartVoiceSearch()"]');
+    
+    // Créer une instance de reconnaissance vocale
+    var recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    
+    // Configurer
+    recognition.lang = 'fr-FR';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    // Activer l'indicateur visuel
+    if (searchInput) {
+        searchInput.placeholder = '🎤 Écoute en cours...';
+        searchInput.style.borderColor = '#ef4444';
+        searchInput.style.backgroundColor = '#fef2f2';
+        searchInput.classList.add('listening');
+    }
+    if (audioBtn) {
+        audioBtn.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)';
+        audioBtn.innerHTML = '<i class="fas fa-microphone-slash"></i> Écoute...';
+    }
+
+    // Démarrer l'écoute
+    recognition.start();
+
+    // Quand un résultat est détecté
+    recognition.onresult = function(event) {
+        var transcript = '';
+        for (var i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                transcript = event.results[i][0].transcript;
+                break;
+            } else {
+                transcript = event.results[i][0].transcript;
+                if (searchInput) {
+                    searchInput.value = transcript;
+                    posSearchProducts(transcript);
+                }
+            }
+        }
+
+        if (transcript) {
+            var cleanText = transcript.trim().replace(/[.,;:!?]+$/, '');
+            if (searchInput) {
+                searchInput.value = cleanText;
+                posSearchProducts(cleanText);
+            }
+            console.log('🎤 Texte reconnu:', cleanText);
+        }
+    };
+
+    // Quand l'écoute s'arrête
+    recognition.onend = function() {
+        if (searchInput) {
+            searchInput.placeholder = '🔍 Rechercher un produit...';
+            searchInput.style.borderColor = '#e2e8f0';
+            searchInput.style.backgroundColor = '#fff';
+            searchInput.classList.remove('listening');
+        }
+        if (audioBtn) {
+            audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
+            audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
+        }
+        console.log('🎤 Écoute terminée');
+    };
+
+    // Gestion des erreurs
+    recognition.onerror = function(event) {
+        if (searchInput) {
+            searchInput.placeholder = '🔍 Rechercher un produit...';
+            searchInput.style.borderColor = '#e2e8f0';
+            searchInput.style.backgroundColor = '#fff';
+            searchInput.classList.remove('listening');
+        }
+        if (audioBtn) {
+            audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
+            audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
+        }
+        
+        if (event.error !== 'no-speech') {
+            alert('❌ Erreur: ' + event.error);
+        }
+        console.warn('🎤 Erreur:', event.error);
+    };
+}
+
+// ==================== RACCOURCI CLAVIER ====================
+document.addEventListener('keydown', function(event) {
+    // Ctrl + Shift + A ou Ctrl + Alt + A pour recherche vocale
+    if ((event.ctrlKey && event.shiftKey && (event.key === 'a' || event.key === 'A')) ||
+        (event.ctrlKey && event.altKey && (event.key === 'a' || event.key === 'A'))) {
+        event.preventDefault();
+        posStartVoiceSearch();
+    }
+    
+    // Ctrl + F pour focus sur la barre de recherche
+    if (event.ctrlKey && (event.key === 'f' || event.key === 'F')) {
+        event.preventDefault();
+        var searchInput = document.getElementById('posSearchInput');
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+        }
+    }
+});
+
+console.log('🎤 Raccourcis: Ctrl+Shift+A = Recherche vocale, Ctrl+F = Focus recherche');
 
 // ==================== FILTRER UNIQUEMENT LA GRILLE ====================
 function filterProductGrid() {
@@ -695,7 +814,7 @@ function posConfirmOptions() {
     closeModal(); renderPOS();
 }
 
-// ==================== RENDER POS AVEC RECHERCHE (sans perte de focus) ====================
+// ==================== RENDER POS AVEC RECHERCHE VOCALE ET PANIER OPTIMISÉ ====================
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
     
@@ -711,10 +830,9 @@ function renderPOS() {
     var st = posCalculateTotal(); var t = st - posDiscountMAD;
     var h = '<div class="pos-container"><div class="pos-products-panel">';
     
-    // ===== BARRE DE RECHERCHE + CATÉGORIES =====
+    // ===== BARRE DE RECHERCHE AVEC BOUTON VOCAL =====
     h += '<div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">';
     
-    // Barre de recherche
     h += '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">';
     h += '<div style="flex:1; min-width:200px; position:relative; display:flex; align-items:center; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:4px 16px; transition:all 0.3s ease;">';
     h += '<i class="fas fa-search" style="color:#94a3b8; margin-right:8px;"></i>';
@@ -725,6 +843,11 @@ function renderPOS() {
         h += '<i class="fas fa-times-circle"></i></button>';
     }
     h += '</div>';
+    
+    // ===== BOUTON RECHERCHE VOCALE =====
+    h += '<button class="btn-audio" onclick="posStartVoiceSearch()" style="background: linear-gradient(135deg, #2E7D32, #1B5E20); border: none; border-radius:50px; padding:10px 20px; cursor:pointer; display:flex; align-items:center; gap:8px; color:#fff; font-weight:600; font-size:0.85rem; transition:all 0.3s ease; white-space:nowrap;">';
+    h += '<i class="fas fa-microphone" style="font-size:1.1rem;"></i> Audio';
+    h += '</button>';
     
     // Boutons Tables et En ligne
     h += '<div style="display:flex; gap:6px; flex-wrap:wrap;">';
@@ -751,41 +874,127 @@ function renderPOS() {
     h += '</div>';
     h += '</div>';
     
-    // ===== GRILLE PRODUITS (avec un ID pour le filtrage) =====
+    // ===== GRILLE PRODUITS =====
     h += '<div class="pos-products-grid" id="posProductGrid">';
-    h += '</div></div>'; // Fermeture de la grille et du products panel
+    h += '</div></div>';
     
-    // ===== PANIER =====
-    h += '<div class="pos-cart-panel">';
+    // ===== PANIER OPTIMISÉ =====
+    h += '<div class="pos-cart-panel" style="max-height: none; height: auto; min-height: 180px;">';
     if (posStep === 1) {
-        h += '<div class="pos-cart-header"><h3><i class="fas fa-shopping-cart"></i> Panier <span class="pos-cart-badge">' + posCart.length + '</span></h3><button class="pos-clear-btn" onclick="posResetCart()"><i class="fas fa-trash-alt"></i> Vider</button></div><div class="pos-cart-items">';
-        if (posCart.length === 0) { h += '<div class="pos-cart-empty"><i class="fas fa-shopping-basket"></i><p>Panier vide</p></div>'; }
-        else {
+        // En-tête du panier
+        h += '<div class="pos-cart-header" style="padding: 6px 0 8px 0; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9;">';
+        h += '<h3 style="font-size: 0.9rem; margin: 0; display:flex; align-items:center; gap:6px;"><i class="fas fa-shopping-cart" style="font-size:0.8rem;"></i> Panier <span class="pos-cart-badge" style="font-size: 0.65rem; padding: 1px 8px; border-radius: 30px; background: #2E7D32; color: #fff;">' + posCart.length + '</span></h3>';
+        h += '<button class="pos-clear-btn" onclick="posResetCart()" style="font-size: 0.7rem; padding: 3px 10px; background: none; border: none; color: #6c757d; cursor: pointer;"><i class="fas fa-trash-alt"></i> Vider</button>';
+        h += '</div>';
+        
+        // Liste des articles (sans scroll)
+        h += '<div class="pos-cart-items" style="max-height: none; overflow: visible; margin-bottom: 6px;">';
+        if (posCart.length === 0) { 
+            h += '<div class="pos-cart-empty" style="padding: 15px; text-align:center; color:#94a3b8; font-size:0.75rem;"><i class="fas fa-shopping-basket" style="font-size:1.5rem; display:block; margin-bottom:5px;"></i>Panier vide</div>'; 
+        } else {
             for (var k = 0; k < posCart.length; k++) {
                 var it = posCart[k];
                 var opts = '';
-                if (it.interdits && it.interdits.length > 0) opts += ' <span style="color:#ef4444;font-size:0.6rem;">🚫' + escapeHtml(it.interdits.join(',')) + '</span>';
-                if (it.epice && it.epice !== 'Normal') opts += ' <span style="color:#d97706;font-size:0.6rem;">🌶️' + escapeHtml(it.epice) + '</span>';
-                if (it.sel && it.sel !== 'Normal') opts += ' <span style="color:#4f46e5;font-size:0.6rem;">🧂' + escapeHtml(it.sel) + '</span>';
-                h += '<div class="pos-cart-item"><div class="pos-cart-item-info"><span class="pos-cart-item-name">' + escapeHtml(it.nom) + opts + '</span><span class="pos-cart-item-price">' + it.prixUnitaire.toFixed(2) + ' MAD/u</span></div><div class="pos-cart-item-actions"><button class="pos-qty-btn" onclick="posUpdateQty(' + k + ',-1)"><i class="fas fa-minus"></i></button><span class="pos-qty-value">' + it.quantite + '</span><button class="pos-qty-btn" onclick="posUpdateQty(' + k + ',1)"><i class="fas fa-plus"></i></button><button class="pos-remove-btn" onclick="posRemoveItem(' + k + ')"><i class="fas fa-times"></i></button></div><span class="pos-cart-item-total">' + (it.prixUnitaire * it.quantite).toFixed(2) + ' MAD</span></div>';
+                if (it.interdits && it.interdits.length > 0) opts += ' <span style="color:#ef4444;font-size:0.5rem;">🚫' + escapeHtml(it.interdits.join(',')) + '</span>';
+                if (it.epice && it.epice !== 'Normal') opts += ' <span style="color:#d97706;font-size:0.5rem;">🌶️' + escapeHtml(it.epice) + '</span>';
+                if (it.sel && it.sel !== 'Normal') opts += ' <span style="color:#4f46e5;font-size:0.5rem;">🧂' + escapeHtml(it.sel) + '</span>';
+                
+                h += '<div class="pos-cart-item" style="display:flex; align-items:center; padding:4px 6px; border-bottom:1px solid #f1f5f9; gap:4px;">';
+                h += '<div class="pos-cart-item-info" style="flex:1; min-width:60px;">';
+                h += '<span class="pos-cart-item-name" style="font-size:0.7rem; font-weight:600; display:block; line-height:1.2;">' + escapeHtml(it.nom) + opts + '</span>';
+                h += '<span class="pos-cart-item-price" style="font-size:0.55rem; color:#6c757d;">' + it.prixUnitaire.toFixed(2) + ' MAD/u</span>';
+                h += '</div>';
+                h += '<div class="pos-cart-item-actions" style="display:flex; align-items:center; gap:3px; flex-shrink:0;">';
+                h += '<button class="pos-qty-btn" onclick="posUpdateQty(' + k + ',-1)" style="width:20px; height:20px; border-radius:50%; border:1px solid #e2e8f0; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.5rem;"><i class="fas fa-minus"></i></button>';
+                h += '<span class="pos-qty-value" style="font-size:0.7rem; min-width:18px; text-align:center; font-weight:700;">' + it.quantite + '</span>';
+                h += '<button class="pos-qty-btn" onclick="posUpdateQty(' + k + ',1)" style="width:20px; height:20px; border-radius:50%; border:1px solid #e2e8f0; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.5rem;"><i class="fas fa-plus"></i></button>';
+                h += '<button class="pos-remove-btn" onclick="posRemoveItem(' + k + ')" style="width:20px; height:20px; border-radius:50%; border:none; background:#fee2e2; cursor:pointer; color:#ef4444; display:flex; align-items:center; justify-content:center; font-size:0.5rem; margin-left:2px;"><i class="fas fa-times"></i></button>';
+                h += '</div>';
+                h += '<span class="pos-cart-item-total" style="font-size:0.7rem; font-weight:700; min-width:50px; text-align:right; flex-shrink:0;">' + (it.prixUnitaire * it.quantite).toFixed(2) + ' MAD</span>';
+                h += '</div>';
             }
         }
         h += '</div>';
-        h += '<div style="padding:10px 0;display:flex;gap:10px;align-items:center;"><label>Remise (MAD):</label><input type="number" id="posDiscountMAD" value="' + posDiscountMAD + '" min="0" step="0.01" onchange="posUpdateDiscountMAD(this.value)" style="width:100px;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"></div>';
-        h += '<div class="pos-cart-footer">';
-        if (posDiscountMAD > 0) h += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;"><span>Sous-total</span><span>' + st.toFixed(2) + '</span></div><div style="display:flex;justify-content:space-between;font-size:0.85rem;color:#ef4444;"><span>Remise</span><span>-' + posDiscountMAD.toFixed(2) + '</span></div>';
-        h += '<div class="pos-cart-total-row"><span>Total</span><span>' + t.toFixed(2) + ' MAD</span></div><button class="pos-validate-btn" onclick="posGoToStep2()" ' + (posCart.length === 0 ? 'disabled' : '') + '><i class="fas fa-check-circle"></i> Valider</button></div>';
+        
+        // Remise
+        h += '<div style="padding:3px 0 5px 0; display:flex; gap:4px; align-items:center; flex-wrap:wrap;">';
+        h += '<label style="font-size:0.65rem; font-weight:600; color:#495057;">Remise (MAD):</label>';
+        h += '<input type="number" id="posDiscountMAD" value="' + posDiscountMAD + '" min="0" step="0.01" onchange="posUpdateDiscountMAD(this.value)" style="width:70px; padding:3px 6px; border:2px solid #e2e8f0; border-radius:4px; font-size:0.7rem;">';
+        h += '</div>';
+        
+        // Footer
+        h += '<div class="pos-cart-footer" style="padding-top:6px; border-top:1px solid #e2e8f0;">';
+        if (posDiscountMAD > 0) {
+            h += '<div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#495057;"><span>Sous-total</span><span>' + st.toFixed(2) + ' MAD</span></div>';
+            h += '<div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#ef4444;"><span>Remise</span><span>-' + posDiscountMAD.toFixed(2) + ' MAD</span></div>';
+        }
+        h += '<div class="pos-cart-total-row" style="display:flex; justify-content:space-between; align-items:center; font-size:1rem; font-weight:700; margin-bottom:6px; padding-top:4px;">';
+        h += '<span>Total</span><span style="font-size:1.1rem; color:#2E7D32;">' + t.toFixed(2) + ' MAD</span>';
+        h += '</div>';
+        h += '<button class="pos-validate-btn" onclick="posGoToStep2()" ' + (posCart.length === 0 ? 'disabled' : '') + ' style="width:100%; padding:8px; border:none; border-radius:6px; background:linear-gradient(135deg,#2E7D32,#1B5E20); color:#fff; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;"><i class="fas fa-check-circle"></i> Valider</button>';
+        h += '</div>';
+        
     } else if (posStep === 2) {
+        // ===== PARTIE PAIEMENT =====
         var canCredit = posCurrentClient && posCurrentClient.id;
-        h += '<div class="pos-cart-header"><h3><i class="fas fa-credit-card"></i> Paiement</h3><button class="pos-back-btn" onclick="posGoToStep1()"><i class="fas fa-arrow-left"></i> Retour</button></div><div class="pos-payment-form">';
-        h += '<div class="pos-payment-section"><label>Client</label><div style="position:relative;"><input type="text" id="posClientSearchInput" placeholder="🔍 Cliquez et tapez pour rechercher..." onkeyup="posSearchClient(this.value)" onfocus="if(this.value)posSearchClient(this.value)" autocomplete="off" value="' + (posCurrentClient ? escapeHtml(posCurrentClient.name) : '') + '" style="width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:12px;"><div id="posClientDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:2px solid #e2e8f0;border-radius:0 0 12px 12px;max-height:200px;overflow-y:auto;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,0.15);"></div></div></div>';
-        h += '<div class="pos-or-divider">— OU —</div>';
-        h += '<div class="pos-payment-section"><label>Table</label><input type="text" id="posTableNum" value="' + escapeHtml(posCurrentTable) + '" onchange="posSetTable(this.value)" style="width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:12px;"></div>';
-        h += '<div class="pos-payment-section"><div class="pos-summary-box"><div class="pos-summary-row"><span>Articles</span><span>' + posCart.length + '</span></div>'; if (posDiscountMAD > 0) h += '<div class="pos-summary-row"><span>Remise</span><span style="color:#ef4444;">-' + posDiscountMAD.toFixed(2) + '</span></div>'; h += '<div class="pos-summary-total"><span>Total</span><span>' + t.toFixed(2) + ' MAD</span></div></div></div>';
-        h += '<div class="pos-payment-section"><label>Vendeur</label><input type="text" id="posVendeur" value="' + (window.currentUserData ? escapeHtml(window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom) : '') + '" style="width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:12px;"></div>';
-        h += '<div class="pos-payment-section"><label>Paiement</label><div class="pos-payment-methods"><button class="pos-payment-btn ' + (posPaymentMethod === 'espece' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'espece\')"><i class="fas fa-money-bill-wave"></i> Espèces</button><button class="pos-payment-btn ' + (posPaymentMethod === 'credit' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'credit\')" id="posCreditBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"') + '><i class="fas fa-credit-card"></i> Crédit</button><button class="pos-payment-btn ' + (posPaymentMethod === 'partiel' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'partiel\')" id="posPartielBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"') + '><i class="fas fa-hand-holding-usd"></i> Partiel</button></div></div>';
-        if (posPaymentMethod === 'espece' || posPaymentMethod === 'partiel') h += '<div class="pos-payment-section"><label>Montant donné</label><input type="number" id="posAmountGiven" placeholder="0.00" value="' + (posAmountGiven > 0 ? posAmountGiven : '') + '" onkeyup="posCalculateChange()"><div id="posChangeDisplay"></div></div>';
-        h += '<button class="pos-finalize-btn" onclick="posFinalizeSale()"><i class="fas fa-check-circle"></i> Finaliser</button></div>';
+        h += '<div class="pos-cart-header" style="padding: 6px 0 8px 0; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9;">';
+        h += '<h3 style="font-size: 0.9rem; margin: 0; display:flex; align-items:center; gap:6px;"><i class="fas fa-credit-card" style="font-size:0.8rem;"></i> Paiement</h3>';
+        h += '<button class="pos-back-btn" onclick="posGoToStep1()" style="font-size: 0.7rem; padding: 3px 10px; background: none; border: none; color: #6c757d; cursor: pointer;"><i class="fas fa-arrow-left"></i> Retour</button>';
+        h += '</div>';
+        
+        h += '<div class="pos-payment-form" style="font-size: 0.85rem;">';
+        
+        // Client
+        h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
+        h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Client</label>';
+        h += '<div style="position:relative;">';
+        h += '<input type="text" id="posClientSearchInput" placeholder="🔍 Rechercher..." onkeyup="posSearchClient(this.value)" onfocus="if(this.value)posSearchClient(this.value)" autocomplete="off" value="' + (posCurrentClient ? escapeHtml(posCurrentClient.name) : '') + '" style="width:100%; padding:6px 10px; border:2px solid #e2e8f0; border-radius:6px; font-size:0.8rem;">';
+        h += '<div id="posClientDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:2px solid #e2e8f0;border-radius:0 0 6px 6px;max-height:150px;overflow-y:auto;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,0.15);"></div>';
+        h += '</div></div>';
+        
+        h += '<div class="pos-or-divider" style="margin:4px 0; font-size:0.65rem; color:#94a3b8; text-align:center;">— OU —</div>';
+        
+        // Table
+        h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
+        h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Table</label>';
+        h += '<input type="text" id="posTableNum" value="' + escapeHtml(posCurrentTable) + '" onchange="posSetTable(this.value)" style="width:100%; padding:6px 10px; border:2px solid #e2e8f0; border-radius:6px; font-size:0.8rem;">';
+        h += '</div>';
+        
+        // Résumé
+        h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
+        h += '<div class="pos-summary-box" style="padding: 8px 12px; border-radius:6px; background:#f8fafc;">';
+        h += '<div class="pos-summary-row" style="display:flex; justify-content:space-between; font-size:0.7rem; margin-bottom:2px;"><span>Articles</span><span>' + posCart.length + '</span></div>';
+        if (posDiscountMAD > 0) h += '<div class="pos-summary-row" style="display:flex; justify-content:space-between; font-size:0.7rem; margin-bottom:2px;"><span>Remise</span><span style="color:#ef4444;">-' + posDiscountMAD.toFixed(2) + '</span></div>';
+        h += '<div class="pos-summary-total" style="display:flex; justify-content:space-between; font-size:1rem; font-weight:700;"><span>Total</span><span style="font-size:1.1rem; color:#2E7D32;">' + t.toFixed(2) + ' MAD</span></div>';
+        h += '</div></div>';
+        
+        // Vendeur
+        h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
+        h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Vendeur</label>';
+        h += '<input type="text" id="posVendeur" value="' + (window.currentUserData ? escapeHtml(window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom) : '') + '" style="width:100%; padding:6px 10px; border:2px solid #e2e8f0; border-radius:6px; font-size:0.8rem;">';
+        h += '</div>';
+        
+        // Méthodes de paiement
+        h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
+        h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Paiement</label>';
+        h += '<div class="pos-payment-methods" style="display:flex; gap:4px; flex-wrap:wrap;">';
+        h += '<button class="pos-payment-btn ' + (posPaymentMethod === 'espece' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'espece\')" style="padding:4px 8px; font-size:0.65rem; border-radius:4px; flex:1; min-width:50px; border:2px solid #e2e8f0; background:#fff; cursor:pointer;"><i class="fas fa-money-bill-wave"></i> Espèces</button>';
+        h += '<button class="pos-payment-btn ' + (posPaymentMethod === 'credit' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'credit\')" id="posCreditBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"') + ' style="padding:4px 8px; font-size:0.65rem; border-radius:4px; flex:1; min-width:50px; border:2px solid #e2e8f0; background:#fff; cursor:pointer;"><i class="fas fa-credit-card"></i> Crédit</button>';
+        h += '<button class="pos-payment-btn ' + (posPaymentMethod === 'partiel' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'partiel\')" id="posPartielBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"') + ' style="padding:4px 8px; font-size:0.65rem; border-radius:4px; flex:1; min-width:50px; border:2px solid #e2e8f0; background:#fff; cursor:pointer;"><i class="fas fa-hand-holding-usd"></i> Partiel</button>';
+        h += '</div></div>';
+        
+        // Montant donné
+        if (posPaymentMethod === 'espece' || posPaymentMethod === 'partiel') {
+            h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
+            h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Montant donné</label>';
+            h += '<input type="number" id="posAmountGiven" placeholder="0.00" value="' + (posAmountGiven > 0 ? posAmountGiven : '') + '" onkeyup="posCalculateChange()" style="width:100%; padding:6px 10px; border:2px solid #e2e8f0; border-radius:6px; font-size:0.9rem;">';
+            h += '<div id="posChangeDisplay"></div>';
+            h += '</div>';
+        }
+        
+        // Bouton finaliser
+        h += '<button class="pos-finalize-btn" onclick="posFinalizeSale()" style="width:100%; padding:8px; border:none; border-radius:6px; background:linear-gradient(135deg,#2E7D32,#1B5E20); color:#fff; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; margin-top:4px;"><i class="fas fa-check-circle"></i> Finaliser</button>';
+        h += '</div>';
     }
     h += '</div></div>';
     c.innerHTML = h;
@@ -858,7 +1067,7 @@ function posCalculateChange() {
     posAmountGiven = parseFloat(ai.value) || 0; 
     var c = posAmountGiven - t; 
     if (posAmountGiven > 0) { 
-        cd.innerHTML = c >= 0 ? '<div class="pos-change-positive"><span>Rendu</span><span>' + c.toFixed(2) + ' MAD</span></div>' : '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c).toFixed(2) + ' MAD</span></div>'; 
+        cd.innerHTML = c >= 0 ? '<div class="pos-change-positive" style="background:#dcfce7; color:#166534; padding:6px 10px; border-radius:4px; margin-top:4px; font-weight:700; display:flex; justify-content:space-between; align-items:center; font-size:0.85rem;"><span>Rendu</span><span>' + c.toFixed(2) + ' MAD</span></div>' : '<div class="pos-change-negative" style="background:#fee2e2; color:#991b1b; padding:6px 10px; border-radius:4px; margin-top:4px; font-weight:700; display:flex; justify-content:space-between; align-items:center; font-size:0.85rem;"><span>Manquant</span><span>' + Math.abs(c).toFixed(2) + ' MAD</span></div>'; 
     } else { 
         cd.innerHTML = ''; 
     } 
@@ -1007,4 +1216,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS prêt (avec recherche corrigée)');
+console.log('🛒 Mixmax Minimarket - POS JS prêt (avec recherche vocale)');
