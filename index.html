@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#6F4E37">
-    <meta name="description" content="Système de gestion pour café et restaurant - Alma Coffee Shop">
-    <title>Alma Coffee Shop</title>
+    <meta name="theme-color" content="#2E7D32">
+    <meta name="description" content="Système de gestion pour minimarket - Mixmax Minimarket">
+    <title>Mixmax Minimarket</title>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="apple-touch-icon" href="logo.png">
@@ -23,9 +23,9 @@
     <div id="authPage" class="login-wrapper">
         <div class="login-container" id="loginContainer">
             <div class="login-brand">
-                <div class="brand-icon"><img src="logo.png" alt="Alma Coffee Shop" class="brand-logo"></div>
-                <h1><span>Alma</span> Coffee Shop</h1>
-                <p style="color:rgba(255,255,255,0.8); font-size:0.9rem;">Gestion complète • Café • Pâtisseries</p>
+                <div class="brand-icon"><img src="logo.png" alt="Mixmax Minimarket" class="brand-logo"></div>
+                <h1><span>Mixmax</span> Minimarket</h1>
+                <p style="color:rgba(255,255,255,0.8); font-size:0.9rem;">Gestion complète • Minimarket</p>
             </div>
             <div class="login-form">
                 <h2>🔐 Connexion</h2>
@@ -39,8 +39,8 @@
         </div>
         <div class="register-container hidden" id="registerContainer">
             <div class="register-brand">
-                <div class="brand-icon"><img src="logo.png" alt="Alma Coffee Shop" class="brand-logo"></div>
-                <h1><span>Alma</span> Coffee Shop</h1>
+                <div class="brand-icon"><img src="logo.png" alt="Mixmax Minimarket" class="brand-logo"></div>
+                <h1><span>Mixmax</span> Minimarket</h1>
                 <p style="color:rgba(255,255,255,0.8);">Inscription rapide</p>
             </div>
             <div class="register-form">
@@ -73,8 +73,8 @@
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo"><img src="logo.png" alt="Logo" class="sidebar-logo-img"></div>
-                <h2>Alma <span>Coffee</span></h2>
-                <div class="sidebar-subtitle">GESTION</div>
+                <h2>Mixmax <span>Market</span></h2>
+                <div class="sidebar-subtitle">MINIMARKET</div>
             </div>
             <div class="sidebar-nav">
                 <ul id="navMenu"></ul>
@@ -84,12 +84,12 @@
             </div>
             <div class="sidebar-footer">
                 <div class="user-info" id="sidebarUserInfo"><i class="fas fa-user-circle"></i> <span>Chargement...</span></div>
-                <div id="sidebarRole" style="font-size:0.7rem; color:#A67C52; margin-top:5px;"></div>
+                <div id="sidebarRole" style="font-size:0.7rem; color:#66BB6A; margin-top:5px;"></div>
             </div>
         </div>
         <div class="main-content">
             <div class="page-header">
-                <div class="header-title"><i class="fas fa-coffee"></i><h2 id="pageTitle">Dashboard</h2></div>
+                <div class="header-title"><i class="fas fa-store"></i><h2 id="pageTitle">Dashboard</h2></div>
             </div>
             <div id="dynamicContent"></div>
         </div>
@@ -102,12 +102,12 @@
         <div class="sidebar" id="clientSidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo"><img src="logo.png" alt="Logo" class="sidebar-logo-img"></div>
-                <h2>Alma <span>Coffee</span></h2>
+                <h2>Mixmax <span>Market</span></h2>
                 <div class="sidebar-subtitle">BIENVENUE</div>
             </div>
             <div class="sidebar-nav">
                 <ul>
-                    <li class="nav-item active" onclick="clientNavigate('commander')"><i class="fas fa-coffee"></i> Commander</li>
+                    <li class="nav-item active" onclick="clientNavigate('commander')"><i class="fas fa-shopping-bag"></i> Commander</li>
                     <li class="nav-item" onclick="clientNavigate('historique')"><i class="fas fa-history"></i> Historique</li>
                     <li class="nav-item" onclick="clientNavigate('parametres')"><i class="fas fa-user-cog"></i> Paramètres</li>
                     <li class="nav-item logout-item" onclick="handleLogout()"><i class="fas fa-sign-out-alt"></i> Déconnexion</li>
@@ -119,7 +119,7 @@
         </div>
         <div class="main-content">
             <div class="page-header">
-                <div class="header-title"><i class="fas fa-coffee"></i><h2 id="clientPageTitle">Commander</h2></div>
+                <div class="header-title"><i class="fas fa-shopping-bag"></i><h2 id="clientPageTitle">Commander</h2></div>
             </div>
             <div id="clientDynamicContent"></div>
         </div>
