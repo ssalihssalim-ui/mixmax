@@ -1,4 +1,4 @@
-// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET AVEC RECHERCHE VOCALE CORRIGÉE) ====================
+// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET AVEC RECHERCHE VOCALE INTELLIGENTE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -179,7 +179,7 @@ function posSearchProducts(query) {
     filterProductGrid();
 }
 
-// ==================== RECHERCHE VOCALE CORRIGÉE ====================
+// ==================== RECHERCHE VOCALE INTELLIGENTE ====================
 function posStartVoiceSearch() {
     // Vérifier le support
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -213,7 +213,7 @@ function posStartVoiceSearch() {
     recognition.lang = 'fr-FR';
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
+    recognition.maxAlternatives = 3;
 
     if (searchInput) {
         searchInput.placeholder = '🎤 Écoute en cours...';
@@ -247,9 +247,14 @@ function posStartVoiceSearch() {
 
     recognition.onresult = function(event) {
         var transcript = '';
+        var alternatives = [];
+        
         for (var i = event.resultIndex; i < event.results.length; i++) {
             if (event.results[i].isFinal) {
                 transcript = event.results[i][0].transcript;
+                for (var alt = 0; alt < event.results[i].length; alt++) {
+                    alternatives.push(event.results[i][alt].transcript);
+                }
                 break;
             } else {
                 transcript = event.results[i][0].transcript;
@@ -262,11 +267,72 @@ function posStartVoiceSearch() {
 
         if (transcript) {
             var cleanText = transcript.trim().replace(/[.,;:!?]+$/, '');
-            if (searchInput) {
-                searchInput.value = cleanText;
-                posSearchProducts(cleanText);
+            
+            // Trouver le produit correspondant
+            var bestMatch = null;
+            var bestScore = 0;
+            var cleanLower = cleanText.toLowerCase();
+            
+            for (var p = 0; p < posProductsList.length; p++) {
+                var product = posProductsList[p];
+                var productName = product.nom.toLowerCase();
+                var score = 0;
+                
+                // Score basé sur la correspondance exacte
+                if (productName === cleanLower) score = 100;
+                // Score basé sur la correspondance partielle
+                else if (productName.indexOf(cleanLower) !== -1) score = 80;
+                else if (cleanLower.indexOf(productName) !== -1) score = 70;
+                // Score basé sur chaque mot
+                else {
+                    var words = cleanLower.split(/\s+/);
+                    for (var w = 0; w < words.length; w++) {
+                        if (words[w].length > 1 && productName.indexOf(words[w]) !== -1) {
+                            score += 30;
+                        }
+                    }
+                }
+                
+                // Vérifier les alternatives
+                for (var alt = 0; alt < alternatives.length; alt++) {
+                    var altLower = alternatives[alt].toLowerCase();
+                    if (productName === altLower) score = 95;
+                    else if (productName.indexOf(altLower) !== -1) score = 75;
+                }
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = product;
+                }
             }
-            console.log('🎤 Texte reconnu:', cleanText);
+            
+            // Si un produit est trouvé avec un bon score
+            if (bestMatch && bestScore >= 30) {
+                if (searchInput) {
+                    searchInput.value = bestMatch.nom;
+                    posSearchProducts(bestMatch.nom);
+                }
+                console.log('🎤 Produit trouvé:', bestMatch.nom, '(score:', bestScore + ')');
+            } else {
+                // Aucun produit correspondant
+                if (searchInput) {
+                    searchInput.value = cleanText;
+                    posSearchProducts(cleanText);
+                }
+                console.log('🎤 Aucun produit trouvé pour:', cleanText);
+            }
+            
+            // Restaurer
+            if (searchInput) {
+                searchInput.placeholder = '🔍 Rechercher un produit...';
+                searchInput.style.borderColor = '#e2e8f0';
+                searchInput.style.backgroundColor = '#fff';
+                searchInput.classList.remove('listening');
+            }
+            if (audioBtn) {
+                audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
+                audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
+            }
         }
     };
 
@@ -1244,4 +1310,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS prêt (avec recherche vocale corrigée)');
+console.log('🛒 Mixmax Minimarket - POS JS prêt (avec recherche vocale intelligente)');
