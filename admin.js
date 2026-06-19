@@ -1,4 +1,4 @@
-// ==================== ADMIN.JS - ALMA COFFEE SHOP (COMPLET) ====================
+// ==================== ADMIN.JS - MIXMAX MINIMARKET (COMPLET) ====================
 // ==================== VARIABLES GLOBALES ====================
 var editingId = null;
 var currentCollection = '';
@@ -61,7 +61,7 @@ function toDate(val) {
 // ==================== DASHBOARD ====================
 function loadDashboardPage(c) {
     c.innerHTML = '<div class="stats-grid">' +
-        '<div class="stat-card"><div class="stat-icon"><i class="fas fa-coffee"></i></div><div class="stat-info"><span class="stat-label">Produits</span><span class="stat-value" id="productsCount">0</span></div></div>' +
+        '<div class="stat-card"><div class="stat-icon"><i class="fas fa-box"></i></div><div class="stat-info"><span class="stat-label">Produits</span><span class="stat-value" id="productsCount">0</span></div></div>' +
         '<div class="stat-card"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-info"><span class="stat-label">Clients</span><span class="stat-value" id="clientsCount">0</span></div></div>' +
         '<div class="stat-card"><div class="stat-icon"><i class="fas fa-layer-group"></i></div><div class="stat-info"><span class="stat-label">Catégories</span><span class="stat-value" id="categoriesCount">0</span></div></div>' +
         '<div class="stat-card"><div class="stat-icon"><i class="fas fa-shopping-cart"></i></div><div class="stat-info"><span class="stat-label">Ventes</span><span class="stat-value" id="ventesCount">0</span></div></div>' +
@@ -85,7 +85,7 @@ function loadDashboardStats() {
 function loadPendingRegistrations() {
     var d = document.getElementById('pendingRegistrations');
     if (!d) return;
-    d.innerHTML = '<div class="table-container"><table class="data-table" id="pendingTable"><thead></table>' +
+    d.innerHTML = '<div class="table-container"><table class="data-table" id="pendingTable"><thead>' +
         makeSortableHeader('pending', 'prenom', 'Utilisateur', 'renderPendingTable') +
         makeSortableHeader('pending', 'email', 'Email', 'renderPendingTable') +
         makeSortableHeader('pending', 'role', 'Rôle', 'renderPendingTable') +
@@ -123,7 +123,7 @@ function renderPendingTable() {
     var data = applySort('pending', pendingUsersData.slice(), 'createdAt');
     tb.innerHTML = '';
     if (data.length === 0) {
-        tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#16a34a;">Aucune inscription en attente</td></tr>';
+        tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#2E7D32;">Aucune inscription en attente</td></tr>';
         return;
     }
     data.forEach(function(x) {
@@ -308,7 +308,7 @@ function sortTableData(tableName, field, loadFn) {
 
 function getSortIcon(tableName, field) {
     if (!sortOrders[tableName] || !sortOrders[tableName][field]) return '<i class="fas fa-sort" style="font-size:0.5rem;margin-left:2px;opacity:0.3;cursor:pointer;"></i>';
-    return sortOrders[tableName][field] === 'asc' ? '<i class="fas fa-sort-up" style="font-size:0.55rem;margin-left:2px;color:#A67C52;"></i>' : '<i class="fas fa-sort-down" style="font-size:0.55rem;margin-left:2px;color:#A67C52;"></i>';
+    return sortOrders[tableName][field] === 'asc' ? '<i class="fas fa-sort-up" style="font-size:0.55rem;margin-left:2px;color:#2E7D32;"></i>' : '<i class="fas fa-sort-down" style="font-size:0.55rem;margin-left:2px;color:#2E7D32;"></i>';
 }
 
 function applySort(tableName, data, defaultField) {
@@ -473,8 +473,8 @@ async function renderCategoriesTable() {
         var d = pageData[i];
         var pc = 0;
         try { var ps = await db.collection('products').where('categorie', '==', d.nom).get(); pc = ps.size; } catch (e) { }
-        var im = d.imageBase64 ? '<img src="' + d.imageBase64 + '" style="width:35px;height:35px;object-fit:cover;border-radius:6px;">' : '<i class="fas fa-folder fa-2x" style="color:#A67C52;"></i>';
-        var pcol = (d.profit || 0) >= 0 ? '#16a34a' : '#dc2626';
+        var im = d.imageBase64 ? '<img src="' + d.imageBase64 + '" style="width:35px;height:35px;object-fit:cover;border-radius:6px;">' : '<i class="fas fa-folder fa-2x" style="color:#2E7D32;"></i>';
+        var pcol = (d.profit || 0) >= 0 ? '#2E7D32' : '#dc2626';
         var recetteBadge = d.recette ? '<span class="status-success">✅ Oui</span>' : '<span class="status-warning">❌ Non</span>';
         tb.innerHTML += '<tr>' +
             '<td>' + im + '</td>' +
@@ -571,7 +571,7 @@ function updateIngredientUnit(selectEl) {
 }
 
 function loadProductsPage(c) {
-    c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-coffee"></i> Produits</h3><div style="display:flex;gap:10px;flex-wrap:wrap;"><select id="categoryFilter" onchange="filterProducts()"><option value="">Toutes catégories</option></select><button class="btn-add" onclick="openProductForm()"><i class="fas fa-plus"></i> Nouveau</button></div></div>' +
+    c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-box"></i> Produits</h3><div style="display:flex;gap:10px;flex-wrap:wrap;"><select id="categoryFilter" onchange="filterProducts()"><option value="">Toutes catégories</option></select><button class="btn-add" onclick="openProductForm()"><i class="fas fa-plus"></i> Nouveau</button></div></div>' +
         '<div class="table-container"><table class="data-table" id="productsTable" style="font-size:0.7rem;"><thead><tr><th>Img</th>' +
         makeSortableHeader('products', 'nom', 'Nom', 'loadProducts') +
         makeSortableHeader('products', 'categorie', 'Catégorie', 'loadProducts') +
@@ -639,10 +639,10 @@ function renderProductsTable() {
     }
     for (var i = 0; i < pageData.length; i++) {
         var d = pageData[i];
-        var im = d.imageBase64 ? '<img src="' + d.imageBase64 + '" style="width:30px;height:30px;object-fit:cover;border-radius:4px;">' : '<i class="fas fa-coffee" style="color:#94a3b8;"></i>';
+        var im = d.imageBase64 ? '<img src="' + d.imageBase64 + '" style="width:30px;height:30px;object-fit:cover;border-radius:4px;">' : '<i class="fas fa-box" style="color:#94a3b8;"></i>';
         var disp = d.disponible !== false ? '<span class="status-success">Oui</span>' : '<span class="status-danger">Non</span>';
         var profitVal = (d.profit !== undefined && !isNaN(d.profit)) ? d.profit : 0;
-        var pc = profitVal >= 0 ? '#16a34a' : '#dc2626';
+        var pc = profitVal >= 0 ? '#2E7D32' : '#dc2626';
         tb.innerHTML += '<tr>' +
             '<td>' + im + '</td>' +
             '<td><strong>' + escapeHtml(d.nom || '') + '</strong></td>' +
@@ -833,9 +833,9 @@ function renderClientsTable() {
         row += '<td>' + escapeHtml(d.whatsapp || '-') + '</td>';
         row += '<td>' + escapeHtml(d.facebook || '-') + '</td>';
         row += '<td>' + escapeHtml(d.instagram || '-') + '</td>';
-        row += '<td style="color:#16a34a;font-weight:600;">' + (d.ca || 0).toFixed(2) + '</td>';
-        row += '<td style="color:#16a34a;">' + (d.profit || 0).toFixed(2) + '</td>';
-        row += '<td style="color:#A67C52;font-weight:600;">' + (d.pointsFidelite || 0) + '</td>';
+        row += '<td style="color:#2E7D32;font-weight:600;">' + (d.ca || 0).toFixed(2) + '</td>';
+        row += '<td style="color:#2E7D32;">' + (d.profit || 0).toFixed(2) + '</td>';
+        row += '<td style="color:#2E7D32;font-weight:600;">' + (d.pointsFidelite || 0) + '</td>';
         row += '<td><small>' + (d.allergies ? d.allergies.join(', ') : '-') + '</small></td>';
         row += '<td><small>' + (d.aime ? d.aime.join(', ') : '-') + '</small></td>';
         row += '<td><small>' + (d.deteste ? d.deteste.join(', ') : '-') + '</small></td>';
@@ -1101,13 +1101,13 @@ function renderCommandesTable() {
         var arts = d.items ? d.items.map(function(it) { return '<strong>' + it.quantite + 'x</strong> ' + escapeHtml(it.nom); }).join('<br>') : '';
         var opts = d.items ? d.items.map(function(it) {
             var o = [];
-            if (it.sauces && it.sauces.length) o.push('<span style="color:#A67C52;">🥫' + escapeHtml(it.sauces.join(',')) + '</span>');
+            if (it.sauces && it.sauces.length) o.push('<span style="color:#2E7D32;">🥫' + escapeHtml(it.sauces.join(',')) + '</span>');
             if (it.interdits && it.interdits.length) o.push('<span style="color:#ef4444;">🚫' + escapeHtml(it.interdits.join(',')) + '</span>');
             if (it.epice && it.epice !== 'Normal') o.push('<span style="color:#d97706;">🌶️' + escapeHtml(it.epice) + '</span>');
             if (it.sel && it.sel !== 'Normal') o.push('<span style="color:#4f46e5;">🧂' + escapeHtml(it.sel) + '</span>');
             return o.length ? o.join(' | ') : '-';
         }).join('<br>') : '-';
-        var sc = d.statut === 'payé' ? '#4f46e5' : (d.statut === 'valide' ? '#16a34a' : '#d97706');
+        var sc = d.statut === 'payé' ? '#4f46e5' : (d.statut === 'valide' ? '#2E7D32' : '#d97706');
         var sl = d.statut === 'payé' ? '💵 Payée' : (d.statut === 'valide' ? '✅ Validée' : '⏳ En attente');
         var act = '';
         if (d.statut === 'en_attente') {
@@ -1233,7 +1233,7 @@ function renderVentesTable() {
         var arts = d.items ? d.items.map(function(it) { return '<strong>' + it.quantite + 'x</strong> ' + escapeHtml(it.nom); }).join('<br>') : '-';
         var opts = d.items ? d.items.map(function(it) {
             var o = [];
-            if (it.sauces && it.sauces.length) o.push('<span style="color:#A67C52;">🥫' + escapeHtml(it.sauces.join(',')) + '</span>');
+            if (it.sauces && it.sauces.length) o.push('<span style="color:#2E7D32;">🥫' + escapeHtml(it.sauces.join(',')) + '</span>');
             if (it.interdits && it.interdits.length) o.push('<span style="color:#ef4444;">🚫' + escapeHtml(it.interdits.join(',')) + '</span>');
             if (it.epice && it.epice !== 'Normal') o.push('<span style="color:#d97706;">🌶️' + escapeHtml(it.epice) + '</span>');
             if (it.sel && it.sel !== 'Normal') o.push('<span style="color:#4f46e5;">🧂' + escapeHtml(it.sel) + '</span>');
@@ -1243,7 +1243,7 @@ function renderVentesTable() {
         var amountGiven = d.amountGiven || 0;
         var change = d.change || 0;
         var statutLabel = d.statutPaiement || (d.paid ? 'payé' : 'impayé');
-        var statutColor = statutLabel === 'payé' ? '#16a34a' : (statutLabel === 'crédit' ? '#A67C52' : (statutLabel === 'partiel' ? '#d97706' : '#ef4444'));
+        var statutColor = statutLabel === 'payé' ? '#2E7D32' : (statutLabel === 'crédit' ? '#2E7D32' : (statutLabel === 'partiel' ? '#d97706' : '#ef4444'));
         var actions = '<button class="btn-edit" onclick="printFacture(\'' + d.id + '\')"><i class="fas fa-print"></i></button> ';
         if (!d.paid) actions += '<button class="btn-add" style="padding:4px 6px;font-size:0.65rem;" onclick="payerVente(\'' + d.id + '\')"><i class="fas fa-check"></i> Payer</button> ';
         if (isAdmin) actions += '<button class="btn-edit" onclick="editVente(\'' + d.id + '\')"><i class="fas fa-edit"></i></button> <button class="btn-delete" onclick="deleteVente(\'' + d.id + '\')"><i class="fas fa-trash"></i></button>';
@@ -1253,7 +1253,7 @@ function renderVentesTable() {
             '<td>' + cl + '</td>' +
             '<td>' + arts + '</td>' +
             '<td>' + opts + '</td>' +
-            (isAdmin ? '<td>' + d.achat.toFixed(2) + '</td><td style="color:#16a34a;">' + d.profit.toFixed(2) + '</td>' : '') +
+            (isAdmin ? '<td>' + d.achat.toFixed(2) + '</td><td style="color:#2E7D32;">' + d.profit.toFixed(2) + '</td>' : '') +
             '<td><strong>' + (d.total || 0).toFixed(2) + '</strong></td>' +
             '<td>' + (d.discountMAD || 0).toFixed(2) + '</td>' +
             '<td>' + amountGiven.toFixed(2) + '</td>' +
@@ -1265,7 +1265,7 @@ function renderVentesTable() {
             '</tr>';
     });
     h += '</tbody>' +
-        '</div><div style="margin-top:15px;padding:15px;background:#f0fdf4;border-radius:12px;text-align:center;"><strong>Total: ' + tv.toFixed(2) + ' MAD</strong></div>';
+        '</div><div style="margin-top:15px;padding:15px;background:#E8F5E9;border-radius:12px;text-align:center;"><strong>Total: ' + tv.toFixed(2) + ' MAD</strong></div>';
     cont.innerHTML = h;
     document.getElementById('ventesPagination').innerHTML = getPaginationHTML('ventes', data.length);
 }
@@ -1328,8 +1328,8 @@ function imprimerFacture(d, id) {
         });
     }
     var w = window.open('', '_blank', 'width=400,height=600');
-    w.document.write('<html><head><title>Facture Alma Coffee Shop</title><style>body{font-family:Arial;padding:20px;}h2{text-align:center;}table{width:100%;border-collapse:collapse;}th,td{padding:5px;border-bottom:1px solid #ddd;}.total{font-size:16px;font-weight:bold;text-align:right;}</style></head><body>' +
-        '<h2>☕ Alma Coffee Shop</h2><p>Facture: ' + (d.factureNum || id.substring(0, 8)) + '</p><p>Date: ' + (d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleString('fr-FR') : '') + '</p>' +
+    w.document.write('<html><head><title>Facture Mixmax Minimarket</title><style>body{font-family:Arial;padding:20px;}h2{text-align:center;}table{width:100%;border-collapse:collapse;}th,td{padding:5px;border-bottom:1px solid #ddd;}.total{font-size:16px;font-weight:bold;text-align:right;}</style></head><body>' +
+        '<h2>🛒 Mixmax Minimarket</h2><p>Facture: ' + (d.factureNum || id.substring(0, 8)) + '</p><p>Date: ' + (d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleString('fr-FR') : '') + '</p>' +
         '<p>Client: ' + (d.clientName || d.table || '') + '</p><p>Vendeur: ' + (d.vendeur || '-') + '</p>' +
         '<table><th>Article</th><th>Qté</th><th>Prix</th><th>Total</th></tr>' + ih +
         (d.discountMAD > 0 ? '<p>Remise: ' + d.discountMAD.toFixed(2) + ' MAD</p>' : '') +
@@ -1472,7 +1472,7 @@ function loadOptionsPage(c) {
             <div class="stat-info"><span>En attente</span><span class="stat-value" id="pendingCount">0</span></div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon" style="background:#dcfce7;"><i class="fas fa-check-circle" style="color:#16a34a;"></i></div>
+            <div class="stat-icon" style="background:#E8F5E9;"><i class="fas fa-check-circle" style="color:#2E7D32;"></i></div>
             <div class="stat-info"><span>Autorisés</span><span class="stat-value" id="authorizedCount">0</span></div>
         </div>
         <div class="stat-card">
@@ -1706,4 +1706,4 @@ async function saveFideliteSettings() {
     alert('✅ Paramètres de fidélité enregistrés');
 }
 
-console.log('☕ Alma Coffee Shop - Admin JS complet');
+console.log('🛒 Mixmax Minimarket - Admin JS complet');
