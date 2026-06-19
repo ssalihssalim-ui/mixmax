@@ -1,12 +1,12 @@
 {
-  "name": "Alma Coffee Shop",
-  "short_name": "Alma Coffee",
-  "description": "Système de gestion pour café et restaurant",
+  "name": "Mixmax Minimarket",
+  "short_name": "Mixmax Market",
+  "description": "Système de gestion pour minimarket",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
-  "theme_color": "#6F4E37",
-  "background_color": "#FFF8F0",
+  "theme_color": "#2E7D32",
+  "background_color": "#F1F8E9",
   "orientation": "portrait",
   "icons": [
     {
