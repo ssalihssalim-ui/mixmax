@@ -179,7 +179,7 @@ function posSearchProducts(query) {
     filterProductGrid();
 }
 
-// ==================== RECHERCHE VOCALE INTELLIGENTE ====================
+// ==================== RECHERCHE VOCALE INTELLIGENTE (Correspondance avec les produits) ====================
 function posStartVoiceSearch() {
     // Vérifier le support
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -209,11 +209,22 @@ function posStartVoiceSearch() {
         return;
     }
 
+    // Vérifier qu'il y a des produits
+    if (posProductsList.length === 0) {
+        alert('❌ Aucun produit disponible dans la liste.');
+        return;
+    }
+
+    // Créer la liste des noms de produits pour la comparaison
+    var productNames = posProductsList.map(function(p) { 
+        return p.nom.toLowerCase().trim(); 
+    });
+
     var recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
     recognition.lang = 'fr-FR';
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 3;
+    recognition.maxAlternatives = 5;
 
     if (searchInput) {
         searchInput.placeholder = '🎤 Écoute en cours...';
@@ -247,13 +258,15 @@ function posStartVoiceSearch() {
 
     recognition.onresult = function(event) {
         var transcript = '';
-        var alternatives = [];
+        var allAlternatives = [];
         
+        // Récupérer tous les résultats
         for (var i = event.resultIndex; i < event.results.length; i++) {
             if (event.results[i].isFinal) {
                 transcript = event.results[i][0].transcript;
+                // Récupérer toutes les alternatives
                 for (var alt = 0; alt < event.results[i].length; alt++) {
-                    alternatives.push(event.results[i][alt].transcript);
+                    allAlternatives.push(event.results[i][alt].transcript.toLowerCase().trim());
                 }
                 break;
             } else {
@@ -266,120 +279,184 @@ function posStartVoiceSearch() {
         }
 
         if (transcript) {
-            var cleanText = transcript.trim().replace(/[.,;:!?]+$/, '');
+            var cleanText = transcript.toLowerCase().trim();
+            cleanText = cleanText.replace(/[.,;:!?]+$/, '');
             
-            // Trouver le produit correspondant
+            // ===== 1. Recherche EXACTE dans les produits =====
+            var exactMatch = productNames.find(function(name) {
+                return name === cleanText;
+            });
+            
+            if (exactMatch) {
+                if (searchInput) {
+                    searchInput.value = exactMatch;
+                    posSearchProducts(exactMatch);
+                }
+                console.log('🎤 Match EXACT:', exactMatch);
+                showVoiceResult('✅ Produit trouvé: ' + exactMatch);
+                cleanUp();
+                return;
+            }
+            
+            // ===== 2. Recherche PARTIELLE =====
+            var partialMatch = productNames.find(function(name) {
+                return name.indexOf(cleanText) !== -1 && cleanText.length > 2;
+            });
+            
+            if (partialMatch) {
+                if (searchInput) {
+                    searchInput.value = partialMatch;
+                    posSearchProducts(partialMatch);
+                }
+                console.log('🎤 Match PARTIEL:', partialMatch);
+                showVoiceResult('✅ Produit trouvé: ' + partialMatch);
+                cleanUp();
+                return;
+            }
+            
+            // ===== 3. Recherche par MOTS-CLÉS =====
+            var words = cleanText.split(/\s+/);
             var bestMatch = null;
             var bestScore = 0;
-            var cleanLower = cleanText.toLowerCase();
             
             for (var p = 0; p < posProductsList.length; p++) {
-                var product = posProductsList[p];
-                var productName = product.nom.toLowerCase();
+                var productName = posProductsList[p].nom.toLowerCase();
                 var score = 0;
                 
-                // Score basé sur la correspondance exacte
-                if (productName === cleanLower) score = 100;
-                // Score basé sur la correspondance partielle
-                else if (productName.indexOf(cleanLower) !== -1) score = 80;
-                else if (cleanLower.indexOf(productName) !== -1) score = 70;
-                // Score basé sur chaque mot
-                else {
-                    var words = cleanLower.split(/\s+/);
-                    for (var w = 0; w < words.length; w++) {
-                        if (words[w].length > 1 && productName.indexOf(words[w]) !== -1) {
-                            score += 30;
-                        }
+                for (var w = 0; w < words.length; w++) {
+                    var word = words[w];
+                    if (word.length < 2) continue;
+                    
+                    if (productName.indexOf(word) !== -1) {
+                        score += 10;
+                    }
+                    if (word.indexOf(productName) !== -1 && productName.length > 2) {
+                        score += 15;
+                    }
+                    if (productName.indexOf(word) === 0) {
+                        score += 20;
                     }
                 }
                 
-                // Vérifier les alternatives
-                for (var alt = 0; alt < alternatives.length; alt++) {
-                    var altLower = alternatives[alt].toLowerCase();
-                    if (productName === altLower) score = 95;
-                    else if (productName.indexOf(altLower) !== -1) score = 75;
+                if (productName.length > 3 && cleanText.length > 3) {
+                    var commonChars = 0;
+                    for (var c = 0; c < Math.min(productName.length, cleanText.length); c++) {
+                        if (productName[c] === cleanText[c]) commonChars++;
+                    }
+                    score += commonChars;
                 }
                 
                 if (score > bestScore) {
                     bestScore = score;
-                    bestMatch = product;
+                    bestMatch = posProductsList[p];
                 }
             }
             
-            // Si un produit est trouvé avec un bon score
-            if (bestMatch && bestScore >= 30) {
+            if (bestMatch && bestScore >= 20) {
                 if (searchInput) {
                     searchInput.value = bestMatch.nom;
                     posSearchProducts(bestMatch.nom);
                 }
-                console.log('🎤 Produit trouvé:', bestMatch.nom, '(score:', bestScore + ')');
-            } else {
-                // Aucun produit correspondant
-                if (searchInput) {
-                    searchInput.value = cleanText;
-                    posSearchProducts(cleanText);
-                }
-                console.log('🎤 Aucun produit trouvé pour:', cleanText);
+                console.log('🎤 Match par MOTS-CLÉS:', bestMatch.nom, '(score:', bestScore + ')');
+                showVoiceResult('✅ Produit trouvé: ' + bestMatch.nom);
+                cleanUp();
+                return;
             }
             
-            // Restaurer
+            // ===== 4. Recherche dans les ALTERNATIVES =====
+            if (allAlternatives.length > 0) {
+                for (var a = 0; a < allAlternatives.length; a++) {
+                    var altText = allAlternatives[a];
+                    if (altText.length < 2) continue;
+                    
+                    var altMatch = productNames.find(function(name) {
+                        return name === altText || name.indexOf(altText) !== -1;
+                    });
+                    
+                    if (altMatch) {
+                        if (searchInput) {
+                            searchInput.value = altMatch;
+                            posSearchProducts(altMatch);
+                        }
+                        console.log('🎤 Match ALTERNATIVE:', altMatch);
+                        showVoiceResult('✅ Produit trouvé: ' + altMatch);
+                        cleanUp();
+                        return;
+                    }
+                }
+            }
+            
+            // ===== 5. AUCUN PRODUIT TROUVÉ =====
             if (searchInput) {
-                searchInput.placeholder = '🔍 Rechercher un produit...';
-                searchInput.style.borderColor = '#e2e8f0';
-                searchInput.style.backgroundColor = '#fff';
-                searchInput.classList.remove('listening');
+                searchInput.value = cleanText;
+                posSearchProducts(cleanText);
             }
-            if (audioBtn) {
-                audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
-                audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
-            }
+            console.log('🎤 Aucun produit trouvé pour:', cleanText);
+            showVoiceResult('❌ Aucun produit trouvé pour "' + cleanText + '"');
+            cleanUp();
         }
     };
 
     recognition.onend = function() {
-        window._recognitionActive = null;
-        if (searchInput) {
-            searchInput.placeholder = '🔍 Rechercher un produit...';
-            searchInput.style.borderColor = '#e2e8f0';
-            searchInput.style.backgroundColor = '#fff';
-            searchInput.classList.remove('listening');
-        }
-        if (audioBtn) {
-            audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
-            audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
-        }
+        cleanUp();
     };
 
     recognition.onerror = function(event) {
-        window._recognitionActive = null;
-        if (searchInput) {
-            searchInput.placeholder = '🔍 Rechercher un produit...';
-            searchInput.style.borderColor = '#e2e8f0';
-            searchInput.style.backgroundColor = '#fff';
-            searchInput.classList.remove('listening');
-        }
-        if (audioBtn) {
-            audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
-            audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
-        }
-        
+        cleanUp();
         if (event.error === 'aborted' || event.error === 'no-speech') {
             return;
         }
         alert('❌ Erreur: ' + event.error);
     };
+    
+    // ===== FONCTION DE NETTOYAGE =====
+    function cleanUp() {
+        window._recognitionActive = null;
+        var searchInput = document.getElementById('posSearchInput');
+        var audioBtn = document.querySelector('.btn-audio') || document.getElementById('posAudioBtn');
+        
+        if (searchInput) {
+            searchInput.placeholder = '🔍 Rechercher un produit...';
+            searchInput.style.borderColor = '#e2e8f0';
+            searchInput.style.backgroundColor = '#fff';
+            searchInput.classList.remove('listening');
+        }
+        if (audioBtn) {
+            audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
+            audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
+        }
+    }
+    
+    // ===== AFFICHER UN RÉSULTAT TEMPORAIRE =====
+    function showVoiceResult(message) {
+        var resultDiv = document.getElementById('voiceResultDisplay');
+        if (!resultDiv) {
+            resultDiv = document.createElement('div');
+            resultDiv.id = 'voiceResultDisplay';
+            resultDiv.style.cssText = 'position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#2E7D32; color:#fff; padding:12px 24px; border-radius:12px; font-weight:600; font-size:1rem; z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.3); transition:all 0.3s ease; display:none; max-width:90%; text-align:center;';
+            document.body.appendChild(resultDiv);
+        }
+        
+        var isError = message.indexOf('❌') !== -1;
+        resultDiv.style.background = isError ? '#ef4444' : '#2E7D32';
+        resultDiv.textContent = message;
+        resultDiv.style.display = 'block';
+        
+        clearTimeout(window._voiceResultTimeout);
+        window._voiceResultTimeout = setTimeout(function() {
+            resultDiv.style.display = 'none';
+        }, 2500);
+    }
 }
 
 // ==================== RACCOURCI CLAVIER ====================
 document.addEventListener('keydown', function(event) {
-    // Ctrl + Shift + A ou Ctrl + Alt + A pour recherche vocale
     if ((event.ctrlKey && event.shiftKey && (event.key === 'a' || event.key === 'A')) ||
         (event.ctrlKey && event.altKey && (event.key === 'a' || event.key === 'A'))) {
         event.preventDefault();
         posStartVoiceSearch();
     }
     
-    // Ctrl + F pour focus sur la barre de recherche
     if (event.ctrlKey && (event.key === 'f' || event.key === 'F')) {
         event.preventDefault();
         var searchInput = document.getElementById('posSearchInput');
@@ -411,12 +488,10 @@ function filterProductGrid() {
         });
     }
     
-    // Trier les produits (alphabétique)
     f.sort(function(a, b) {
         return (a.nom || '').localeCompare(b.nom || '');
     });
     
-    // Générer uniquement la grille
     var html = '';
     
     if (f.length === 0) { 
@@ -445,7 +520,6 @@ function filterProductGrid() {
                 else if (p.stock <= 5) { stt = ' (' + p.stock + ' rest.)'; } 
             }
             
-            // Mettre en évidence le texte recherché
             var displayName = escapeHtml(p.nom);
             if (posSearchQuery) {
                 var regex = new RegExp('(' + posSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
@@ -908,11 +982,10 @@ function posConfirmOptions() {
     closeModal(); renderPOS();
 }
 
-// ==================== RENDER POS AVEC RECHERCHE VOCALE ET PANIER OPTIMISÉ ====================
+// ==================== RENDER POS AVEC RECHERCHE VOCALE INTELLIGENTE ET PANIER OPTIMISÉ ====================
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
     
-    // Vérifier si les données sont chargées
     if (posProductsList.length === 0 && posCategoriesList.length === 0) {
         c.innerHTML = '<div style="text-align:center;padding:60px;">' +
             '<i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2E7D32;"></i>' +
@@ -924,7 +997,6 @@ function renderPOS() {
     var st = posCalculateTotal(); var t = st - posDiscountMAD;
     var h = '<div class="pos-container"><div class="pos-products-panel">';
     
-    // ===== BARRE DE RECHERCHE AVEC BOUTON VOCAL =====
     h += '<div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">';
     
     h += '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">';
@@ -938,12 +1010,10 @@ function renderPOS() {
     }
     h += '</div>';
     
-    // ===== BOUTON RECHERCHE VOCALE =====
     h += '<button class="btn-audio" id="posAudioBtn" onclick="posStartVoiceSearch()" style="background: linear-gradient(135deg, #2E7D32, #1B5E20); border: none; border-radius:50px; padding:10px 20px; cursor:pointer; display:flex; align-items:center; gap:8px; color:#fff; font-weight:600; font-size:0.85rem; transition:all 0.3s ease; white-space:nowrap;">';
     h += '<i class="fas fa-microphone" style="font-size:1.1rem;"></i> Audio';
     h += '</button>';
     
-    // Boutons Tables et En ligne
     h += '<div style="display:flex; gap:6px; flex-wrap:wrap;">';
     h += '<button onclick="posAfficherCommandesTables()" style="position:relative; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:8px 16px; cursor:pointer; font-weight:600; color:#1e293b; display:flex; align-items:center; gap:6px; white-space:nowrap;">';
     h += '<i class="fas fa-utensils"></i> Tables';
@@ -956,7 +1026,6 @@ function renderPOS() {
     h += '</div>';
     h += '</div>';
     
-    // Catégories
     h += '<div class="pos-categories-bar" style="margin-bottom:0;">';
     h += '<button class="pos-cat-btn ' + (posSelectedCategory === 'all' ? 'active' : '') + '" onclick="posFilterCategory(\'all\')"><i class="fas fa-th-large"></i> Tous</button>';
     for (var i = 0; i < posCategoriesList.length; i++) {
@@ -968,20 +1037,16 @@ function renderPOS() {
     h += '</div>';
     h += '</div>';
     
-    // ===== GRILLE PRODUITS =====
     h += '<div class="pos-products-grid" id="posProductGrid">';
     h += '</div></div>';
     
-    // ===== PANIER OPTIMISÉ =====
     h += '<div class="pos-cart-panel" style="max-height: none; height: auto; min-height: 180px;">';
     if (posStep === 1) {
-        // En-tête du panier
         h += '<div class="pos-cart-header" style="padding: 6px 0 8px 0; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9;">';
         h += '<h3 style="font-size: 0.9rem; margin: 0; display:flex; align-items:center; gap:6px;"><i class="fas fa-shopping-cart" style="font-size:0.8rem;"></i> Panier <span class="pos-cart-badge" style="font-size: 0.65rem; padding: 1px 8px; border-radius: 30px; background: #2E7D32; color: #fff;">' + posCart.length + '</span></h3>';
         h += '<button class="pos-clear-btn" onclick="posResetCart()" style="font-size: 0.7rem; padding: 3px 10px; background: none; border: none; color: #6c757d; cursor: pointer;"><i class="fas fa-trash-alt"></i> Vider</button>';
         h += '</div>';
         
-        // Liste des articles (sans scroll)
         h += '<div class="pos-cart-items" style="max-height: none; overflow: visible; margin-bottom: 6px;">';
         if (posCart.length === 0) { 
             h += '<div class="pos-cart-empty" style="padding: 15px; text-align:center; color:#94a3b8; font-size:0.75rem;"><i class="fas fa-shopping-basket" style="font-size:1.5rem; display:block; margin-bottom:5px;"></i>Panier vide</div>'; 
@@ -1010,13 +1075,11 @@ function renderPOS() {
         }
         h += '</div>';
         
-        // Remise
         h += '<div style="padding:3px 0 5px 0; display:flex; gap:4px; align-items:center; flex-wrap:wrap;">';
         h += '<label style="font-size:0.65rem; font-weight:600; color:#495057;">Remise (MAD):</label>';
         h += '<input type="number" id="posDiscountMAD" value="' + posDiscountMAD + '" min="0" step="0.01" onchange="posUpdateDiscountMAD(this.value)" style="width:70px; padding:3px 6px; border:2px solid #e2e8f0; border-radius:4px; font-size:0.7rem;">';
         h += '</div>';
         
-        // Footer
         h += '<div class="pos-cart-footer" style="padding-top:6px; border-top:1px solid #e2e8f0;">';
         if (posDiscountMAD > 0) {
             h += '<div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#495057;"><span>Sous-total</span><span>' + st.toFixed(2) + ' MAD</span></div>';
@@ -1029,7 +1092,6 @@ function renderPOS() {
         h += '</div>';
         
     } else if (posStep === 2) {
-        // ===== PARTIE PAIEMENT =====
         var canCredit = posCurrentClient && posCurrentClient.id;
         h += '<div class="pos-cart-header" style="padding: 6px 0 8px 0; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9;">';
         h += '<h3 style="font-size: 0.9rem; margin: 0; display:flex; align-items:center; gap:6px;"><i class="fas fa-credit-card" style="font-size:0.8rem;"></i> Paiement</h3>';
@@ -1038,7 +1100,6 @@ function renderPOS() {
         
         h += '<div class="pos-payment-form" style="font-size: 0.85rem;">';
         
-        // Client
         h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
         h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Client</label>';
         h += '<div style="position:relative;">';
@@ -1048,13 +1109,11 @@ function renderPOS() {
         
         h += '<div class="pos-or-divider" style="margin:4px 0; font-size:0.65rem; color:#94a3b8; text-align:center;">— OU —</div>';
         
-        // Table
         h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
         h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Table</label>';
         h += '<input type="text" id="posTableNum" value="' + escapeHtml(posCurrentTable) + '" onchange="posSetTable(this.value)" style="width:100%; padding:6px 10px; border:2px solid #e2e8f0; border-radius:6px; font-size:0.8rem;">';
         h += '</div>';
         
-        // Résumé
         h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
         h += '<div class="pos-summary-box" style="padding: 8px 12px; border-radius:6px; background:#f8fafc;">';
         h += '<div class="pos-summary-row" style="display:flex; justify-content:space-between; font-size:0.7rem; margin-bottom:2px;"><span>Articles</span><span>' + posCart.length + '</span></div>';
@@ -1062,13 +1121,11 @@ function renderPOS() {
         h += '<div class="pos-summary-total" style="display:flex; justify-content:space-between; font-size:1rem; font-weight:700;"><span>Total</span><span style="font-size:1.1rem; color:#2E7D32;">' + t.toFixed(2) + ' MAD</span></div>';
         h += '</div></div>';
         
-        // Vendeur
         h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
         h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Vendeur</label>';
         h += '<input type="text" id="posVendeur" value="' + (window.currentUserData ? escapeHtml(window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom) : '') + '" style="width:100%; padding:6px 10px; border:2px solid #e2e8f0; border-radius:6px; font-size:0.8rem;">';
         h += '</div>';
         
-        // Méthodes de paiement
         h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
         h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Paiement</label>';
         h += '<div class="pos-payment-methods" style="display:flex; gap:4px; flex-wrap:wrap;">';
@@ -1077,7 +1134,6 @@ function renderPOS() {
         h += '<button class="pos-payment-btn ' + (posPaymentMethod === 'partiel' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'partiel\')" id="posPartielBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"') + ' style="padding:4px 8px; font-size:0.65rem; border-radius:4px; flex:1; min-width:50px; border:2px solid #e2e8f0; background:#fff; cursor:pointer;"><i class="fas fa-hand-holding-usd"></i> Partiel</button>';
         h += '</div></div>';
         
-        // Montant donné
         if (posPaymentMethod === 'espece' || posPaymentMethod === 'partiel') {
             h += '<div class="pos-payment-section" style="margin-bottom: 8px;">';
             h += '<label style="font-size: 0.7rem; font-weight:600; display:block; margin-bottom:3px;">Montant donné</label>';
@@ -1086,14 +1142,12 @@ function renderPOS() {
             h += '</div>';
         }
         
-        // Bouton finaliser
         h += '<button class="pos-finalize-btn" onclick="posFinalizeSale()" style="width:100%; padding:8px; border:none; border-radius:6px; background:linear-gradient(135deg,#2E7D32,#1B5E20); color:#fff; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; margin-top:4px;"><i class="fas fa-check-circle"></i> Finaliser</button>';
         h += '</div>';
     }
     h += '</div></div>';
     c.innerHTML = h;
     
-    // Remplir la grille après avoir créé le HTML
     filterProductGrid();
     
     if (posStep === 2) setTimeout(posCalculateChange, 200);
@@ -1224,7 +1278,6 @@ async function posFinalizeSale() {
             delete window.posVenteId;
         }
 
-        // Mise à jour du stock
         for (var i = 0; i < posCart.length; i++) {
             var it = posCart[i];
             try {
@@ -1263,7 +1316,6 @@ async function posFinalizeSale() {
             } catch(e) {}
         }
 
-        // Fidélité
         if (posCurrentClient && posCurrentClient.id && paid) {
             try {
                 var cr = await db.collection('clients').doc(posCurrentClient.id).get();
