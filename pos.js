@@ -1,4 +1,4 @@
-// ==================== POS.JS - MIXMAX MINIMARKET (VERSION STABLE SANS BLOCAGE) ====================
+// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET - RECHERCHE VOCALE SANS AJOUT) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -179,7 +179,7 @@ function posSearchProducts(query) {
     filterProductGrid();
 }
 
-// ==================== RECHERCHE VOCALE STABLE (SANS BLOCAGE) ====================
+// ==================== RECHERCHE VOCALE STABLE (SANS AJOUT AUTOMATIQUE) ====================
 function posStartVoiceSearch() {
     // Vérifier le support
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -353,13 +353,17 @@ function posStartVoiceSearch() {
             
             // SI PRODUIT TROUVÉ
             if (foundProduct) {
+                // ⭐ AFFICHER DANS LA BARRE DE RECHERCHE UNIQUEMENT ⭐
                 if (searchInput) {
                     searchInput.value = foundProduct.nom;
                     posSearchProducts(foundProduct.nom);
                 }
                 console.log('🎤 Produit trouvé:', foundProduct.nom, '(' + matchType + ')');
-                showVoiceResult('✅ ' + foundProduct.nom + ' ajouté au panier !');
-                posAddToCartOrOpenOptions(foundProduct.id);
+                showVoiceResult('🔍 ' + foundProduct.nom + ' trouvé !');
+                
+                // ❌ SUPPRIMER L'AJOUT AUTOMATIQUE
+                // posAddToCartOrOpenOptions(foundProduct.id);
+                
                 cleanUp();
                 return;
             }
@@ -438,14 +442,23 @@ function posStartVoiceSearch() {
         }
         
         var isError = message.indexOf('❌') !== -1 || message.indexOf('⏱️') !== -1;
-        resultDiv.style.background = isError ? '#ef4444' : '#2E7D32';
+        var isInfo = message.indexOf('🔍') !== -1;
+        
+        if (isInfo) {
+            resultDiv.style.background = '#2196F3'; // Bleu pour info
+        } else if (isError) {
+            resultDiv.style.background = '#ef4444';
+        } else {
+            resultDiv.style.background = '#2E7D32';
+        }
+        
         resultDiv.textContent = message;
         resultDiv.style.display = 'block';
         
         clearTimeout(window._voiceResultTimeout);
         window._voiceResultTimeout = setTimeout(function() {
             resultDiv.style.display = 'none';
-        }, 3000);
+        }, 2500);
     }
 }
 
@@ -1031,7 +1044,7 @@ function posConfirmOptions() {
     closeModal(); renderPOS();
 }
 
-// ==================== RENDER POS AVEC RECHERCHE VOCALE STABLE ====================
+// ==================== RENDER POS AVEC RECHERCHE VOCALE (AFFICHAGE UNIQUEMENT) ====================
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
     
@@ -1417,4 +1430,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS prêt (version stable sans blocage)');
+console.log('🛒 Mixmax Minimarket - POS JS prêt (recherche vocale sans ajout automatique)');
