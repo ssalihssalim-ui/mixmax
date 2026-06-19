@@ -1,4 +1,4 @@
-// ==================== POS.JS - ALMA COFFEE SHOP (PARTIE 1) ====================
+// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -186,7 +186,7 @@ async function posChargerCommandesEnLigneCount() {
             .where('source', '==', 'client')
             .get();
         posCommandesEnLigneCount = snap.size;
-        console.log('☕ Commandes en ligne :', posCommandesEnLigneCount);
+        console.log('🛒 Commandes en ligne :', posCommandesEnLigneCount);
     } catch(e) {
         console.warn('Fallback chargement commandes en ligne', e);
         try {
@@ -197,7 +197,7 @@ async function posChargerCommandesEnLigneCount() {
                 if (data.statut === 'en_attente' && data.source === 'client') count++;
             });
             posCommandesEnLigneCount = count;
-            console.log('☕ Commandes en ligne (fallback) :', posCommandesEnLigneCount);
+            console.log('🛒 Commandes en ligne (fallback) :', posCommandesEnLigneCount);
         } catch(err) {
             console.error('Erreur fallback', err);
             posCommandesEnLigneCount = 0;
@@ -295,7 +295,7 @@ function posAfficherCommandesTables() {
             <th>Actions</th>
         </tr></thead>
         <tbody>`;
-    // ==================== POS.JS - ALMA COFFEE SHOP (PARTIE 2) ====================
+    
     if (filteredData.length === 0) {
         html += '<tr><td colspan="6" style="text-align:center; padding:30px;">Aucune commande correspondante</td></tr>';
     } else {
@@ -317,7 +317,7 @@ function posAfficherCommandesTables() {
             html += '<td><strong>🍽️ ' + escapeHtml(table) + '</strong></td>';
             html += '<td>' + produits + '</td>';
             html += '<td><small>' + options + '</small></td>';
-            html += '<td><strong style="color:#A67C52;">' + cmd.total.toFixed(2) + ' MAD</strong></td>';
+            html += '<td><strong style="color:#2E7D32;">' + cmd.total.toFixed(2) + ' MAD</strong></td>';
             html += '<td><small>' + dateHeure + '</small></td>';
             html += '<td style="white-space:nowrap;">' +
                 '<button class="btn-add" style="padding:4px 8px;font-size:0.7rem;margin-right:4px;" onclick="posChargerCommandeTable(\'' + cmd.id + '\')"><i class="fas fa-check"></i> Accepter</button>' +
@@ -327,7 +327,7 @@ function posAfficherCommandesTables() {
         });
     }
 
-    html += '</tbody>\\n</table></div>';
+    html += '</tbody></table></div>';
     openModal('🛎️ Commandes tables en attente (' + filteredData.length + ')', html);
     setTimeout(function() {
         var modal = document.getElementById('modalOverlay');
@@ -592,7 +592,6 @@ function posConfirmOptions() {
     }
     closeModal(); renderPOS();
 }
-// ==================== POS.JS - ALMA COFFEE SHOP (PARTIE 3) ====================
 
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
@@ -622,7 +621,7 @@ function renderPOS() {
     // Grille produits
     h += '<div class="pos-products-grid">';
     var f = posProductsList; if (posSelectedCategory !== 'all') f = posProductsList.filter(function(p) { return p.categorie === posSelectedCategory; });
-    if (f.length === 0) { h += '<div style="grid-column:1/-1;text-align:center;padding:40px;">Aucun</div>'; }
+    if (f.length === 0) { h += '<div style="grid-column:1/-1;text-align:center;padding:40px;">Aucun produit disponible</div>'; }
     else {
         for (var j = 0; j < f.length; j++) {
             var p = f[j];
@@ -632,7 +631,7 @@ function renderPOS() {
             if (p.stock !== undefined) { if (p.stock <= 0) { sc = 'pos-out-of-stock'; stt = ' (Rupture)'; } else if (p.stock <= 5) { stt = ' (' + p.stock + ' rest.)'; } }
             h += '<div class="pos-product-card ' + sc + '" onclick="posAddToCartOrOpenOptions(\'' + p.id + '\')">';
             if (p.imageBase64) h += '<div class="pos-product-img"><img src="' + escapeHtml(p.imageBase64) + '" alt=""></div>';
-            else h += '<div class="pos-product-img pos-product-placeholder"><i class="fas fa-coffee"></i></div>';
+            else h += '<div class="pos-product-img pos-product-placeholder"><i class="fas fa-box"></i></div>';
             h += '<div class="pos-product-info"><span class="pos-product-name">' + escapeHtml(p.nom) + stt + '</span><span class="pos-product-price">';
             if (hp) h += '<span class="pos-old-price">' + p.prixVente.toFixed(2) + '</span> <span class="pos-promo-price">' + pr.toFixed(2) + ' MAD</span>';
             else h += pr.toFixed(2) + ' MAD';
@@ -644,7 +643,7 @@ function renderPOS() {
     h += '<div class="pos-cart-panel">';
     if (posStep === 1) {
         h += '<div class="pos-cart-header"><h3><i class="fas fa-shopping-cart"></i> Panier <span class="pos-cart-badge">' + posCart.length + '</span></h3><button class="pos-clear-btn" onclick="posResetCart()"><i class="fas fa-trash-alt"></i> Vider</button></div><div class="pos-cart-items">';
-        if (posCart.length === 0) { h += '<div class="pos-cart-empty"><i class="fas fa-shopping-basket"></i><p>Vide</p></div>'; }
+        if (posCart.length === 0) { h += '<div class="pos-cart-empty"><i class="fas fa-shopping-basket"></i><p>Panier vide</p></div>'; }
         else {
             for (var k = 0; k < posCart.length; k++) {
                 var it = posCart[k];
@@ -830,4 +829,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('☕ Alma Coffee Shop - POS JS prêt');
+console.log('🛒 Mixmax Minimarket - POS JS prêt');
