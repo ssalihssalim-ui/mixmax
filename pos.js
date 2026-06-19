@@ -1,4 +1,4 @@
-// ==================== POS.JS - MIX MAX (COMPLET AVEC RECHERCHE NOM + CATÉGORIE + DESCRIPTION) ====================
+// ==================== POS.JS - MIX MAX (COMPLET AVEC RECHERCHE VOCALE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -76,7 +76,7 @@ async function loadPosPage(c) {
                 let prod = {
                     id: d.id, 
                     nom: dd.nom, 
-                    description: dd.description || '',  // Ajout de la description (pour la recherche uniquement)
+                    description: dd.description || '',
                     prixVente: dd.prixVente||0, 
                     prixPromo: dd.prixPromo||0,
                     prixAchat: dd.prixAchat||0, 
@@ -471,6 +471,149 @@ function posSearchProducts(query) {
     renderPOS();
 }
 
+// ==================== RECHERCHE VOCALE (Speech Recognition) ====================
+function posStartVoiceSearch() {
+    // Vérifier si le navigateur supporte la reconnaissance vocale
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('❌ La reconnaissance vocale n\'est pas supportée par votre navigateur.\nUtilisez Chrome ou Edge pour cette fonctionnalité.');
+        return;
+    }
+
+    // Vérifier si le micro est déjà en cours d'utilisation
+    var micBtn = document.getElementById('posMicBtn');
+    if (micBtn && micBtn.disabled) {
+        return; // Éviter les doubles clics
+    }
+
+    // Initialiser la reconnaissance vocale
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var recognition = new SpeechRecognition();
+
+    // Configuration
+    recognition.lang = 'fr-FR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    // Désactiver le bouton pendant l'écoute
+    if (micBtn) {
+        micBtn.disabled = true;
+        micBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        micBtn.style.opacity = '0.6';
+        micBtn.style.cursor = 'not-allowed';
+        micBtn.style.background = '#ef4444';
+        micBtn.style.borderColor = '#ef4444';
+    }
+
+    // Afficher un message dans la barre de recherche
+    var searchInput = document.getElementById('posSearchInput');
+    if (searchInput) {
+        searchInput.placeholder = '🎤 Écoute en cours... Parlez maintenant';
+        searchInput.style.background = '#fef2f2';
+        searchInput.style.borderColor = '#ef4444';
+    }
+
+    // Démarrer l'écoute
+    recognition.start();
+
+    // Quand la reconnaissance est terminée avec succès
+    recognition.onresult = function(event) {
+        var transcript = event.results[0][0].transcript;
+        console.log('🎤 Texte reconnu :', transcript);
+
+        // Mettre à jour la barre de recherche
+        if (searchInput) {
+            searchInput.value = transcript;
+            searchInput.placeholder = '🔍 Rechercher (nom, catégorie, description)...';
+            searchInput.style.background = '#fff';
+            searchInput.style.borderColor = '#e2e8f0';
+        }
+
+        // Lancer la recherche automatiquement
+        posSearchQuery = transcript;
+        renderPOS();
+
+        // Réactiver le bouton micro
+        if (micBtn) {
+            micBtn.disabled = false;
+            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            micBtn.style.opacity = '1';
+            micBtn.style.cursor = 'pointer';
+            micBtn.style.background = '#dcfce7';
+            micBtn.style.borderColor = '#16a34a';
+        }
+        
+        // Remettre le focus dans la barre de recherche
+        if (searchInput) {
+            searchInput.focus();
+            var len = searchInput.value.length;
+            searchInput.setSelectionRange(len, len);
+        }
+    };
+
+    // En cas d'erreur
+    recognition.onerror = function(event) {
+        console.error('🎤 Erreur de reconnaissance :', event.error);
+
+        var errorMsg = '';
+        switch(event.error) {
+            case 'not-allowed':
+                errorMsg = '❌ Accès au microphone refusé. Autorisez l\'accès dans les paramètres du navigateur.';
+                break;
+            case 'no-speech':
+                errorMsg = '⚠️ Aucune parole détectée. Cliquez sur le micro et parlez clairement.';
+                break;
+            case 'audio-capture':
+                errorMsg = '❌ Aucun microphone détecté. Vérifiez que votre micro est branché.';
+                break;
+            case 'network':
+                errorMsg = '❌ Erreur réseau. Vérifiez votre connexion internet.';
+                break;
+            case 'service-not-allowed':
+                errorMsg = '❌ Le service de reconnaissance vocale n\'est pas autorisé.';
+                break;
+            default:
+                errorMsg = '❌ Erreur : ' + event.error;
+        }
+
+        alert(errorMsg);
+
+        // Restaurer l'interface
+        if (searchInput) {
+            searchInput.placeholder = '🔍 Rechercher (nom, catégorie, description)...';
+            searchInput.style.background = '#fff';
+            searchInput.style.borderColor = '#e2e8f0';
+        }
+        if (micBtn) {
+            micBtn.disabled = false;
+            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            micBtn.style.opacity = '1';
+            micBtn.style.cursor = 'pointer';
+            micBtn.style.background = '#dcfce7';
+            micBtn.style.borderColor = '#16a34a';
+        }
+    };
+
+    // Quand la reconnaissance se termine (même en cas d'erreur)
+    recognition.onend = function() {
+        console.log('🎤 Écoute terminée');
+        // Si le bouton est toujours désactivé (cas d'erreur non gérée)
+        if (micBtn && micBtn.disabled) {
+            micBtn.disabled = false;
+            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            micBtn.style.opacity = '1';
+            micBtn.style.cursor = 'pointer';
+            micBtn.style.background = '#dcfce7';
+            micBtn.style.borderColor = '#16a34a';
+        }
+        if (searchInput && searchInput.placeholder === '🎤 Écoute en cours... Parlez maintenant') {
+            searchInput.placeholder = '🔍 Rechercher (nom, catégorie, description)...';
+            searchInput.style.background = '#fff';
+            searchInput.style.borderColor = '#e2e8f0';
+        }
+    };
+}
+
 // ==================== AJOUT AU PANIER / OPTIONS ====================
 function posAddToCartOrOpenOptions(pid) {
     var p = posProductsList.find(function(x) { return x.id === pid; });
@@ -608,7 +751,7 @@ function posConfirmOptions() {
     closeModal(); renderPOS();
 }
 
-// ==================== RENDU PRINCIPAL POS (AVEC RECHERCHE NOM + CATÉGORIE + DESCRIPTION) ====================
+// ==================== RENDU PRINCIPAL POS (AVEC RECHERCHE VOCALE) ====================
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); 
     if (!c) return;
@@ -627,11 +770,8 @@ function renderPOS() {
     if (posSearchQuery && posSearchQuery.trim() !== '') {
         var query = posSearchQuery.toLowerCase().trim();
         filteredProducts = filteredProducts.filter(function(p) {
-            // 1. Recherche dans le NOM
             if (p.nom && p.nom.toLowerCase().indexOf(query) !== -1) return true;
-            // 2. Recherche dans la CATÉGORIE
             if (p.categorie && p.categorie.toLowerCase().indexOf(query) !== -1) return true;
-            // 3. Recherche dans la DESCRIPTION
             if (p.description && p.description.toLowerCase().indexOf(query) !== -1) return true;
             return false;
         });
@@ -640,12 +780,16 @@ function renderPOS() {
     // === ÉTAPE 3 : Construction du HTML ===
     var h = '<div class="pos-container"><div class="pos-products-panel">';
     
-    // Barre de recherche
-    h += '<div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">';
+    // Barre de recherche avec bouton micro
+    h += '<div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; align-items:center;">';
     h += '<div class="input-group" style="flex:1; min-width:200px; background:#fff; border:2px solid var(--border); border-radius:40px; padding:0 15px;">';
     h += '<i class="fas fa-search" style="color:#94a3b8;"></i>';
     h += '<input type="text" id="posSearchInput" placeholder="🔍 Rechercher (nom, catégorie, description)..." value="' + escapeHtml(posSearchQuery) + '" onkeyup="posSearchProducts(this.value)" style="border:none; padding:12px 15px; width:100%; font-size:0.95rem; outline:none;">';
     h += '</div>';
+    // Bouton Micro
+    h += '<button id="posMicBtn" onclick="posStartVoiceSearch()" title="Recherche vocale" style="background:#dcfce7; border:2px solid #16a34a; border-radius:40px; padding:10px 16px; cursor:pointer; font-size:1.1rem; color:#16a34a; transition:all 0.3s; display:flex; align-items:center; gap:8px; white-space:nowrap;">';
+    h += '<i class="fas fa-microphone"></i> <span style="font-size:0.75rem;">Micro</span>';
+    h += '</button>';
     h += '<button class="btn-cancel" onclick="posSearchProducts(\'\')" style="padding:8px 16px; margin:0; float:none; font-size:0.85rem;">✕ Effacer</button>';
     h += '</div>';
 
@@ -673,7 +817,7 @@ function renderPOS() {
     h += '</div>';
 
     // Grille produits
-    h += '<div class="pos-products-grid">';
+    h += '<div id="posProductsGrid" class="pos-products-grid">';
     if (filteredProducts.length === 0) { 
         h += '<div style="grid-column:1/-1;text-align:center;padding:40px;">Aucun produit trouvé</div>'; 
     } else {
@@ -698,11 +842,9 @@ function renderPOS() {
             }
             h += '<div class="pos-product-info">';
             h += '<span class="pos-product-name">' + escapeHtml(p.nom) + stt + '</span>';
-            // Afficher la catégorie en badge (uniquement si elle existe)
             if (p.categorie) {
                 h += '<span style="font-size:0.55rem; color:#A67C52; background:#F5E6D3; padding:1px 8px; border-radius:10px; display:inline-block;">' + escapeHtml(p.categorie) + '</span>';
             }
-            // LA DESCRIPTION N'EST PLUS AFFICHÉE SOUS LE PRODUIT
             h += '<span class="pos-product-price">';
             if (hp) {
                 h += '<span class="pos-old-price">' + p.prixVente.toFixed(2) + '</span> <span class="pos-promo-price">' + pr.toFixed(2) + ' MAD</span>';
@@ -748,6 +890,15 @@ function renderPOS() {
     }
     h += '</div></div>';
     c.innerHTML = h;
+    
+    // === RESTAURER LE FOCUS SUR LA BARRE DE RECHERCHE ===
+    var searchInput = document.getElementById('posSearchInput');
+    if (searchInput) {
+        searchInput.focus();
+        var len = searchInput.value.length;
+        searchInput.setSelectionRange(len, len);
+    }
+    
     if (posStep === 2) setTimeout(posCalculateChange, 200);
 }
 
@@ -908,4 +1059,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('📦 Mix Max - POS JS (recherche par nom, catégorie et description)');
+console.log('📦 Mix Max - POS JS (recherche par nom, catégorie, description et vocale)');
