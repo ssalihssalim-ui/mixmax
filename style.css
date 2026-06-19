@@ -1,19 +1,19 @@
-/* ==================== MIXMAX MINIMARKET - THÈME VERT ==================== */
+/* ==================== ALMA COFFEE SHOP - THEME CAFÉ ==================== */
 :root {
-    --primary: #2E7D32;
-    --primary-dark: #1B5E20;
-    --primary-light: #E8F5E9;
-    --primary-bg: #F1F8E9;
+    --primary: #A67C52;
+    --primary-dark: #6F4E37;
+    --primary-light: #F5E6D3;
+    --primary-bg: #FFF8F0;
     --bg-dark: #1a1a2e;
     --bg-card: #ffffff;
-    --bg-page: #F5F5F5;
-    --text-dark: #1A1A1A;
-    --text-gray: #616161;
-    --text-light: #9E9E9E;
-    --border: #E0E0E0;
-    --danger: #D32F2F;
-    --success: #2E7D32;
-    --warning: #F57C00;
+    --bg-page: #FDFBF7;
+    --text-dark: #2C1810;
+    --text-gray: #6B4E3A;
+    --text-light: #B8956E;
+    --border: #E8DCCC;
+    --danger: #D9534F;
+    --success: #2E8B57;
+    --warning: #E67E22;
     --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
     --shadow: 0 4px 6px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.03);
@@ -100,7 +100,7 @@ button {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(46, 125, 50, 0.3) 100%);
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 100%);
     z-index: 1;
 }
 
@@ -154,7 +154,7 @@ button {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 10px 40px rgba(46, 125, 50, 0.3);
+    box-shadow: 0 10px 40px rgba(166, 124, 82, 0.3);
     animation: pulse 3s ease-in-out infinite;
     overflow: hidden;
 }
@@ -162,10 +162,10 @@ button {
 @keyframes pulse {
     0%,
     100% {
-        box-shadow: 0 10px 40px rgba(46, 125, 50, 0.3);
+        box-shadow: 0 10px 40px rgba(166, 124, 82, 0.3)
     }
     50% {
-        box-shadow: 0 10px 60px rgba(46, 125, 50, 0.5);
+        box-shadow: 0 10px 60px rgba(166, 124, 82, 0.5)
     }
 }
 
@@ -185,7 +185,7 @@ button {
 
 .login-brand h1 span,
 .register-brand h1 span {
-    color: #66BB6A;
+    color: var(--primary);
 }
 
 .login-form,
@@ -221,7 +221,7 @@ button {
 
 .input-group:focus-within {
     border-color: var(--primary);
-    box-shadow: 0 0 0 5px rgba(46, 125, 50, 0.12);
+    box-shadow: 0 0 0 5px rgba(166, 124, 82, 0.12);
     background: #fff;
 }
 
@@ -292,7 +292,7 @@ button {
 
 .btn-login:hover {
     transform: translateY(-3px);
-    box-shadow: 0 12px 30px rgba(46, 125, 50, 0.35);
+    box-shadow: 0 12px 30px rgba(166, 124, 82, 0.35);
 }
 
 .btn-login:active {
@@ -313,7 +313,7 @@ button {
 }
 
 .register-link strong {
-    color: #66BB6A;
+    color: var(--primary);
     cursor: pointer;
     transition: var(--transition);
 }
@@ -334,7 +334,7 @@ button {
 /* Sidebar */
 .sidebar {
     width: 280px;
-    background: linear-gradient(180deg, #1B5E20 0%, #0D3B10 100%);
+    background: linear-gradient(180deg, #2C1810 0%, #1a0f0a 100%);
     display: flex;
     flex-direction: column;
     position: fixed;
@@ -381,7 +381,7 @@ button {
 }
 
 .sidebar-header h2 span {
-    color: #66BB6A;
+    color: var(--primary);
 }
 
 .sidebar-subtitle {
@@ -427,15 +427,15 @@ button {
 }
 
 .nav-item:hover {
-    background: rgba(46, 125, 50, 0.15);
-    color: #66BB6A;
+    background: rgba(166, 124, 82, 0.1);
+    color: var(--primary);
 }
 
 .nav-item.active {
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: #fff;
     font-weight: 600;
-    box-shadow: 0 6px 20px rgba(46, 125, 50, 0.35);
+    box-shadow: 0 6px 20px rgba(166, 124, 82, 0.35);
 }
 
 .logout-item {
@@ -467,7 +467,7 @@ button {
 
 .user-info i {
     font-size: 1.5rem;
-    color: #66BB6A;
+    color: var(--primary);
 }
 
 /* Main Content */
@@ -675,8 +675,8 @@ button {
 
 /* Status Badges */
 .status-success {
-    background: #E8F5E9;
-    color: #1B5E20;
+    background: #dcfce7;
+    color: #166534;
     padding: 5px 14px;
     border-radius: 30px;
     font-size: 0.76rem;
@@ -687,8 +687,8 @@ button {
 }
 
 .status-warning {
-    background: #FFF3E0;
-    color: #E65100;
+    background: #fef3c7;
+    color: #92400e;
     padding: 5px 14px;
     border-radius: 30px;
     font-size: 0.76rem;
@@ -699,8 +699,8 @@ button {
 }
 
 .status-danger {
-    background: #FFEBEE;
-    color: #B71C1C;
+    background: #fee2e2;
+    color: #991b1b;
     padding: 5px 14px;
     border-radius: 30px;
     font-size: 0.76rem;
@@ -726,13 +726,13 @@ button {
     font-weight: 600;
     white-space: nowrap;
     transition: var(--transition);
-    box-shadow: 0 4px 12px rgba(46, 125, 50, 0.25);
+    box-shadow: 0 4px 12px rgba(166, 124, 82, 0.25);
     letter-spacing: 0.3px;
 }
 
 .btn-add:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(46, 125, 50, 0.4);
+    box-shadow: 0 8px 25px rgba(166, 124, 82, 0.4);
 }
 
 .btn-add:active {
@@ -767,8 +767,8 @@ button {
 }
 
 .btn-delete:hover {
-    background: #FFEBEE;
-    color: #B71C1C;
+    background: #fee2e2;
+    color: #dc2626;
 }
 
 /* Modal */
@@ -849,7 +849,7 @@ button {
 
 .modal-close:hover {
     color: var(--danger);
-    background: #FFEBEE;
+    background: #fee2e2;
 }
 
 .modal-body .form-row {
@@ -892,7 +892,7 @@ button {
 .modal-body .form-group textarea:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.08);
+    box-shadow: 0 0 0 4px rgba(166, 124, 82, 0.08);
 }
 
 .modal-body .form-group textarea {
@@ -901,7 +901,7 @@ button {
 }
 
 .btn-save {
-    background: linear-gradient(135deg, #2E7D32, #1B5E20);
+    background: linear-gradient(135deg, #2E8B57, #1e6b42);
     border: none;
     padding: 13px 30px;
     border-radius: 10px;
@@ -917,7 +917,7 @@ button {
 
 .btn-save:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(46, 125, 50, 0.4);
+    box-shadow: 0 8px 25px rgba(46, 139, 86, 0.4);
 }
 
 .btn-cancel {
@@ -990,7 +990,7 @@ button {
     z-index: 99;
 }
 
-/* ==================== POS SYSTEM ==================== */
+/* ==================== POS SYSTEM (DESKTOP) ==================== */
 .pos-container {
     display: flex;
     gap: 28px;
@@ -1056,7 +1056,7 @@ button {
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: #fff;
     border-color: var(--primary);
-    box-shadow: 0 6px 18px rgba(46, 125, 50, 0.3);
+    box-shadow: 0 6px 18px rgba(166, 124, 82, 0.3);
 }
 
 .pos-products-grid {
@@ -1146,7 +1146,7 @@ button {
 }
 
 .pos-promo-price {
-    color: #D32F2F;
+    color: #dc2626;
 }
 
 .pos-cart-panel {
@@ -1207,7 +1207,7 @@ button {
 
 .pos-clear-btn:hover {
     color: var(--danger);
-    background: #FFEBEE;
+    background: #fee2e2;
 }
 
 .pos-back-btn:hover {
@@ -1305,7 +1305,7 @@ button {
     height: 34px;
     border-radius: 50%;
     border: none;
-    background: #FFEBEE;
+    background: #fee2e2;
     cursor: pointer;
     color: var(--danger);
     transition: var(--transition);
@@ -1317,7 +1317,7 @@ button {
 }
 
 .pos-remove-btn:hover {
-    background: #FFCDD2;
+    background: #fecaca;
 }
 
 .pos-cart-item-total {
@@ -1373,7 +1373,7 @@ button {
 
 .pos-validate-btn:hover:not(:disabled) {
     transform: translateY(-3px);
-    box-shadow: 0 10px 25px rgba(46, 125, 50, 0.4);
+    box-shadow: 0 10px 25px rgba(166, 124, 82, 0.4);
 }
 
 .pos-validate-btn:disabled {
@@ -1382,14 +1382,14 @@ button {
 }
 
 .pos-finalize-btn {
-    background: linear-gradient(135deg, #2E7D32, #1B5E20);
+    background: linear-gradient(135deg, #2E8B57, #1e6b42);
     color: #fff;
     margin-top: 24px;
 }
 
 .pos-finalize-btn:hover {
     transform: translateY(-3px);
-    box-shadow: 0 10px 25px rgba(46, 125, 50, 0.4);
+    box-shadow: 0 10px 25px rgba(46, 139, 86, 0.4);
 }
 
 /* ==================== PAIEMENT ==================== */
@@ -1404,7 +1404,7 @@ button {
 
 .pos-payment-section label {
     font-weight: 600;
-    color: #1A1A1A;
+    color: #2C1810;
     margin-bottom: 12px;
     display: block;
     font-size: 1.2rem;
@@ -1432,7 +1432,7 @@ button {
 .pos-payment-section select:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.08);
+    box-shadow: 0 0 0 4px rgba(166, 124, 82, 0.08);
 }
 
 .pos-or-divider {
@@ -1502,12 +1502,12 @@ button {
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: #fff;
     border-color: var(--primary);
-    box-shadow: 0 6px 18px rgba(46, 125, 50, 0.3);
+    box-shadow: 0 6px 18px rgba(166, 124, 82, 0.3);
 }
 
 .pos-change-positive {
-    background: #E8F5E9;
-    color: #1B5E20;
+    background: #dcfce7;
+    color: #166534;
     padding: 18px 22px;
     border-radius: 14px;
     margin-top: 15px;
@@ -1519,8 +1519,8 @@ button {
 }
 
 .pos-change-negative {
-    background: #FFEBEE;
-    color: #B71C1C;
+    background: #fee2e2;
+    color: #991b1b;
     padding: 18px 22px;
     border-radius: 14px;
     margin-top: 15px;
@@ -1571,7 +1571,7 @@ button {
 
 #changePasswordForm input:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.08);
+    box-shadow: 0 0 0 3px rgba(166, 124, 82, 0.08);
     outline: none;
 }
 
@@ -1608,7 +1608,7 @@ button {
 #marketingProgramContent select:focus,
 #marketingProgramContent input[type="number"]:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.08);
+    box-shadow: 0 0 0 3px rgba(166, 124, 82, 0.08);
     outline: none;
 }
 
