@@ -1,7 +1,8 @@
-// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET) ====================
+// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET AVEC RECHERCHE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
+var posSearchQuery = ''; // Variable pour la recherche de produits
 
 // Commandes tables
 var posCommandesTables = [];
@@ -41,19 +42,18 @@ async function loadPosPage(c) {
     posCommandesFilterText = '';
     posCommandesSortField = 'createdAt';
     posCommandesSortOrder = 'desc';
+    posSearchQuery = '';
 
-    let cachedCategories = await CacheDB.getAll('categories');
-    let cachedProducts = await CacheDB.getAll('products');
-    let cachedClients = await CacheDB.getAll('clients');
-    if (cachedCategories.length) posCategoriesList = cachedCategories.map(cat => ({
-        id: cat.id, nom: cat.nom, imageBase64: cat.imageBase64, recette: cat.recette || false
-    }));
-    if (cachedProducts.length) posProductsList = cachedProducts.filter(p => p.disponible !== false);
-    if (cachedClients.length) {
-        posAllClients = cachedClients.map(c => ({ id: c.id, nom: c.nom, prenom: c.prenom, telephone: c.telephone }));
-        posFilteredClients = [...posAllClients];
+    // Forcer le chargement depuis Firestore
+    posCategoriesList = [];
+    posProductsList = [];
+    posAllClients = [];
+    posFilteredClients = [];
+    
+    // Afficher un message de chargement
+    if (c) {
+        c.innerHTML = '<div style="text-align:center;padding:60px;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2E7D32;"></i><p style="margin-top:15px;">Chargement du POS...</p></div>';
     }
-    renderPOS();
 
     try {
         const [cs, ps, cl] = await Promise.all([
@@ -61,12 +61,16 @@ async function loadPosPage(c) {
             db.collection('products').get(),
             db.collection('clients').limit(500).get()
         ]);
+        
+        // Catégories
         posCategoriesList = [];
         cs.forEach(d => {
             let cat = { id: d.id, nom: d.data().nom, imageBase64: d.data().imageBase64, recette: d.data().recette || false };
             posCategoriesList.push(cat);
             CacheDB.set('categories', d.id, cat);
         });
+        
+        // Produits
         posProductsList = [];
         ps.forEach(d => {
             const dd = d.data();
@@ -80,6 +84,8 @@ async function loadPosPage(c) {
                 CacheDB.set('products', d.id, prod);
             }
         });
+        
+        // Clients
         posAllClients = [];
         cl.forEach(d => {
             let cli = { id: d.id, nom: d.data().nom, prenom: d.data().prenom, telephone: d.data().telephone };
@@ -87,8 +93,22 @@ async function loadPosPage(c) {
             CacheDB.set('clients', d.id, cli);
         });
         posFilteredClients = [...posAllClients];
-        renderPOS();
-    } catch(e) { console.error('Erreur mise à jour POS', e); }
+        
+    } catch(e) {
+        console.error('Erreur chargement POS:', e);
+        // Fallback vers le cache si Firestore échoue
+        let cachedCategories = await CacheDB.getAll('categories');
+        let cachedProducts = await CacheDB.getAll('products');
+        let cachedClients = await CacheDB.getAll('clients');
+        if (cachedCategories.length) posCategoriesList = cachedCategories.map(cat => ({
+            id: cat.id, nom: cat.nom, imageBase64: cat.imageBase64, recette: cat.recette || false
+        }));
+        if (cachedProducts.length) posProductsList = cachedProducts.filter(p => p.disponible !== false);
+        if (cachedClients.length) {
+            posAllClients = cachedClients.map(c => ({ id: c.id, nom: c.nom, prenom: c.prenom, telephone: c.telephone }));
+            posFilteredClients = [...posAllClients];
+        }
+    }
 
     await posChargerCommandesTables();
     await posChargerCommandesEnLigneCount();
@@ -150,6 +170,12 @@ async function loadPosPage(c) {
         return;
     }
 
+    renderPOS();
+}
+
+// ==================== RECHERCHE DE PRODUITS ====================
+function posSearchProducts(query) {
+    posSearchQuery = query.toLowerCase().trim();
     renderPOS();
 }
 
@@ -379,6 +405,7 @@ function posResetCart() {
     posCurrentClient = null; posCurrentTable = '';
     posPaymentMethod = 'espece'; posAmountGiven = 0; posDiscountMAD = 0;
     posFilteredClients = posAllClients.slice();
+    posSearchQuery = '';
     delete window.posCommandeId; delete window.posVenteId;
 }
 
@@ -593,21 +620,39 @@ function posConfirmOptions() {
     closeModal(); renderPOS();
 }
 
+// ==================== RENDER POS AVEC RECHERCHE ====================
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
+    
+    // Vérifier si les données sont chargées
+    if (posProductsList.length === 0 && posCategoriesList.length === 0) {
+        c.innerHTML = '<div style="text-align:center;padding:60px;">' +
+            '<i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2E7D32;"></i>' +
+            '<p style="margin-top:15px;">Chargement du POS...</p>' +
+            '</div>';
+        return;
+    }
+    
     var st = posCalculateTotal(); var t = st - posDiscountMAD;
     var h = '<div class="pos-container"><div class="pos-products-panel">';
-    h += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap;">';
-    h += '<div class="pos-categories-bar" style="margin-bottom:0;">';
-    h += '<button class="pos-cat-btn ' + (posSelectedCategory === 'all' ? 'active' : '') + '" onclick="posFilterCategory(\'all\')"><i class="fas fa-th-large"></i> Tous</button>';
-    for (var i = 0; i < posCategoriesList.length; i++) {
-        var ca = posCategoriesList[i];
-        var ac = posSelectedCategory === ca.nom ? 'active' : '';
-        var ih = ca.imageBase64 ? '<img src="' + escapeHtml(ca.imageBase64) + '" alt="">' : '<i class="fas fa-folder"></i>';
-        h += '<button class="pos-cat-btn ' + ac + '" onclick="posFilterCategory(\'' + escapeHtml(ca.nom).replace(/'/g, "\\'") + '\')">' + ih + ' ' + escapeHtml(ca.nom) + '</button>';
+    
+    // ===== BARRE DE RECHERCHE + CATÉGORIES =====
+    h += '<div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">';
+    
+    // Barre de recherche
+    h += '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">';
+    h += '<div style="flex:1; min-width:200px; position:relative; display:flex; align-items:center; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:4px 16px; transition:all 0.3s ease;">';
+    h += '<i class="fas fa-search" style="color:#94a3b8; margin-right:8px;"></i>';
+    h += '<input type="text" id="posSearchInput" placeholder="🔍 Rechercher un produit..." value="' + escapeHtml(posSearchQuery) + '" ';
+    h += 'onkeyup="posSearchProducts(this.value)" style="border:none; outline:none; padding:10px 0; width:100%; font-size:0.95rem; background:transparent;">';
+    if (posSearchQuery) {
+        h += '<button onclick="document.getElementById(\'posSearchInput\').value=\'\'; posSearchProducts(\'\');" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:4px 8px; font-size:1rem;">';
+        h += '<i class="fas fa-times-circle"></i></button>';
     }
     h += '</div>';
-    h += '<div style="display:flex; gap:8px; margin-left:10px;">';
+    
+    // Boutons Tables et En ligne
+    h += '<div style="display:flex; gap:6px; flex-wrap:wrap;">';
     h += '<button onclick="posAfficherCommandesTables()" style="position:relative; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:8px 16px; cursor:pointer; font-weight:600; color:#1e293b; display:flex; align-items:center; gap:6px; white-space:nowrap;">';
     h += '<i class="fas fa-utensils"></i> Tables';
     h += '<span style="background:#ef4444; color:#fff; border-radius:20px; padding:2px 8px; font-size:0.7rem; margin-left:4px;">' + posCommandesTablesCount + '</span>';
@@ -618,28 +663,85 @@ function renderPOS() {
     h += '</button>';
     h += '</div>';
     h += '</div>';
-    // Grille produits
+    
+    // Catégories
+    h += '<div class="pos-categories-bar" style="margin-bottom:0;">';
+    h += '<button class="pos-cat-btn ' + (posSelectedCategory === 'all' ? 'active' : '') + '" onclick="posFilterCategory(\'all\')"><i class="fas fa-th-large"></i> Tous</button>';
+    for (var i = 0; i < posCategoriesList.length; i++) {
+        var ca = posCategoriesList[i];
+        var ac = posSelectedCategory === ca.nom ? 'active' : '';
+        var ih = ca.imageBase64 ? '<img src="' + escapeHtml(ca.imageBase64) + '" alt="">' : '<i class="fas fa-folder"></i>';
+        h += '<button class="pos-cat-btn ' + ac + '" onclick="posFilterCategory(\'' + escapeHtml(ca.nom).replace(/'/g, "\\'") + '\')">' + ih + ' ' + escapeHtml(ca.nom) + '</button>';
+    }
+    h += '</div>';
+    h += '</div>';
+    
+    // ===== GRILLE PRODUITS AVEC FILTRE =====
     h += '<div class="pos-products-grid">';
-    var f = posProductsList; if (posSelectedCategory !== 'all') f = posProductsList.filter(function(p) { return p.categorie === posSelectedCategory; });
-    if (f.length === 0) { h += '<div style="grid-column:1/-1;text-align:center;padding:40px;">Aucun produit disponible</div>'; }
-    else {
+    
+    // Filtrage des produits
+    var f = posProductsList;
+    if (posSelectedCategory !== 'all') {
+        f = f.filter(function(p) { return p.categorie === posSelectedCategory; });
+    }
+    if (posSearchQuery) {
+        f = f.filter(function(p) {
+            return (p.nom || '').toLowerCase().indexOf(posSearchQuery) !== -1 ||
+                   (p.categorie || '').toLowerCase().indexOf(posSearchQuery) !== -1;
+        });
+    }
+    
+    // Tri des produits (alphabétique)
+    f.sort(function(a, b) {
+        return (a.nom || '').localeCompare(b.nom || '');
+    });
+    
+    if (f.length === 0) { 
+        var message = posSearchQuery ? 'Aucun produit trouvé pour "' + escapeHtml(posSearchQuery) + '"' : 'Aucun produit disponible';
+        h += '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;">';
+        h += '<i class="fas fa-search" style="font-size:3rem;color:#94a3b8;display:block;margin-bottom:15px;"></i>';
+        h += '<p style="color:#94a3b8;font-size:1.1rem;">' + message + '</p>';
+        if (posSearchQuery) {
+            h += '<button class="btn-add" onclick="document.getElementById(\'posSearchInput\').value=\'\'; posSearchProducts(\'\');" style="margin-top:15px;"><i class="fas fa-times"></i> Effacer la recherche</button>';
+        }
+        h += '</div>'; 
+    } else {
+        // Afficher le nombre de résultats
+        if (posSearchQuery) {
+            h += '<div style="grid-column:1/-1;text-align:left;padding:5px 10px;font-size:0.85rem;color:#94a3b8;">';
+            h += f.length + ' résultat' + (f.length > 1 ? 's' : '') + ' trouvé' + (f.length > 1 ? 's' : '');
+            h += '</div>';
+        }
+        
         for (var j = 0; j < f.length; j++) {
             var p = f[j];
             var pr = p.prixPromo && p.prixPromo > 0 ? p.prixPromo : p.prixVente;
             var hp = p.prixPromo && p.prixPromo > 0;
             var sc = '', stt = '';
-            if (p.stock !== undefined) { if (p.stock <= 0) { sc = 'pos-out-of-stock'; stt = ' (Rupture)'; } else if (p.stock <= 5) { stt = ' (' + p.stock + ' rest.)'; } }
+            if (p.stock !== undefined) { 
+                if (p.stock <= 0) { sc = 'pos-out-of-stock'; stt = ' (Rupture)'; } 
+                else if (p.stock <= 5) { stt = ' (' + p.stock + ' rest.)'; } 
+            }
+            
+            // Mettre en évidence le texte recherché
+            var displayName = escapeHtml(p.nom);
+            if (posSearchQuery) {
+                var regex = new RegExp('(' + posSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+                displayName = displayName.replace(regex, '<mark style="background:#fef3c7; border-radius:3px; padding:0 2px;">$1</mark>');
+            }
+            
             h += '<div class="pos-product-card ' + sc + '" onclick="posAddToCartOrOpenOptions(\'' + p.id + '\')">';
             if (p.imageBase64) h += '<div class="pos-product-img"><img src="' + escapeHtml(p.imageBase64) + '" alt=""></div>';
             else h += '<div class="pos-product-img pos-product-placeholder"><i class="fas fa-box"></i></div>';
-            h += '<div class="pos-product-info"><span class="pos-product-name">' + escapeHtml(p.nom) + stt + '</span><span class="pos-product-price">';
+            h += '<div class="pos-product-info"><span class="pos-product-name">' + displayName + stt + '</span><span class="pos-product-price">';
             if (hp) h += '<span class="pos-old-price">' + p.prixVente.toFixed(2) + '</span> <span class="pos-promo-price">' + pr.toFixed(2) + ' MAD</span>';
             else h += pr.toFixed(2) + ' MAD';
             h += '</span></div></div>';
         }
     }
     h += '</div></div>';
-    // Panier
+    
+    // ===== PANIER =====
     h += '<div class="pos-cart-panel">';
     if (posStep === 1) {
         h += '<div class="pos-cart-header"><h3><i class="fas fa-shopping-cart"></i> Panier <span class="pos-cart-badge">' + posCart.length + '</span></h3><button class="pos-clear-btn" onclick="posResetCart()"><i class="fas fa-trash-alt"></i> Vider</button></div><div class="pos-cart-items">';
@@ -674,17 +776,81 @@ function renderPOS() {
     h += '</div></div>';
     c.innerHTML = h;
     if (posStep === 2) setTimeout(posCalculateChange, 200);
+    
+    // Focus sur la barre de recherche
+    // setTimeout(function() {
+    //     var searchInput = document.getElementById('posSearchInput');
+    //     if (searchInput) searchInput.focus();
+    // }, 100);
 }
 
-function posFilterCategory(ca) { posSelectedCategory = ca; renderPOS(); }
+function posFilterCategory(ca) { 
+    posSelectedCategory = ca; 
+    var searchInput = document.getElementById('posSearchInput');
+    if (searchInput) {
+        posSearchQuery = searchInput.value.toLowerCase().trim();
+    }
+    renderPOS(); 
+}
+
 function posUpdateDiscountMAD(v) { posDiscountMAD = parseFloat(v) || 0; if (posDiscountMAD < 0) posDiscountMAD = 0; renderPOS(); }
-function posUpdateQty(i, ch) { var it = posCart[i]; if (!it) return; var p = posProductsList.find(function(x) { return x.id === it.id; }); var nq = it.quantite + ch; if (nq <= 0) posCart.splice(i, 1); else { if (p && p.stock !== undefined && nq > p.stock) { alert('Max: ' + p.stock); return; } it.quantite = nq; } renderPOS(); }
+
+function posUpdateQty(i, ch) { 
+    var it = posCart[i]; if (!it) return; 
+    var p = posProductsList.find(function(x) { return x.id === it.id; }); 
+    var nq = it.quantite + ch; 
+    if (nq <= 0) posCart.splice(i, 1); 
+    else { 
+        if (p && p.stock !== undefined && nq > p.stock) { alert('Max: ' + p.stock); return; } 
+        it.quantite = nq; 
+    } 
+    renderPOS(); 
+}
+
 function posRemoveItem(i) { posCart.splice(i, 1); renderPOS(); }
-function posCalculateTotal() { var t = 0; for (var i = 0; i < posCart.length; i++) t += posCart[i].prixUnitaire * posCart[i].quantite; return t; }
-function posGoToStep2() { if (posCart.length === 0) { alert('Panier vide'); return; } posStep = 2; renderPOS(); }
-function posGoToStep1() { posStep = 1; delete window.posCommandeId; delete window.posVenteId; renderPOS(); }
-function posSetPaymentMethod(m) { if ((m === 'credit' || m === 'partiel') && (!posCurrentClient || !posCurrentClient.id)) { alert('Client requis pour crédit/partiel.'); return; } posPaymentMethod = m; posAmountGiven = 0; renderPOS(); }
-function posCalculateChange() { var ai = document.getElementById('posAmountGiven'), cd = document.getElementById('posChangeDisplay'); if (!ai || !cd) return; var st = posCalculateTotal(); var t = st - posDiscountMAD; posAmountGiven = parseFloat(ai.value) || 0; var c = posAmountGiven - t; if (posAmountGiven > 0) { cd.innerHTML = c >= 0 ? '<div class="pos-change-positive"><span>Rendu</span><span>' + c.toFixed(2) + ' MAD</span></div>' : '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c).toFixed(2) + ' MAD</span></div>'; } else { cd.innerHTML = ''; } }
+
+function posCalculateTotal() { 
+    var t = 0; 
+    for (var i = 0; i < posCart.length; i++) t += posCart[i].prixUnitaire * posCart[i].quantite; 
+    return t; 
+}
+
+function posGoToStep2() { 
+    if (posCart.length === 0) { alert('Panier vide'); return; } 
+    posStep = 2; 
+    renderPOS(); 
+}
+
+function posGoToStep1() { 
+    posStep = 1; 
+    delete window.posCommandeId; 
+    delete window.posVenteId; 
+    renderPOS(); 
+}
+
+function posSetPaymentMethod(m) { 
+    if ((m === 'credit' || m === 'partiel') && (!posCurrentClient || !posCurrentClient.id)) { 
+        alert('Client requis pour crédit/partiel.'); 
+        return; 
+    } 
+    posPaymentMethod = m; 
+    posAmountGiven = 0; 
+    renderPOS(); 
+}
+
+function posCalculateChange() { 
+    var ai = document.getElementById('posAmountGiven'), cd = document.getElementById('posChangeDisplay'); 
+    if (!ai || !cd) return; 
+    var st = posCalculateTotal(); 
+    var t = st - posDiscountMAD; 
+    posAmountGiven = parseFloat(ai.value) || 0; 
+    var c = posAmountGiven - t; 
+    if (posAmountGiven > 0) { 
+        cd.innerHTML = c >= 0 ? '<div class="pos-change-positive"><span>Rendu</span><span>' + c.toFixed(2) + ' MAD</span></div>' : '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c).toFixed(2) + ' MAD</span></div>'; 
+    } else { 
+        cd.innerHTML = ''; 
+    } 
+}
 
 // ==================== FINALISATION ====================
 async function posFinalizeSale() {
@@ -829,4 +995,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS prêt');
+console.log('🛒 Mixmax Minimarket - POS JS prêt (avec recherche)');
