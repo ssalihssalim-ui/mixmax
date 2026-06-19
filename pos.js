@@ -1,4 +1,4 @@
-// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET AVEC RECHERCHE) ====================
+// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET AVEC RECHERCHE CORRIGÉE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -173,10 +173,83 @@ async function loadPosPage(c) {
     renderPOS();
 }
 
-// ==================== RECHERCHE DE PRODUITS ====================
+// ==================== RECHERCHE DE PRODUITS (Version corrigée - sans perte de focus) ====================
 function posSearchProducts(query) {
     posSearchQuery = query.toLowerCase().trim();
-    renderPOS();
+    filterProductGrid();
+}
+
+// ==================== FILTRER UNIQUEMENT LA GRILLE ====================
+function filterProductGrid() {
+    var grid = document.getElementById('posProductGrid');
+    if (!grid) {
+        grid = document.querySelector('.pos-products-grid');
+    }
+    if (!grid) return;
+    
+    var f = posProductsList;
+    if (posSelectedCategory !== 'all') {
+        f = f.filter(function(p) { return p.categorie === posSelectedCategory; });
+    }
+    if (posSearchQuery) {
+        f = f.filter(function(p) {
+            return (p.nom || '').toLowerCase().indexOf(posSearchQuery) !== -1 ||
+                   (p.categorie || '').toLowerCase().indexOf(posSearchQuery) !== -1;
+        });
+    }
+    
+    // Trier les produits (alphabétique)
+    f.sort(function(a, b) {
+        return (a.nom || '').localeCompare(b.nom || '');
+    });
+    
+    // Générer uniquement la grille
+    var html = '';
+    
+    if (f.length === 0) { 
+        var message = posSearchQuery ? 'Aucun produit trouvé pour "' + escapeHtml(posSearchQuery) + '"' : 'Aucun produit disponible';
+        html += '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;">';
+        html += '<i class="fas fa-search" style="font-size:3rem;color:#94a3b8;display:block;margin-bottom:15px;"></i>';
+        html += '<p style="color:#94a3b8;font-size:1.1rem;">' + message + '</p>';
+        if (posSearchQuery) {
+            html += '<button class="btn-add" onclick="document.getElementById(\'posSearchInput\').value=\'\'; posSearchProducts(\'\');" style="margin-top:15px;"><i class="fas fa-times"></i> Effacer la recherche</button>';
+        }
+        html += '</div>'; 
+    } else {
+        if (posSearchQuery) {
+            html += '<div style="grid-column:1/-1;text-align:left;padding:5px 10px;font-size:0.85rem;color:#94a3b8;">';
+            html += f.length + ' résultat' + (f.length > 1 ? 's' : '') + ' trouvé' + (f.length > 1 ? 's' : '');
+            html += '</div>';
+        }
+        
+        for (var j = 0; j < f.length; j++) {
+            var p = f[j];
+            var pr = p.prixPromo && p.prixPromo > 0 ? p.prixPromo : p.prixVente;
+            var hp = p.prixPromo && p.prixPromo > 0;
+            var sc = '', stt = '';
+            if (p.stock !== undefined) { 
+                if (p.stock <= 0) { sc = 'pos-out-of-stock'; stt = ' (Rupture)'; } 
+                else if (p.stock <= 5) { stt = ' (' + p.stock + ' rest.)'; } 
+            }
+            
+            // Mettre en évidence le texte recherché
+            var displayName = escapeHtml(p.nom);
+            if (posSearchQuery) {
+                var regex = new RegExp('(' + posSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+                displayName = displayName.replace(regex, '<mark style="background:#fef3c7; border-radius:3px; padding:0 2px;">$1</mark>');
+            }
+            
+            html += '<div class="pos-product-card ' + sc + '" onclick="posAddToCartOrOpenOptions(\'' + p.id + '\')">';
+            if (p.imageBase64) html += '<div class="pos-product-img"><img src="' + escapeHtml(p.imageBase64) + '" alt=""></div>';
+            else html += '<div class="pos-product-img pos-product-placeholder"><i class="fas fa-box"></i></div>';
+            html += '<div class="pos-product-info"><span class="pos-product-name">' + displayName + stt + '</span><span class="pos-product-price">';
+            if (hp) html += '<span class="pos-old-price">' + p.prixVente.toFixed(2) + '</span> <span class="pos-promo-price">' + pr.toFixed(2) + ' MAD</span>';
+            else html += pr.toFixed(2) + ' MAD';
+            html += '</span></div></div>';
+        }
+    }
+    
+    grid.innerHTML = html;
 }
 
 // ========== CHARGEMENT DES COMMANDES TABLES ==========
@@ -407,6 +480,8 @@ function posResetCart() {
     posFilteredClients = posAllClients.slice();
     posSearchQuery = '';
     delete window.posCommandeId; delete window.posVenteId;
+    var searchInput = document.getElementById('posSearchInput');
+    if (searchInput) searchInput.value = '';
 }
 
 function posSearchClient(query) {
@@ -620,7 +695,7 @@ function posConfirmOptions() {
     closeModal(); renderPOS();
 }
 
-// ==================== RENDER POS AVEC RECHERCHE ====================
+// ==================== RENDER POS AVEC RECHERCHE (sans perte de focus) ====================
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
     
@@ -676,70 +751,9 @@ function renderPOS() {
     h += '</div>';
     h += '</div>';
     
-    // ===== GRILLE PRODUITS AVEC FILTRE =====
-    h += '<div class="pos-products-grid">';
-    
-    // Filtrage des produits
-    var f = posProductsList;
-    if (posSelectedCategory !== 'all') {
-        f = f.filter(function(p) { return p.categorie === posSelectedCategory; });
-    }
-    if (posSearchQuery) {
-        f = f.filter(function(p) {
-            return (p.nom || '').toLowerCase().indexOf(posSearchQuery) !== -1 ||
-                   (p.categorie || '').toLowerCase().indexOf(posSearchQuery) !== -1;
-        });
-    }
-    
-    // Tri des produits (alphabétique)
-    f.sort(function(a, b) {
-        return (a.nom || '').localeCompare(b.nom || '');
-    });
-    
-    if (f.length === 0) { 
-        var message = posSearchQuery ? 'Aucun produit trouvé pour "' + escapeHtml(posSearchQuery) + '"' : 'Aucun produit disponible';
-        h += '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;">';
-        h += '<i class="fas fa-search" style="font-size:3rem;color:#94a3b8;display:block;margin-bottom:15px;"></i>';
-        h += '<p style="color:#94a3b8;font-size:1.1rem;">' + message + '</p>';
-        if (posSearchQuery) {
-            h += '<button class="btn-add" onclick="document.getElementById(\'posSearchInput\').value=\'\'; posSearchProducts(\'\');" style="margin-top:15px;"><i class="fas fa-times"></i> Effacer la recherche</button>';
-        }
-        h += '</div>'; 
-    } else {
-        // Afficher le nombre de résultats
-        if (posSearchQuery) {
-            h += '<div style="grid-column:1/-1;text-align:left;padding:5px 10px;font-size:0.85rem;color:#94a3b8;">';
-            h += f.length + ' résultat' + (f.length > 1 ? 's' : '') + ' trouvé' + (f.length > 1 ? 's' : '');
-            h += '</div>';
-        }
-        
-        for (var j = 0; j < f.length; j++) {
-            var p = f[j];
-            var pr = p.prixPromo && p.prixPromo > 0 ? p.prixPromo : p.prixVente;
-            var hp = p.prixPromo && p.prixPromo > 0;
-            var sc = '', stt = '';
-            if (p.stock !== undefined) { 
-                if (p.stock <= 0) { sc = 'pos-out-of-stock'; stt = ' (Rupture)'; } 
-                else if (p.stock <= 5) { stt = ' (' + p.stock + ' rest.)'; } 
-            }
-            
-            // Mettre en évidence le texte recherché
-            var displayName = escapeHtml(p.nom);
-            if (posSearchQuery) {
-                var regex = new RegExp('(' + posSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-                displayName = displayName.replace(regex, '<mark style="background:#fef3c7; border-radius:3px; padding:0 2px;">$1</mark>');
-            }
-            
-            h += '<div class="pos-product-card ' + sc + '" onclick="posAddToCartOrOpenOptions(\'' + p.id + '\')">';
-            if (p.imageBase64) h += '<div class="pos-product-img"><img src="' + escapeHtml(p.imageBase64) + '" alt=""></div>';
-            else h += '<div class="pos-product-img pos-product-placeholder"><i class="fas fa-box"></i></div>';
-            h += '<div class="pos-product-info"><span class="pos-product-name">' + displayName + stt + '</span><span class="pos-product-price">';
-            if (hp) h += '<span class="pos-old-price">' + p.prixVente.toFixed(2) + '</span> <span class="pos-promo-price">' + pr.toFixed(2) + ' MAD</span>';
-            else h += pr.toFixed(2) + ' MAD';
-            h += '</span></div></div>';
-        }
-    }
-    h += '</div></div>';
+    // ===== GRILLE PRODUITS (avec un ID pour le filtrage) =====
+    h += '<div class="pos-products-grid" id="posProductGrid">';
+    h += '</div></div>'; // Fermeture de la grille et du products panel
     
     // ===== PANIER =====
     h += '<div class="pos-cart-panel">';
@@ -775,13 +789,11 @@ function renderPOS() {
     }
     h += '</div></div>';
     c.innerHTML = h;
-    if (posStep === 2) setTimeout(posCalculateChange, 200);
     
-    // Focus sur la barre de recherche
-    // setTimeout(function() {
-    //     var searchInput = document.getElementById('posSearchInput');
-    //     if (searchInput) searchInput.focus();
-    // }, 100);
+    // Remplir la grille après avoir créé le HTML
+    filterProductGrid();
+    
+    if (posStep === 2) setTimeout(posCalculateChange, 200);
 }
 
 function posFilterCategory(ca) { 
@@ -790,7 +802,7 @@ function posFilterCategory(ca) {
     if (searchInput) {
         posSearchQuery = searchInput.value.toLowerCase().trim();
     }
-    renderPOS(); 
+    filterProductGrid(); 
 }
 
 function posUpdateDiscountMAD(v) { posDiscountMAD = parseFloat(v) || 0; if (posDiscountMAD < 0) posDiscountMAD = 0; renderPOS(); }
@@ -995,4 +1007,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS prêt (avec recherche)');
+console.log('🛒 Mixmax Minimarket - POS JS prêt (avec recherche corrigée)');
