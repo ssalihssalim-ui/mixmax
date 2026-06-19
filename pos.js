@@ -1,4 +1,4 @@
-// ==================== POS.JS - ALMA COFFEE SHOP (COMPLET AVEC RECHERCHE NOM + CATÉGORIE + DESCRIPTION) ====================
+// ==================== POS.JS - MIX MAX (COMPLET AVEC RECHERCHE NOM + CATÉGORIE + DESCRIPTION) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -194,7 +194,7 @@ async function posChargerCommandesEnLigneCount() {
             .where('source', '==', 'client')
             .get();
         posCommandesEnLigneCount = snap.size;
-        console.log('☕ Commandes en ligne :', posCommandesEnLigneCount);
+        console.log('📦 Commandes en ligne :', posCommandesEnLigneCount);
     } catch(e) {
         console.warn('Fallback chargement commandes en ligne', e);
         try {
@@ -205,7 +205,7 @@ async function posChargerCommandesEnLigneCount() {
                 if (data.statut === 'en_attente' && data.source === 'client') count++;
             });
             posCommandesEnLigneCount = count;
-            console.log('☕ Commandes en ligne (fallback) :', posCommandesEnLigneCount);
+            console.log('📦 Commandes en ligne (fallback) :', posCommandesEnLigneCount);
         } catch(err) {
             console.error('Erreur fallback', err);
             posCommandesEnLigneCount = 0;
@@ -717,7 +717,7 @@ function renderPOS() {
     }
     h += '</div></div>';
 
-    // === PANIER (inchangé) ===
+    // Panier
     h += '<div class="pos-cart-panel">';
     if (posStep === 1) {
         h += '<div class="pos-cart-header"><h3><i class="fas fa-shopping-cart"></i> Panier <span class="pos-cart-badge">' + posCart.length + '</span></h3><button class="pos-clear-btn" onclick="posResetCart()"><i class="fas fa-trash-alt"></i> Vider</button></div><div class="pos-cart-items">';
@@ -911,4 +911,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('☕ Alma Coffee Shop - POS JS (recherche par nom, catégorie et description)');
+console.log('📦 Mix Max - POS JS (recherche par nom, catégorie et description)');
