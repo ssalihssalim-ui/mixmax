@@ -76,7 +76,7 @@ async function loadPosPage(c) {
                 let prod = {
                     id: d.id, 
                     nom: dd.nom, 
-                    description: dd.description || '',  // Ajout de la description
+                    description: dd.description || '',  // Ajout de la description (pour la recherche uniquement)
                     prixVente: dd.prixVente||0, 
                     prixPromo: dd.prixPromo||0,
                     prixAchat: dd.prixAchat||0, 
@@ -698,14 +698,11 @@ function renderPOS() {
             }
             h += '<div class="pos-product-info">';
             h += '<span class="pos-product-name">' + escapeHtml(p.nom) + stt + '</span>';
-            // Afficher la catégorie en badge
+            // Afficher la catégorie en badge (uniquement si elle existe)
             if (p.categorie) {
                 h += '<span style="font-size:0.55rem; color:#A67C52; background:#F5E6D3; padding:1px 8px; border-radius:10px; display:inline-block;">' + escapeHtml(p.categorie) + '</span>';
             }
-            // Afficher la description en petit
-            if (p.description) {
-                h += '<span style="font-size:0.6rem; color:#94a3b8; display:block; margin-top:2px;">' + escapeHtml(p.description) + '</span>';
-            }
+            // LA DESCRIPTION N'EST PLUS AFFICHÉE SOUS LE PRODUIT
             h += '<span class="pos-product-price">';
             if (hp) {
                 h += '<span class="pos-old-price">' + p.prixVente.toFixed(2) + '</span> <span class="pos-promo-price">' + pr.toFixed(2) + ' MAD</span>';
