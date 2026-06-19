@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#6F4E37">
+    <meta name="description" content="Système de gestion pour café et restaurant - Alma Coffee Shop">
+    <title>Alma Coffee Shop</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Auth Page -->
+    <div id="authPage" class="login-wrapper">
+        <div class="login-container" id="loginContainer">
+            <div class="login-brand">
+                <div class="brand-icon"><img src="logo.png" alt="Alma Coffee Shop" class="brand-logo"></div>
+                <h1><span>Alma</span> Coffee Shop</h1>
+                <p style="color:rgba(255,255,255,0.8); font-size:0.9rem;">Gestion complète • Café • Pâtisseries</p>
+            </div>
+            <div class="login-form">
+                <h2>🔐 Connexion</h2>
+                <form id="loginForm" onsubmit="return handleLogin(event)">
+                    <div class="input-group"><i class="fas fa-envelope"></i><input type="email" id="loginEmail" placeholder="Email" required></div>
+                    <div class="input-group"><i class="fas fa-lock"></i><input type="password" id="loginPassword" placeholder="Mot de passe" required></div>
+                    <button type="submit" class="btn-login" id="loginBtn"><i class="fas fa-sign-in-alt"></i> Se connecter</button>
+                </form>
+                <div class="register-link">Pas de compte ? <strong onclick="showRegister()">Créer un compte</strong></div>
+            </div>
+        </div>
+        <div class="register-container hidden" id="registerContainer">
+            <div class="register-brand">
+                <div class="brand-icon"><img src="logo.png" alt="Alma Coffee Shop" class="brand-logo"></div>
+                <h1><span>Alma</span> Coffee Shop</h1>
+                <p style="color:rgba(255,255,255,0.8);">Inscription rapide</p>
+            </div>
+            <div class="register-form">
+                <h2>📝 Créer un compte</h2>
+                <form id="registerForm" onsubmit="return handleRegister(event)">
+                    <div class="input-group"><i class="fas fa-user"></i><input type="text" id="regNom" placeholder="Nom" required></div>
+                    <div class="input-group"><i class="fas fa-user"></i><input type="text" id="regPrenom" placeholder="Prénom" required></div>
+                    <div class="input-group"><i class="fas fa-at"></i><input type="text" id="regUsername" placeholder="Nom d'utilisateur" required></div>
+                    <div class="input-group"><i class="fas fa-envelope"></i><input type="email" id="regEmail" placeholder="Email" required></div>
+                    <div class="input-group"><i class="fas fa-phone"></i><input type="tel" id="regTelephone" placeholder="Téléphone" required></div>
+                    <div class="input-group"><i class="fas fa-briefcase"></i>
+                        <select id="regRole">
+                            <option value="client">Client</option>
+                            <option value="caissier">Caissier</option>
+                            <option value="admin">Administrateur</option>
+                        </select>
+                    </div>
+                    <div class="input-group"><i class="fas fa-lock"></i><input type="password" id="regPassword" placeholder="Mot de passe (min 6 caractères)" required></div>
+                    <button type="submit" class="btn-login" id="registerBtn"><i class="fas fa-user-plus"></i> Créer mon compte</button>
+                </form>
+                <div class="register-link">Déjà inscrit ? <strong onclick="showLogin()">Se connecter</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Admin/Caissier -->
+    <div id="dashboardPage" class="dashboard hidden">
+        <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo"><img src="logo.png" alt="Logo" class="sidebar-logo-img"></div>
+                <h2>Alma <span>Coffee</span></h2>
+                <div class="sidebar-subtitle">GESTION</div>
+            </div>
+            <div class="sidebar-nav">
+                <ul id="navMenu"></ul>
+                <ul>
+                    <li class="nav-item logout-item" onclick="handleLogout()"><i class="fas fa-sign-out-alt"></i> Déconnexion</li>
+                </ul>
+            </div>
+            <div class="sidebar-footer">
+                <div class="user-info" id="sidebarUserInfo"><i class="fas fa-user-circle"></i> <span>Chargement...</span></div>
+                <div id="sidebarRole" style="font-size:0.7rem; color:#A67C52; margin-top:5px;"></div>
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="page-header">
+                <div class="header-title"><i class="fas fa-coffee"></i><h2 id="pageTitle">Dashboard</h2></div>
+            </div>
+            <div id="dynamicContent"></div>
+        </div>
+    </div>
+
+    <!-- Client Page -->
+    <div id="clientPage" class="dashboard hidden">
+        <button class="mobile-menu-btn" onclick="toggleClientSidebar()"><i class="fas fa-bars"></i></button>
+        <div class="sidebar-overlay" id="clientSidebarOverlay" onclick="toggleClientSidebar()"></div>
+        <div class="sidebar" id="clientSidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo"><img src="logo.png" alt="Logo" class="sidebar-logo-img"></div>
+                <h2>Alma <span>Coffee</span></h2>
+                <div class="sidebar-subtitle">BIENVENUE</div>
+            </div>
+            <div class="sidebar-nav">
+                <ul>
+                    <li class="nav-item active" onclick="clientNavigate('commander')"><i class="fas fa-coffee"></i> Commander</li>
+                    <li class="nav-item" onclick="clientNavigate('historique')"><i class="fas fa-history"></i> Historique</li>
+                    <li class="nav-item" onclick="clientNavigate('parametres')"><i class="fas fa-user-cog"></i> Paramètres</li>
+                    <li class="nav-item logout-item" onclick="handleLogout()"><i class="fas fa-sign-out-alt"></i> Déconnexion</li>
+                </ul>
+            </div>
+            <div class="sidebar-footer">
+                <div class="user-info" id="clientSidebarInfo"><i class="fas fa-user-circle"></i> <span>Client</span></div>
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="page-header">
+                <div class="header-title"><i class="fas fa-coffee"></i><h2 id="clientPageTitle">Commander</h2></div>
+            </div>
+            <div id="clientDynamicContent"></div>
+        </div>
+    </div>
+
+    <!-- Menu Tactile Page -->
+    <div id="menuTactilePage" class="hidden" style="background:#f8fafc; min-height:100vh;">
+        <div id="menuTactileContent" style="padding-bottom:100px;"></div>
+    </div>
+
+    <!-- ==================== MODAL ==================== -->
+    <div id="modalOverlay" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Titre</h3>
+                <span class="modal-close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="modalBody">
+                Contenu du modal
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="db-cache.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="auth.js"></script>
+    <script src="script.js"></script>
+    <script src="admin.js"></script>
+    <script src="pos.js"></script>
+    <script src="client.js"></script>
+    <script src="menutactile.js"></script>
+    <script src="depenses.js"></script>
+    <script src="statistics.js"></script>
+    <script src="caissier.js"></script>
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(reg => console.log('SW ✓', reg)).catch(err => console.error('SW ✗', err));
+        }
+    </script>
+</body>
+</html>
