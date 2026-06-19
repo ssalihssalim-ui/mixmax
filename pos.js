@@ -1,4 +1,4 @@
-// ==================== POS.JS - ALMA COFFEE SHOP (COMPLET AVEC RECHERCHE DESCRIPTION) ====================
+// ==================== POS.JS - ALMA COFFEE SHOP (COMPLET AVEC RECHERCHE NOM + CATÉGORIE + DESCRIPTION) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -465,7 +465,7 @@ function posSetTable(v) {
     }
 }
 
-// ==================== RECHERCHE POS (nom + description) ====================
+// ==================== RECHERCHE POS (nom + catégorie + description) ====================
 function posSearchProducts(query) {
     posSearchQuery = query || '';
     renderPOS();
@@ -608,12 +608,14 @@ function posConfirmOptions() {
     closeModal(); renderPOS();
 }
 
-// ==================== RENDU PRINCIPAL POS (AVEC RECHERCHE) ====================
+// ==================== RENDU PRINCIPAL POS (AVEC RECHERCHE NOM + CATÉGORIE + DESCRIPTION) ====================
 function renderPOS() {
-    var c = document.getElementById('dynamicContent'); if (!c) return;
-    var st = posCalculateTotal(); var t = st - posDiscountMAD;
+    var c = document.getElementById('dynamicContent'); 
+    if (!c) return;
+    var st = posCalculateTotal(); 
+    var t = st - posDiscountMAD;
 
-    // Filtrer les produits par catégorie
+    // === ÉTAPE 1 : Filtrer par catégorie (si une catégorie est sélectionnée) ===
     var filteredProducts = posProductsList;
     if (posSelectedCategory !== 'all') {
         filteredProducts = filteredProducts.filter(function(p) { 
@@ -621,23 +623,28 @@ function renderPOS() {
         });
     }
 
-    // Filtrer par recherche (nom + description)
+    // === ÉTAPE 2 : Filtrer par recherche (nom + catégorie + description) ===
     if (posSearchQuery && posSearchQuery.trim() !== '') {
         var query = posSearchQuery.toLowerCase().trim();
         filteredProducts = filteredProducts.filter(function(p) {
+            // 1. Recherche dans le NOM
             if (p.nom && p.nom.toLowerCase().indexOf(query) !== -1) return true;
+            // 2. Recherche dans la CATÉGORIE
+            if (p.categorie && p.categorie.toLowerCase().indexOf(query) !== -1) return true;
+            // 3. Recherche dans la DESCRIPTION
             if (p.description && p.description.toLowerCase().indexOf(query) !== -1) return true;
             return false;
         });
     }
 
+    // === ÉTAPE 3 : Construction du HTML ===
     var h = '<div class="pos-container"><div class="pos-products-panel">';
     
     // Barre de recherche
     h += '<div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">';
     h += '<div class="input-group" style="flex:1; min-width:200px; background:#fff; border:2px solid var(--border); border-radius:40px; padding:0 15px;">';
     h += '<i class="fas fa-search" style="color:#94a3b8;"></i>';
-    h += '<input type="text" id="posSearchInput" placeholder="🔍 Rechercher (nom, description)..." value="' + escapeHtml(posSearchQuery) + '" onkeyup="posSearchProducts(this.value)" style="border:none; padding:12px 15px; width:100%; font-size:0.95rem; outline:none;">';
+    h += '<input type="text" id="posSearchInput" placeholder="🔍 Rechercher (nom, catégorie, description)..." value="' + escapeHtml(posSearchQuery) + '" onkeyup="posSearchProducts(this.value)" style="border:none; padding:12px 15px; width:100%; font-size:0.95rem; outline:none;">';
     h += '</div>';
     h += '<button class="btn-cancel" onclick="posSearchProducts(\'\')" style="padding:8px 16px; margin:0; float:none; font-size:0.85rem;">✕ Effacer</button>';
     h += '</div>';
@@ -691,8 +698,13 @@ function renderPOS() {
             }
             h += '<div class="pos-product-info">';
             h += '<span class="pos-product-name">' + escapeHtml(p.nom) + stt + '</span>';
+            // Afficher la catégorie en badge
+            if (p.categorie) {
+                h += '<span style="font-size:0.55rem; color:#A67C52; background:#F5E6D3; padding:1px 8px; border-radius:10px; display:inline-block;">' + escapeHtml(p.categorie) + '</span>';
+            }
+            // Afficher la description en petit
             if (p.description) {
-                h += '<span style="font-size:0.6rem; color:#94a3b8;">' + escapeHtml(p.description) + '</span>';
+                h += '<span style="font-size:0.6rem; color:#94a3b8; display:block; margin-top:2px;">' + escapeHtml(p.description) + '</span>';
             }
             h += '<span class="pos-product-price">';
             if (hp) {
@@ -705,7 +717,7 @@ function renderPOS() {
     }
     h += '</div></div>';
 
-    // Panier
+    // === PANIER (inchangé) ===
     h += '<div class="pos-cart-panel">';
     if (posStep === 1) {
         h += '<div class="pos-cart-header"><h3><i class="fas fa-shopping-cart"></i> Panier <span class="pos-cart-badge">' + posCart.length + '</span></h3><button class="pos-clear-btn" onclick="posResetCart()"><i class="fas fa-trash-alt"></i> Vider</button></div><div class="pos-cart-items">';
@@ -899,4 +911,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('☕ Alma Coffee Shop - POS JS (recherche par description)');
+console.log('☕ Alma Coffee Shop - POS JS (recherche par nom, catégorie et description)');
