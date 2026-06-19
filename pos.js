@@ -1,4 +1,4 @@
-// ==================== POS.JS - MIXMAX MINIMARKET (COMPLET AVEC AJOUT VOCAL AUTOMATIQUE) ====================
+// ==================== POS.JS - MIXMAX MINIMARKET (VERSION STABLE SANS BLOCAGE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -179,7 +179,7 @@ function posSearchProducts(query) {
     filterProductGrid();
 }
 
-// ==================== RECHERCHE VOCALE AVEC AJOUT AUTOMATIQUE AU PANIER ====================
+// ==================== RECHERCHE VOCALE STABLE (SANS BLOCAGE) ====================
 function posStartVoiceSearch() {
     // Vérifier le support
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -188,37 +188,28 @@ function posStartVoiceSearch() {
     }
 
     var searchInput = document.getElementById('posSearchInput');
-    var audioBtn = document.querySelector('.btn-audio') || document.getElementById('posAudioBtn') || document.querySelector('[onclick="posStartVoiceSearch()"]');
+    var audioBtn = document.querySelector('.btn-audio') || document.getElementById('posAudioBtn');
+    var statusSpan = document.getElementById('microStatus');
     
-    // Si déjà en écoute, arrêter
+    // ⭐ FORCER L'ARRÊT DE TOUTE INSTANCE PRÉCÉDENTE
     if (window._recognitionActive) {
         try {
             window._recognitionActive.abort();
+            window._recognitionActive = null;
         } catch(e) {}
-        window._recognitionActive = null;
-        if (searchInput) {
-            searchInput.placeholder = '🔍 Rechercher un produit...';
-            searchInput.style.borderColor = '#e2e8f0';
-            searchInput.style.backgroundColor = '#fff';
-            searchInput.classList.remove('listening');
-        }
-        if (audioBtn) {
-            audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
-            audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
-        }
-        return;
     }
-
+    
+    // ⭐ NETTOYER LES TIMEOUTS EXISTANTS
+    if (window._voiceTimeout) {
+        clearTimeout(window._voiceTimeout);
+        window._voiceTimeout = null;
+    }
+    
     // Vérifier qu'il y a des produits
     if (posProductsList.length === 0) {
         alert('❌ Aucun produit disponible dans la liste.');
         return;
     }
-
-    // Créer la liste des noms de produits pour la comparaison
-    var productNames = posProductsList.map(function(p) { 
-        return p.nom.toLowerCase().trim(); 
-    });
 
     var recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
     recognition.lang = 'fr-FR';
@@ -226,6 +217,20 @@ function posStartVoiceSearch() {
     recognition.interimResults = true;
     recognition.maxAlternatives = 5;
 
+    // ⭐ DÉMARRER LE TIMEOUT DE SÉCURITÉ (5 secondes)
+    window._voiceTimeout = setTimeout(function() {
+        console.log('⏱️ Timeout sécurité - Arrêt du micro');
+        if (window._recognitionActive) {
+            try {
+                window._recognitionActive.abort();
+            } catch(e) {}
+            window._recognitionActive = null;
+        }
+        cleanUp();
+        showVoiceResult('⏱️ Temps écoulé, réessayez');
+    }, 6000); // 6 secondes max
+
+    // Activer l'indicateur visuel
     if (searchInput) {
         searchInput.placeholder = '🎤 Écoute en cours...';
         searchInput.style.borderColor = '#ef4444';
@@ -235,32 +240,44 @@ function posStartVoiceSearch() {
     if (audioBtn) {
         audioBtn.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)';
         audioBtn.innerHTML = '<i class="fas fa-microphone-slash"></i> Arrêter';
+        audioBtn.style.animation = 'pulse-audio 1s ease-in-out infinite';
+    }
+    if (statusSpan) {
+        statusSpan.textContent = '🔴 Écoute...';
+        statusSpan.style.color = '#ef4444';
     }
 
     window._recognitionActive = recognition;
 
     try {
         recognition.start();
+        console.log('🎤 Micro démarré');
     } catch(e) {
+        console.warn('Erreur démarrage micro:', e);
         window._recognitionActive = null;
-        if (searchInput) {
-            searchInput.placeholder = '🔍 Rechercher un produit...';
-            searchInput.style.borderColor = '#e2e8f0';
-            searchInput.style.backgroundColor = '#fff';
-            searchInput.classList.remove('listening');
-        }
-        if (audioBtn) {
-            audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
-            audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
-        }
+        cleanUp();
+        showVoiceResult('❌ Erreur micro: ' + e.message);
         return;
     }
 
+    // ⭐ RÉSULTATS
     recognition.onresult = function(event) {
+        // Réinitialiser le timeout à chaque résultat
+        if (window._voiceTimeout) {
+            clearTimeout(window._voiceTimeout);
+            window._voiceTimeout = setTimeout(function() {
+                if (window._recognitionActive) {
+                    try { window._recognitionActive.abort(); } catch(e) {}
+                    window._recognitionActive = null;
+                }
+                cleanUp();
+                showVoiceResult('⏱️ Temps écoulé');
+            }, 5000);
+        }
+        
         var transcript = '';
         var allAlternatives = [];
         
-        // Récupérer tous les résultats
         for (var i = event.resultIndex; i < event.results.length; i++) {
             if (event.results[i].isFinal) {
                 transcript = event.results[i][0].transcript;
@@ -284,32 +301,27 @@ function posStartVoiceSearch() {
             var foundProduct = null;
             var matchType = '';
             
-            // ===== 1. Recherche EXACTE =====
-            var exactMatch = productNames.find(function(name) {
-                return name === cleanText;
+            // Recherche EXACTE
+            var exactMatch = posProductsList.find(function(p) {
+                return p.nom.toLowerCase() === cleanText;
             });
-            
             if (exactMatch) {
-                foundProduct = posProductsList.find(function(p) {
-                    return p.nom.toLowerCase() === exactMatch;
-                });
+                foundProduct = exactMatch;
                 matchType = 'EXACT';
             }
             
-            // ===== 2. Recherche PARTIELLE =====
+            // Recherche PARTIELLE
             if (!foundProduct) {
-                var partialMatch = productNames.find(function(name) {
-                    return name.indexOf(cleanText) !== -1 && cleanText.length > 2;
+                var partialMatch = posProductsList.find(function(p) {
+                    return p.nom.toLowerCase().indexOf(cleanText) !== -1 && cleanText.length > 2;
                 });
                 if (partialMatch) {
-                    foundProduct = posProductsList.find(function(p) {
-                        return p.nom.toLowerCase() === partialMatch;
-                    });
+                    foundProduct = partialMatch;
                     matchType = 'PARTIEL';
                 }
             }
             
-            // ===== 3. Recherche par MOTS-CLÉS =====
+            // Recherche MOTS-CLÉS
             if (!foundProduct) {
                 var words = cleanText.split(/\s+/);
                 var bestMatch = null;
@@ -335,76 +347,68 @@ function posStartVoiceSearch() {
                 
                 if (bestMatch && bestScore >= 20) {
                     foundProduct = bestMatch;
-                    matchType = 'MOTS-CLÉS (score: ' + bestScore + ')';
+                    matchType = 'MOTS-CLÉS';
                 }
             }
             
-            // ===== 4. Recherche dans les ALTERNATIVES =====
-            if (!foundProduct && allAlternatives.length > 0) {
-                for (var a = 0; a < allAlternatives.length; a++) {
-                    var altText = allAlternatives[a];
-                    if (altText.length < 2) continue;
-                    
-                    var altMatch = productNames.find(function(name) {
-                        return name === altText || name.indexOf(altText) !== -1;
-                    });
-                    
-                    if (altMatch) {
-                        foundProduct = posProductsList.find(function(p) {
-                            return p.nom.toLowerCase() === altMatch;
-                        });
-                        matchType = 'ALTERNATIVE';
-                        break;
-                    }
-                }
-            }
-            
-            // ===== SI UN PRODUIT EST TROUVÉ =====
+            // SI PRODUIT TROUVÉ
             if (foundProduct) {
-                // Afficher dans la barre de recherche
                 if (searchInput) {
                     searchInput.value = foundProduct.nom;
                     posSearchProducts(foundProduct.nom);
                 }
-                
-                console.log('🎤 Produit trouvé:', foundProduct.nom, '(Match:', matchType + ')');
+                console.log('🎤 Produit trouvé:', foundProduct.nom, '(' + matchType + ')');
                 showVoiceResult('✅ ' + foundProduct.nom + ' ajouté au panier !');
-                
-                // ⭐ AJOUTER AUTOMATIQUEMENT AU PANIER ⭐
                 posAddToCartOrOpenOptions(foundProduct.id);
-                
                 cleanUp();
                 return;
             }
             
-            // ===== AUCUN PRODUIT TROUVÉ =====
+            // AUCUN PRODUIT
             if (searchInput) {
                 searchInput.value = cleanText;
                 posSearchProducts(cleanText);
             }
-            console.log('🎤 Aucun produit trouvé pour:', cleanText);
             showVoiceResult('❌ Aucun produit trouvé pour "' + cleanText + '"');
             cleanUp();
         }
     };
 
+    // ⭐ FIN DE L'ÉCOUTE
     recognition.onend = function() {
+        console.log('🎤 Écoute terminée');
         cleanUp();
     };
 
+    // ⭐ GESTION DES ERREURS
     recognition.onerror = function(event) {
+        console.warn('🎤 Erreur:', event.error);
         cleanUp();
         if (event.error === 'aborted' || event.error === 'no-speech') {
+            if (event.error === 'no-speech') {
+                showVoiceResult('⏳ Aucune parole détectée');
+            }
             return;
         }
-        alert('❌ Erreur: ' + event.error);
+        if (event.error === 'not-allowed') {
+            showVoiceResult('❌ Accès au micro refusé');
+            alert('❌ Veuillez autoriser l\'accès au microphone dans les paramètres du navigateur.');
+            return;
+        }
+        showVoiceResult('❌ Erreur: ' + event.error);
     };
     
     // ===== FONCTION DE NETTOYAGE =====
     function cleanUp() {
         window._recognitionActive = null;
+        if (window._voiceTimeout) {
+            clearTimeout(window._voiceTimeout);
+            window._voiceTimeout = null;
+        }
+        
         var searchInput = document.getElementById('posSearchInput');
         var audioBtn = document.querySelector('.btn-audio') || document.getElementById('posAudioBtn');
+        var statusSpan = document.getElementById('microStatus');
         
         if (searchInput) {
             searchInput.placeholder = '🔍 Rechercher un produit...';
@@ -415,6 +419,11 @@ function posStartVoiceSearch() {
         if (audioBtn) {
             audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
             audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
+            audioBtn.style.animation = 'none';
+        }
+        if (statusSpan) {
+            statusSpan.textContent = '⚪ Micro prêt';
+            statusSpan.style.color = '#94a3b8';
         }
     }
     
@@ -428,7 +437,7 @@ function posStartVoiceSearch() {
             document.body.appendChild(resultDiv);
         }
         
-        var isError = message.indexOf('❌') !== -1;
+        var isError = message.indexOf('❌') !== -1 || message.indexOf('⏱️') !== -1;
         resultDiv.style.background = isError ? '#ef4444' : '#2E7D32';
         resultDiv.textContent = message;
         resultDiv.style.display = 'block';
@@ -436,8 +445,57 @@ function posStartVoiceSearch() {
         clearTimeout(window._voiceResultTimeout);
         window._voiceResultTimeout = setTimeout(function() {
             resultDiv.style.display = 'none';
-        }, 2500);
+        }, 3000);
     }
+}
+
+// ==================== RÉINITIALISER LE MICROPHONE ====================
+function resetMicrophone() {
+    console.log('🔄 Réinitialisation du microphone...');
+    
+    if (window._recognitionActive) {
+        try {
+            window._recognitionActive.abort();
+        } catch(e) {}
+        window._recognitionActive = null;
+    }
+    
+    if (window._voiceTimeout) {
+        clearTimeout(window._voiceTimeout);
+        window._voiceTimeout = null;
+    }
+    
+    var searchInput = document.getElementById('posSearchInput');
+    var audioBtn = document.querySelector('.btn-audio') || document.getElementById('posAudioBtn');
+    var statusSpan = document.getElementById('microStatus');
+    
+    if (searchInput) {
+        searchInput.placeholder = '🔍 Rechercher un produit...';
+        searchInput.style.borderColor = '#e2e8f0';
+        searchInput.style.backgroundColor = '#fff';
+        searchInput.classList.remove('listening');
+    }
+    if (audioBtn) {
+        audioBtn.style.background = 'linear-gradient(135deg, #2E7D32, #1B5E20)';
+        audioBtn.innerHTML = '<i class="fas fa-microphone"></i> Audio';
+        audioBtn.style.animation = 'none';
+    }
+    if (statusSpan) {
+        statusSpan.textContent = '⚪ Micro prêt';
+        statusSpan.style.color = '#94a3b8';
+    }
+    
+    var resultDiv = document.getElementById('voiceResultDisplay');
+    if (resultDiv) {
+        resultDiv.style.background = '#2E7D32';
+        resultDiv.textContent = '🔄 Micro réinitialisé';
+        resultDiv.style.display = 'block';
+        setTimeout(function() {
+            resultDiv.style.display = 'none';
+        }, 2000);
+    }
+    
+    console.log('✅ Micro réinitialisé');
 }
 
 // ==================== RACCOURCI CLAVIER ====================
@@ -973,7 +1031,7 @@ function posConfirmOptions() {
     closeModal(); renderPOS();
 }
 
-// ==================== RENDER POS AVEC RECHERCHE VOCALE ET AJOUT AUTOMATIQUE ====================
+// ==================== RENDER POS AVEC RECHERCHE VOCALE STABLE ====================
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
     
@@ -1004,6 +1062,12 @@ function renderPOS() {
     h += '<button class="btn-audio" id="posAudioBtn" onclick="posStartVoiceSearch()" style="background: linear-gradient(135deg, #2E7D32, #1B5E20); border: none; border-radius:50px; padding:10px 20px; cursor:pointer; display:flex; align-items:center; gap:8px; color:#fff; font-weight:600; font-size:0.85rem; transition:all 0.3s ease; white-space:nowrap;">';
     h += '<i class="fas fa-microphone" style="font-size:1.1rem;"></i> Audio';
     h += '</button>';
+    
+    // Indicateur d'état du micro
+    h += '<span id="microStatus" style="font-size:0.65rem; color:#94a3b8; margin-left:2px; white-space:nowrap;">⚪ Micro prêt</span>';
+    
+    // Bouton reset micro
+    h += '<button onclick="resetMicrophone()" style="background:#ff9800; border:none; border-radius:50px; padding:4px 10px; cursor:pointer; color:#fff; font-weight:600; font-size:0.6rem; margin-left:2px; white-space:nowrap;" title="Réinitialiser le microphone">🔄 Reset</button>';
     
     h += '<div style="display:flex; gap:6px; flex-wrap:wrap;">';
     h += '<button onclick="posAfficherCommandesTables()" style="position:relative; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:8px 16px; cursor:pointer; font-weight:600; color:#1e293b; display:flex; align-items:center; gap:6px; white-space:nowrap;">';
@@ -1353,4 +1417,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS prêt (avec ajout automatique après recherche vocale)');
+console.log('🛒 Mixmax Minimarket - POS JS prêt (version stable sans blocage)');
