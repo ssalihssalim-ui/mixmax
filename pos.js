@@ -1,4 +1,4 @@
-// ==================== POS.JS - MIXMAX MINIMARKET (AVEC RECHERCHE VOCALE) ====================
+// ==================== POS.JS - MIXMAX MINIMARKET (RECHERCHE NOM + CATÉGORIE + DESCRIPTION) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -71,14 +71,20 @@ posCategoriesList.push(cat);
 CacheDB.set('categories', d.id, cat);
 });
 
-// Produits
+// Produits (avec description)
 posProductsList = [];
 ps.forEach(d => {
 const dd = d.data();
 if (dd.disponible !== false) {
 let prod = {
-id: d.id, nom: dd.nom, prixVente: dd.prixVente||0, prixPromo: dd.prixPromo||0,
-prixAchat: dd.prixAchat||0, stock: dd.stock, categorie: dd.categorie||'',
+id: d.id, 
+nom: dd.nom || '', 
+description: dd.description || '',  // ← Ajout de la description
+prixVente: dd.prixVente||0, 
+prixPromo: dd.prixPromo||0,
+prixAchat: dd.prixAchat||0, 
+stock: dd.stock, 
+categorie: dd.categorie||'',
 imageBase64: dd.imageBase64||''
 };
 posProductsList.push(prod);
@@ -104,7 +110,12 @@ let cachedClients = await CacheDB.getAll('clients');
 if (cachedCategories.length) posCategoriesList = cachedCategories.map(cat => ({
 id: cat.id, nom: cat.nom, imageBase64: cat.imageBase64, recette: cat.recette || false
 }));
-if (cachedProducts.length) posProductsList = cachedProducts.filter(p => p.disponible !== false);
+if (cachedProducts.length) {
+posProductsList = cachedProducts.filter(p => p.disponible !== false).map(p => ({
+...p,
+description: p.description || ''
+}));
+}
 if (cachedClients.length) {
 posAllClients = cachedClients.map(c => ({ id: c.id, nom: c.nom, prenom: c.prenom, telephone: c.telephone }));
 posFilteredClients = [...posAllClients];
@@ -174,13 +185,13 @@ return;
 renderPOS();
 }
 
-// ==================== RECHERCHE DE PRODUITS (Version corrigée - sans perte de focus) ====================
+// ==================== RECHERCHE DE PRODUITS (NOM + CATÉGORIE + DESCRIPTION) ====================
 function posSearchProducts(query) {
 posSearchQuery = query.toLowerCase().trim();
 filterProductGrid();
 }
 
-// ==================== FILTRER UNIQUEMENT LA GRILLE ====================
+// ==================== FILTRER UNIQUEMENT LA GRILLE (NOM + CATÉGORIE + DESCRIPTION) ====================
 function filterProductGrid() {
 var grid = document.getElementById('posProductGrid');
 if (!grid) {
@@ -192,10 +203,18 @@ var f = posProductsList;
 if (posSelectedCategory !== 'all') {
 f = f.filter(function(p) { return p.categorie === posSelectedCategory; });
 }
+
+// === RECHERCHE AMÉLIORÉE : NOM + CATÉGORIE + DESCRIPTION ===
 if (posSearchQuery) {
+var query = posSearchQuery.toLowerCase();
 f = f.filter(function(p) {
-return (p.nom || '').toLowerCase().indexOf(posSearchQuery) !== -1 ||
-(p.categorie || '').toLowerCase().indexOf(posSearchQuery) !== -1;
+// 1. Recherche dans le NOM
+if (p.nom && p.nom.toLowerCase().indexOf(query) !== -1) return true;
+// 2. Recherche dans la CATÉGORIE
+if (p.categorie && p.categorie.toLowerCase().indexOf(query) !== -1) return true;
+// 3. Recherche dans la DESCRIPTION
+if (p.description && p.description.toLowerCase().indexOf(query) !== -1) return true;
+return false;
 });
 }
 
@@ -255,7 +274,6 @@ grid.innerHTML = html;
 
 // ==================== RECHERCHE VOCALE (STYLE WHATSAPP) ====================
 function posStartVoiceSearch() {
-    // Vérifier si le navigateur supporte la reconnaissance vocale
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
         alert('❌ La reconnaissance vocale n\'est pas supportée par votre navigateur.\nUtilisez Chrome ou Edge.');
         return;
@@ -272,7 +290,6 @@ function posStartVoiceSearch() {
 
     var searchInput = document.getElementById('posSearchInput');
 
-    // Activer le mode enregistrement
     if (micBtn) {
         micBtn.classList.add('recording');
         micBtn.innerHTML = '<i class="fas fa-circle" style="color:#ef4444; animation: pulse 0.5s ease-in-out infinite;"></i>';
@@ -286,7 +303,6 @@ function posStartVoiceSearch() {
         searchInput.style.borderColor = '#ef4444';
     }
 
-    // Style d'animation
     var style = document.createElement('style');
     style.id = 'voiceStyle';
     style.textContent = `
@@ -311,7 +327,6 @@ function posStartVoiceSearch() {
     voiceRecognition.onend = function() {
         var transcript = searchInput ? searchInput.value.trim() : '';
 
-        // Restaurer le bouton
         if (micBtn) {
             micBtn.classList.remove('recording');
             micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
@@ -329,7 +344,6 @@ function posStartVoiceSearch() {
         if (styleEl) styleEl.remove();
         voiceRecognition = null;
 
-        // Lancer la recherche si du texte a été reconnu
         if (transcript) {
             posSearchQuery = transcript.toLowerCase().trim();
             filterProductGrid();
@@ -343,7 +357,6 @@ function posStartVoiceSearch() {
 
     voiceRecognition.onerror = function(event) {
         if (event.error === 'no-speech') {
-            // Restaurer silencieusement
             if (micBtn) {
                 micBtn.classList.remove('recording');
                 micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
@@ -643,7 +656,6 @@ posSearchQuery = '';
 delete window.posCommandeId; delete window.posVenteId;
 var searchInput = document.getElementById('posSearchInput');
 if (searchInput) searchInput.value = '';
-// Réinitialiser le micro si actif
 if (voiceRecognition) {
 try { voiceRecognition.abort(); } catch(e) {}
 voiceRecognition = null;
@@ -894,7 +906,7 @@ h += '<div style="display:flex; flex-direction:column; gap:10px; margin-bottom:1
 h += '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">';
 h += '<div style="flex:1; min-width:180px; position:relative; display:flex; align-items:center; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:4px 16px; transition:all 0.3s ease;">';
 h += '<i class="fas fa-search" style="color:#94a3b8; margin-right:8px;"></i>';
-h += '<input type="text" id="posSearchInput" placeholder="🔍 Rechercher un produit..." value="' + escapeHtml(posSearchQuery) + '" ';
+h += '<input type="text" id="posSearchInput" placeholder="🔍 Rechercher (nom, catégorie, description)..." value="' + escapeHtml(posSearchQuery) + '" ';
 h += 'onkeyup="posSearchProducts(this.value)" style="border:none; outline:none; padding:10px 0; width:100%; font-size:0.95rem; background:transparent;">';
 if (posSearchQuery) {
 h += '<button onclick="document.getElementById(\'posSearchInput\').value=\'\'; posSearchProducts(\'\');" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:4px 8px; font-size:1rem;">';
@@ -1189,4 +1201,4 @@ alert(msg); posResetCart(); renderPOS(); CacheDB.sync();
 } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS avec recherche vocale');
+console.log('🛒 Mixmax Minimarket - POS JS (recherche par nom, catégorie et description)');
