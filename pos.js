@@ -1,4 +1,4 @@
-// ==================== POS.JS - MIXMAX MINIMARKET (COMMANDES VOCALES AVANCÉES) ====================
+// ==================== POS.JS - VERSION CORRIGÉE (ÉCOUTE CONTINUE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -11,6 +11,15 @@ var voiceTimeout = null;
 var voiceMode = 'search'; // 'search' | 'quantity' | 'client' | 'payment'
 var lastAddedProductId = null;
 var voiceModeMessage = '🎤 Recherche vocale active';
+
+// ========== FONCTION CENTRALISÉE POUR CHANGER LE MODE ==========
+function setVoiceMode(newMode, message, productId) {
+    voiceMode = newMode;
+    if (message) voiceModeMessage = message;
+    if (productId !== undefined) lastAddedProductId = productId;
+    showVoiceModeIndicator();
+    // On ne coupe PAS le micro, on continue d'écouter
+}
 
 // Commandes tables
 var posCommandesTables = [];
@@ -48,19 +57,14 @@ function isIOSStandalone() {
 function checkVoiceSupport() {
     var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     var isStandalone = isIOSStandalone();
-    
-    // PWA sur iPhone : bloqué
     if (isIOS && isStandalone) {
         return { supported: false, reason: 'Ouvrez dans Safari pour le micro' };
     }
-    
     var hasSpeechRecognition = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
     if (!hasSpeechRecognition) {
         return { supported: false, reason: 'Navigateur non supporté' };
     }
-    
-    var isAndroid = /Android/.test(navigator.userAgent);
-    return { supported: true, platform: isIOS ? 'iOS' : (isAndroid ? 'Android' : 'Desktop') };
+    return { supported: true };
 }
 
 async function requestMicrophonePermission() {
@@ -113,9 +117,7 @@ async function loadPosPage(c) {
     posCommandesSortField = 'createdAt';
     posCommandesSortOrder = 'desc';
     posSearchQuery = '';
-    voiceMode = 'search';
-    voiceModeMessage = '🎤 Recherche vocale active';
-    lastAddedProductId = null;
+    setVoiceMode('search', '🎤 Recherche vocale active', null);
 
     posCategoriesList = [];
     posProductsList = [];
@@ -346,19 +348,19 @@ function parseVoiceCommand(transcript) {
         'cinquante': 50, 'soixante': 60, 'cent': 100
     };
 
-    // Vérifier si c'est un nombre (chiffres)
+    // 1. Vérifier si c'est un nombre (chiffres)
     var numberMatch = transcript.match(/\b(\d+)\b/);
     if (numberMatch) {
         return { type: 'number', value: parseInt(numberMatch[1]) };
     }
-    // Vérifier les mots-nombres
+    // 2. Vérifier les mots-nombres
     for (var word in numberMap) {
         if (transcript.indexOf(word) !== -1) {
             return { type: 'number', value: numberMap[word] };
         }
     }
 
-    // Commandes spéciales
+    // 3. Commandes spéciales
     if (transcript.includes('passe') || transcript.includes('passer') || transcript.includes('suivant')) {
         return { type: 'next' };
     }
@@ -372,21 +374,22 @@ function parseVoiceCommand(transcript) {
         return { type: 'clear' };
     }
 
-    // Recherche de produit par nom
+    // 4. Recherche de produit par nom (priorité plus haute que client)
     var foundProduct = null;
+    var bestMatchLength = 0;
     for (var i = 0; i < posProductsList.length; i++) {
         var prod = posProductsList[i];
         var prodName = prod.nom.toLowerCase();
-        if (transcript.includes(prodName)) {
+        if (transcript.includes(prodName) && prodName.length > bestMatchLength) {
             foundProduct = prod;
-            break;
+            bestMatchLength = prodName.length;
         }
     }
     if (foundProduct) {
         return { type: 'product', product: foundProduct };
     }
 
-    // Recherche de client par nom
+    // 5. Recherche de client par nom
     for (var j = 0; j < posAllClients.length; j++) {
         var client = posAllClients[j];
         var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
@@ -395,7 +398,7 @@ function parseVoiceCommand(transcript) {
         }
     }
 
-    // Recherche de montant (pour paiement)
+    // 6. Recherche de montant (pour paiement)
     var amountMatch = transcript.match(/\d+[.,]?\d*/);
     if (amountMatch) {
         var amount = parseFloat(amountMatch[0].replace(',', '.'));
@@ -407,26 +410,19 @@ function parseVoiceCommand(transcript) {
     return { type: 'unknown', text: transcript };
 }
 
+// ==================== HANDLER (avec mode continu) ====================
 function handleVoiceCommand(command) {
     console.log('🎤 Commande vocale:', command);
-    var micBtn = document.getElementById('posMicBtn');
     var searchInput = document.getElementById('posSearchInput');
 
     switch (command.type) {
         case 'product':
-            // Ajouter le produit au panier
             var p = command.product;
             if (p.stock !== undefined && p.stock <= 0) {
                 alert('Rupture de stock pour ' + p.nom);
                 return;
             }
-            // Vérifier si le produit a une recette (personnalisation)
-            var cat = posCategoriesList.find(function(c) { return c.nom === p.categorie; });
-            var isRecette = cat && cat.recette === true;
-            if (isRecette) {
-                alert('Personnalisation non prise en charge par voix pour le moment');
-                return;
-            }
+            // Ajouter au panier (comme posAddToCartOrOpenOptions)
             var existing = posCart.find(function(x) { return x.id === p.id; });
             if (existing) {
                 existing.quantite += 1;
@@ -441,9 +437,8 @@ function handleVoiceCommand(command) {
                 });
                 lastAddedProductId = p.id;
             }
-            voiceMode = 'quantity';
-            voiceModeMessage = '🎤 Dites un nombre pour la quantité, "passe" ou "valide"';
-            showVoiceModeIndicator();
+            // Passer en mode quantité
+            setVoiceMode('quantity', '🎤 Dites un nombre pour la quantité, "passe" ou "valide"', lastAddedProductId);
             renderPOS();
             break;
 
@@ -460,9 +455,7 @@ function handleVoiceCommand(command) {
                     }
                     item.quantite = qty;
                     lastAddedProductId = null;
-                    voiceMode = 'search';
-                    voiceModeMessage = '🎤 Recherche vocale active';
-                    showVoiceModeIndicator();
+                    setVoiceMode('search', '🎤 Recherche vocale active', null);
                     renderPOS();
                 }
             } else if (voiceMode === 'payment') {
@@ -487,25 +480,17 @@ function handleVoiceCommand(command) {
             var clientInput = document.getElementById('posClientSearchInput');
             if (clientInput) clientInput.value = posCurrentClient.name;
             updatePaymentButtons();
-            if (voiceMode === 'client') {
-                voiceMode = 'payment';
-                voiceModeMessage = '🎤 Dites le montant donné ou "valide"';
-                showVoiceModeIndicator();
-            }
+            // ← Passage AUTOMATIQUE en mode paiement
+            setVoiceMode('payment', '🎤 Dites le montant donné ou "valide"', null);
             renderPOS();
             break;
 
         case 'next':
             if (voiceMode === 'quantity') {
-                voiceMode = 'search';
-                voiceModeMessage = '🎤 Recherche vocale active';
-                lastAddedProductId = null;
-                showVoiceModeIndicator();
+                setVoiceMode('search', '🎤 Recherche vocale active', null);
                 renderPOS();
             } else if (voiceMode === 'client') {
-                voiceMode = 'payment';
-                voiceModeMessage = '🎤 Dites le montant donné ou "valide"';
-                showVoiceModeIndicator();
+                setVoiceMode('payment', '🎤 Dites le montant donné ou "valide"', null);
                 renderPOS();
             } else if (voiceMode === 'payment') {
                 posFinalizeSale();
@@ -518,22 +503,15 @@ function handleVoiceCommand(command) {
 
         case 'validate':
             if (voiceMode === 'quantity') {
-                voiceMode = 'search';
-                voiceModeMessage = '🎤 Recherche vocale active';
-                lastAddedProductId = null;
-                showVoiceModeIndicator();
+                setVoiceMode('search', '🎤 Recherche vocale active', null);
                 renderPOS();
             } else if (voiceMode === 'client') {
-                voiceMode = 'payment';
-                voiceModeMessage = '🎤 Dites le montant donné ou "valide"';
-                showVoiceModeIndicator();
+                setVoiceMode('payment', '🎤 Dites le montant donné ou "valide"', null);
                 renderPOS();
-            } else if (voiceMode === 'payment') {
+            } else if (voiceMode === 'payment' || posStep === 2) {
                 posFinalizeSale();
             } else if (posStep === 1 && posCart.length > 0) {
                 posGoToStep2();
-            } else if (posStep === 2) {
-                posFinalizeSale();
             }
             break;
 
@@ -561,10 +539,7 @@ function handleVoiceCommand(command) {
 
         case 'cancel':
             if (voiceMode !== 'search') {
-                voiceMode = 'search';
-                voiceModeMessage = '🎤 Recherche vocale active';
-                lastAddedProductId = null;
-                showVoiceModeIndicator();
+                setVoiceMode('search', '🎤 Recherche vocale active', null);
                 renderPOS();
             }
             break;
@@ -598,7 +573,7 @@ function showVoiceModeIndicator() {
     indicator.style.background = voiceMode === 'search' ? '#f0fdf4' : '#fefce8';
 }
 
-// ==================== RECHERCHE VOCALE (TOGGLE) ====================
+// ==================== RECHERCHE VOCALE (CONTINUE) ====================
 function posToggleVoiceSearch() {
     var support = checkVoiceSupport();
     if (!support.supported) {
@@ -640,13 +615,13 @@ function posStartVoiceRecording() {
 
     voiceRecognition = new SpeechRecognition();
     voiceRecognition.lang = 'fr-FR';
-    voiceRecognition.continuous = true;
+    voiceRecognition.continuous = true;  // ← TOUJOURS CONTINU
     voiceRecognition.interimResults = true;
     voiceRecognition.maxAlternatives = 3;
 
     var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     if (isIOS) {
-        voiceRecognition.continuous = false;
+        voiceRecognition.continuous = true; // iOS gère mieux en continu
         voiceRecognition.interimResults = true;
     }
 
@@ -662,7 +637,7 @@ function posStartVoiceRecording() {
     }
 
     if (searchInput) {
-        searchInput.placeholder = '🎤 Écoute en cours... Parlez maintenant';
+        searchInput.placeholder = '🎤 Écoute continue... Parlez à tout moment';
         searchInput.style.background = '#fef2f2';
         searchInput.style.borderColor = '#ef4444';
         searchInput.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.2)';
@@ -685,6 +660,7 @@ function posStartVoiceRecording() {
 
     var finalTranscript = '';
     var lastInterim = '';
+    var processing = false;
 
     voiceRecognition.onresult = function(event) {
         var interimTranscript = '';
@@ -703,9 +679,13 @@ function posStartVoiceRecording() {
             if (finalTranscriptTemp) {
                 searchInput.value = finalTranscriptTemp;
                 finalTranscript = finalTranscriptTemp;
-                // Traiter la commande si c'est un résultat final
-                var command = parseVoiceCommand(finalTranscript);
-                handleVoiceCommand(command);
+                // Traiter LA COMMANDE immédiatement
+                if (!processing) {
+                    processing = true;
+                    var command = parseVoiceCommand(finalTranscript);
+                    handleVoiceCommand(command);
+                    processing = false;
+                }
             } else if (interimTranscript && interimTranscript !== lastInterim) {
                 searchInput.value = interimTranscript + ' ✍️';
                 lastInterim = interimTranscript;
@@ -714,15 +694,27 @@ function posStartVoiceRecording() {
     };
 
     voiceRecognition.onend = function() {
+        // Si le micro s'arrête (erreur), on le redémarre automatiquement
         if (isRecording) {
-            posStopVoiceSearch();
+            console.log('🔄 Redémarrage du micro...');
+            try {
+                voiceRecognition.start();
+            } catch(e) {
+                console.error('❌ Erreur redémarrage:', e);
+                posStopVoiceSearch();
+            }
         }
     };
 
     voiceRecognition.onerror = function(event) {
         console.error('🎤 Erreur :', event.error);
-        if (event.error !== 'aborted' && event.error !== 'no-speech') {
-            alert('Erreur de reconnaissance: ' + event.error);
+        if (event.error === 'aborted' || event.error === 'no-speech') {
+            // Pas d'action, le micro redémarrera via onend
+            return;
+        }
+        // Pour les autres erreurs, on affiche mais on continue
+        if (event.error !== 'aborted') {
+            alert('Erreur de reconnaissance: ' + event.error + '. Le micro va redémarrer.');
         }
         posStopVoiceSearch();
     };
@@ -731,6 +723,7 @@ function posStartVoiceRecording() {
         voiceRecognition.start();
         isRecording = true;
         showVoiceModeIndicator();
+        console.log('🎤 Micro activé (écoute continue)');
     } catch(e) {
         console.error('Erreur démarrage:', e);
         isRecording = false;
@@ -761,10 +754,6 @@ function posStopVoiceSearch() {
         voiceRecognition = null;
     }
     isRecording = false;
-    if (voiceTimeout) {
-        clearTimeout(voiceTimeout);
-        voiceTimeout = null;
-    }
 
     var micBtn = document.getElementById('posMicBtn');
     var searchInput = document.getElementById('posSearchInput');
@@ -778,7 +767,6 @@ function posStopVoiceSearch() {
         micBtn.style.transform = 'scale(1)';
         micBtn.style.border = '3px solid #16a34a';
     }
-
     if (searchInput) {
         searchInput.placeholder = '🔍 Rechercher (nom, catégorie, description)...';
         searchInput.style.background = '#fff';
@@ -789,6 +777,8 @@ function posStopVoiceSearch() {
 
     var styleEl = document.getElementById('voiceStyle');
     if (styleEl) styleEl.remove();
+    var indicator = document.getElementById('voiceModeIndicator');
+    if (indicator) indicator.remove();
 }
 
 // ========== CHARGEMENT DES COMMANDES TABLES ==========
@@ -1012,15 +1002,14 @@ async function posPayerCommandeTable(commandeId) {
     } catch(e) { alert('❌ Erreur: ' + e.message); }
 }
 
+// ==================== POS RESET CART ====================
 function posResetCart() {
     posCart = []; posStep = 1; posSelectedCategory = 'all';
     posCurrentClient = null; posCurrentTable = '';
     posPaymentMethod = 'espece'; posAmountGiven = 0; posDiscountMAD = 0;
     posFilteredClients = posAllClients.slice();
     posSearchQuery = '';
-    voiceMode = 'search';
-    voiceModeMessage = '🎤 Recherche vocale active';
-    lastAddedProductId = null;
+    setVoiceMode('search', '🎤 Recherche vocale active', null);
     delete window.posCommandeId; delete window.posVenteId;
     var searchInput = document.getElementById('posSearchInput');
     if (searchInput) searchInput.value = '';
@@ -1077,6 +1066,7 @@ function renderClientDropdown() {
     d.style.display = 'block';
 }
 
+// ==================== POS SELECT CLIENT FROM DROPDOWN (avec synchro vocale) ====================
 function posSelectClientFromDropdown(cid, cn) {
     posCurrentClient = {id: cid, name: cn};
     posCurrentTable = '';
@@ -1087,6 +1077,9 @@ function posSelectClientFromDropdown(cid, cn) {
     if(t) t.value = '';
     if(d) d.style.display = 'none';
     updatePaymentButtons();
+    // ← SYNCHRONISATION : Passage automatique en mode paiement
+    setVoiceMode('payment', '🎤 Dites le montant donné ou "valide"', null);
+    renderPOS();
 }
 
 document.addEventListener('click', function(e) {
@@ -1123,7 +1116,7 @@ function posSetTable(v) {
     }
 }
 
-// ==================== AJOUT AU PANIER / OPTIONS ====================
+// ==================== AJOUT AU PANIER / OPTIONS (avec synchro vocale) ====================
 function posAddToCartOrOpenOptions(pid) {
     var p = posProductsList.find(function(x) { return x.id === pid; });
     if (!p) return;
@@ -1154,7 +1147,10 @@ function posAddToCartOrOpenOptions(pid) {
                 categorie: p.categorie || '', imageBase64: p.imageBase64 || '',
                 sauces: [], interdits: [], epice: 'Normal', sel: 'Normal'
             });
+            lastAddedProductId = p.id;
         }
+        // ← SYNCHRONISATION : Passage automatique en mode quantité
+        setVoiceMode('quantity', '🎤 Dites un nombre pour la quantité, "passe" ou "valide"', lastAddedProductId);
         renderPOS();
     }
 }
@@ -1256,8 +1252,12 @@ function posConfirmOptions() {
             interdits: interdits,
             epice: epice, sel: sel
         });
+        lastAddedProductId = p.id;
     }
-    closeModal(); renderPOS();
+    // ← SYNCHRONISATION : Passage en mode quantité après confirmation
+    setVoiceMode('quantity', '🎤 Dites un nombre pour la quantité, "passe" ou "valide"', lastAddedProductId);
+    closeModal(); 
+    renderPOS();
 }
 
 // ==================== RENDER POS ====================
@@ -1296,9 +1296,9 @@ function renderPOS() {
     var isOnline = navigator.onLine;
     var isActive = isSupported && isOnline && !isIOSStandalone();
 
-    h += '<button id="posMicBtn" title="' + (isActive ? 'Cliquez pour la recherche vocale' : (isIOSStandalone() ? 'Ouvrir dans Safari' : 'Non disponible')) + '" style="background:' + (isActive ? '#dcfce7' : (isIOSStandalone() ? '#fef3c7' : '#e2e8f0')) + '; border:3px solid ' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#f59e0b' : '#94a3b8')) + '; border-radius:50%; width:56px; height:56px; cursor:' + (isActive ? 'pointer' : (isIOSStandalone() ? 'pointer' : 'not-allowed')) + '; font-size:1.4rem; color:' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#d97706' : '#94a3b8')) + '; transition:all 0.3s; display:flex; align-items:center; justify-content:center; user-select:none; touch-action:manipulation; flex-shrink:0; box-shadow:0 2px 8px rgba(0,0,0,0.08);"';
+    h += '<button id="posMicBtn" title="' + (isActive ? 'Cliquez pour activer l\'écoute continue' : (isIOSStandalone() ? 'Ouvrir dans Safari' : 'Non disponible')) + '" style="background:' + (isActive ? '#dcfce7' : (isIOSStandalone() ? '#fef3c7' : '#e2e8f0')) + '; border:3px solid ' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#f59e0b' : '#94a3b8')) + '; border-radius:50%; width:56px; height:56px; cursor:' + (isActive ? 'pointer' : (isIOSStandalone() ? 'pointer' : 'not-allowed')) + '; font-size:1.4rem; color:' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#d97706' : '#94a3b8')) + '; transition:all 0.3s; display:flex; align-items:center; justify-content:center; user-select:none; touch-action:manipulation; flex-shrink:0; box-shadow:0 2px 8px rgba(0,0,0,0.08);"';
     h += ' onclick="' + (isActive ? 'posToggleVoiceSearch()' : (isIOSStandalone() ? 'window.open(window.location.href.split(\'?\')[0],\'_blank\')' : '')) + '"';
-    h += '><i class="fas fa-' + (isActive ? 'microphone' : (isIOSStandalone() ? 'exclamation-triangle' : 'microphone-slash')) + '"></i></button>';
+    h += '><i class="fas fa-' + (isActive ? (isRecording ? 'circle' : 'microphone') : (isIOSStandalone() ? 'exclamation-triangle' : 'microphone-slash')) + '" style="' + (isRecording ? 'color:#ef4444; animation: pulse 0.5s ease-in-out infinite;' : '') + '"></i></button>';
 
     // Boutons Tables et En ligne
     h += '<div style="display:flex; gap:6px; flex-wrap:wrap;">';
@@ -1368,7 +1368,7 @@ function renderPOS() {
 
     if (posStep === 2) setTimeout(posCalculateChange, 200);
 
-    // Afficher l'indicateur de mode vocal
+    // Afficher l'indicateur de mode vocal (toujours visible si micro actif)
     if (isRecording || voiceMode !== 'search') {
         showVoiceModeIndicator();
     } else {
@@ -1588,4 +1588,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS (commandes vocales avancées)');
+console.log('🛒 Mixmax Minimarket - POS JS (écoute continue, modes synchronisés)');
