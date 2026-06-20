@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION CORRIGÉE (ÉCOUTE CONTINUE) ====================
+// ==================== POS.JS - VERSION ULTRA RAPIDE (PAIEMENT SANS SCROLL) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -8,9 +8,12 @@ var isRecording = false;
 var voiceTimeout = null;
 
 // ========== MODE VOCAL ==========
-var voiceMode = 'search'; // 'search' | 'quantity' | 'client' | 'payment'
+var voiceMode = 'search';
 var lastAddedProductId = null;
 var voiceModeMessage = '🎤 Recherche vocale active';
+
+// Cache pour la fidélité (évite un appel Firestore à chaque vente)
+var fideliteSettingsCache = null;
 
 // ========== FONCTION CENTRALISÉE POUR CHANGER LE MODE ==========
 function setVoiceMode(newMode, message, productId) {
@@ -18,7 +21,6 @@ function setVoiceMode(newMode, message, productId) {
     if (message) voiceModeMessage = message;
     if (productId !== undefined) lastAddedProductId = productId;
     showVoiceModeIndicator();
-    // On ne coupe PAS le micro, on continue d'écouter
 }
 
 // Commandes tables
@@ -87,17 +89,17 @@ function showSafariBanner() {
     if (!container) return;
     var banner = document.createElement('div');
     banner.id = 'iosPwaBanner';
-    banner.style.cssText = 'background:#fef3c7; border:2px solid #f59e0b; border-radius:12px; padding:14px 18px; margin-bottom:15px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;';
+    banner.style.cssText = 'background:#fef3c7; border:2px solid #f59e0b; border-radius:12px; padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;';
     banner.innerHTML = `
-        <div style="display:flex; align-items:center; gap:10px;">
-            <i class="fas fa-exclamation-triangle" style="color:#d97706; font-size:1.3rem;"></i>
-            <span style="font-size:0.9rem; color:#92400e;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-exclamation-triangle" style="color:#d97706; font-size:1.1rem;"></i>
+            <span style="font-size:0.8rem; color:#92400e;">
                 <strong>📱 Microphone</strong><br>
-                <span style="font-size:0.8rem;">Ouvrez cette page dans Safari pour utiliser la recherche vocale.</span>
+                <span style="font-size:0.7rem;">Ouvrez dans Safari pour le micro.</span>
             </span>
         </div>
-        <button onclick="window.open(window.location.href.split('?')[0], '_blank')" style="background:#f59e0b; border:none; padding:8px 20px; border-radius:8px; color:#fff; font-weight:600; cursor:pointer; font-size:0.85rem; white-space:nowrap;">
-            🌐 Ouvrir dans Safari
+        <button onclick="window.open(window.location.href.split('?')[0], '_blank')" style="background:#f59e0b; border:none; padding:6px 14px; border-radius:6px; color:#fff; font-weight:600; cursor:pointer; font-size:0.75rem; white-space:nowrap;">
+            🌐 Ouvrir
         </button>
     `;
     container.insertBefore(banner, container.firstChild);
@@ -293,16 +295,16 @@ function filterProductGrid() {
 
     if (f.length === 0) {
         var message = posSearchQuery ? 'Aucun produit trouvé pour "' + escapeHtml(posSearchQuery) + '"' : 'Aucun produit disponible';
-        html += '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;">';
-        html += '<i class="fas fa-search" style="font-size:3rem;color:#94a3b8;display:block;margin-bottom:15px;"></i>';
-        html += '<p style="color:#94a3b8;font-size:1.1rem;">' + message + '</p>';
+        html += '<div style="grid-column:1/-1;text-align:center;padding:40px 10px;">';
+        html += '<i class="fas fa-search" style="font-size:2.5rem;color:#94a3b8;display:block;margin-bottom:10px;"></i>';
+        html += '<p style="color:#94a3b8;font-size:0.95rem;">' + message + '</p>';
         if (posSearchQuery) {
-            html += '<button class="btn-add" onclick="document.getElementById(\'posSearchInput\').value=\'\'; posSearchProducts(\'\');" style="margin-top:15px;"><i class="fas fa-times"></i> Effacer la recherche</button>';
+            html += '<button class="btn-add" onclick="document.getElementById(\'posSearchInput\').value=\'\'; posSearchProducts(\'\');" style="margin-top:10px; padding:6px 14px; font-size:0.8rem;"><i class="fas fa-times"></i> Effacer</button>';
         }
         html += '</div>';
     } else {
         if (posSearchQuery) {
-            html += '<div style="grid-column:1/-1;text-align:left;padding:5px 10px;font-size:0.85rem;color:#94a3b8;">';
+            html += '<div style="grid-column:1/-1;text-align:left;padding:3px 8px;font-size:0.75rem;color:#94a3b8;">';
             html += f.length + ' résultat' + (f.length > 1 ? 's' : '') + ' trouvé' + (f.length > 1 ? 's' : '');
             html += '</div>';
         }
@@ -339,7 +341,6 @@ function filterProductGrid() {
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     
-    // Mots-clés pour les nombres
     var numberMap = {
         'un': 1, 'une': 1, 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
         'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
@@ -348,19 +349,16 @@ function parseVoiceCommand(transcript) {
         'cinquante': 50, 'soixante': 60, 'cent': 100
     };
 
-    // 1. Vérifier si c'est un nombre (chiffres)
     var numberMatch = transcript.match(/\b(\d+)\b/);
     if (numberMatch) {
         return { type: 'number', value: parseInt(numberMatch[1]) };
     }
-    // 2. Vérifier les mots-nombres
     for (var word in numberMap) {
         if (transcript.indexOf(word) !== -1) {
             return { type: 'number', value: numberMap[word] };
         }
     }
 
-    // 3. Commandes spéciales
     if (transcript.includes('passe') || transcript.includes('passer') || transcript.includes('suivant')) {
         return { type: 'next' };
     }
@@ -374,7 +372,6 @@ function parseVoiceCommand(transcript) {
         return { type: 'clear' };
     }
 
-    // 4. Recherche de produit par nom (priorité plus haute que client)
     var foundProduct = null;
     var bestMatchLength = 0;
     for (var i = 0; i < posProductsList.length; i++) {
@@ -389,7 +386,6 @@ function parseVoiceCommand(transcript) {
         return { type: 'product', product: foundProduct };
     }
 
-    // 5. Recherche de client par nom
     for (var j = 0; j < posAllClients.length; j++) {
         var client = posAllClients[j];
         var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
@@ -398,7 +394,6 @@ function parseVoiceCommand(transcript) {
         }
     }
 
-    // 6. Recherche de montant (pour paiement)
     var amountMatch = transcript.match(/\d+[.,]?\d*/);
     if (amountMatch) {
         var amount = parseFloat(amountMatch[0].replace(',', '.'));
@@ -410,10 +405,9 @@ function parseVoiceCommand(transcript) {
     return { type: 'unknown', text: transcript };
 }
 
-// ==================== HANDLER (avec mode continu) ====================
+// ==================== HANDLER ====================
 function handleVoiceCommand(command) {
     console.log('🎤 Commande vocale:', command);
-    var searchInput = document.getElementById('posSearchInput');
 
     switch (command.type) {
         case 'product':
@@ -422,7 +416,6 @@ function handleVoiceCommand(command) {
                 alert('Rupture de stock pour ' + p.nom);
                 return;
             }
-            // Ajouter au panier (comme posAddToCartOrOpenOptions)
             var existing = posCart.find(function(x) { return x.id === p.id; });
             if (existing) {
                 existing.quantite += 1;
@@ -437,9 +430,9 @@ function handleVoiceCommand(command) {
                 });
                 lastAddedProductId = p.id;
             }
-            // Passer en mode quantité
-            setVoiceMode('quantity', '🎤 Dites un nombre pour la quantité, "passe" ou "valide"', lastAddedProductId);
-            renderPOS();
+            setVoiceMode('quantity', '🎤 Dites un nombre, "passe" ou "valide"', lastAddedProductId);
+            updateCartOnly();
+            showVoiceModeIndicator();
             break;
 
         case 'number':
@@ -456,7 +449,8 @@ function handleVoiceCommand(command) {
                     item.quantite = qty;
                     lastAddedProductId = null;
                     setVoiceMode('search', '🎤 Recherche vocale active', null);
-                    renderPOS();
+                    updateCartOnly();
+                    showVoiceModeIndicator();
                 }
             } else if (voiceMode === 'payment') {
                 posAmountGiven = command.value;
@@ -480,17 +474,17 @@ function handleVoiceCommand(command) {
             var clientInput = document.getElementById('posClientSearchInput');
             if (clientInput) clientInput.value = posCurrentClient.name;
             updatePaymentButtons();
-            // ← Passage AUTOMATIQUE en mode paiement
-            setVoiceMode('payment', '🎤 Dites le montant donné ou "valide"', null);
-            renderPOS();
+            setVoiceMode('payment', '🎤 Dites le montant ou "valide"', null);
+            renderPOS(); // on refait le rendu pour afficher le paiement
             break;
 
         case 'next':
             if (voiceMode === 'quantity') {
                 setVoiceMode('search', '🎤 Recherche vocale active', null);
-                renderPOS();
+                updateCartOnly();
+                showVoiceModeIndicator();
             } else if (voiceMode === 'client') {
-                setVoiceMode('payment', '🎤 Dites le montant donné ou "valide"', null);
+                setVoiceMode('payment', '🎤 Dites le montant ou "valide"', null);
                 renderPOS();
             } else if (voiceMode === 'payment') {
                 posFinalizeSale();
@@ -504,9 +498,10 @@ function handleVoiceCommand(command) {
         case 'validate':
             if (voiceMode === 'quantity') {
                 setVoiceMode('search', '🎤 Recherche vocale active', null);
-                renderPOS();
+                updateCartOnly();
+                showVoiceModeIndicator();
             } else if (voiceMode === 'client') {
-                setVoiceMode('payment', '🎤 Dites le montant donné ou "valide"', null);
+                setVoiceMode('payment', '🎤 Dites le montant ou "valide"', null);
                 renderPOS();
             } else if (voiceMode === 'payment' || posStep === 2) {
                 posFinalizeSale();
@@ -561,14 +556,14 @@ function showVoiceModeIndicator() {
         if (!container) return;
         indicator = document.createElement('div');
         indicator.id = 'voiceModeIndicator';
-        indicator.style.cssText = 'background:#f0fdf4; border:2px solid #16a34a; border-radius:10px; padding:8px 14px; margin-bottom:10px; font-size:0.85rem; display:flex; align-items:center; gap:10px; color:#14532d;';
+        indicator.style.cssText = 'background:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:6px 12px; margin-bottom:8px; font-size:0.8rem; display:flex; align-items:center; gap:8px; color:#14532d;';
         container.insertBefore(indicator, container.firstChild);
     }
     var icon = voiceMode === 'search' ? 'fa-microphone' : (voiceMode === 'quantity' ? 'fa-hashtag' : (voiceMode === 'client' ? 'fa-user' : 'fa-money-bill-wave'));
     var color = voiceMode === 'search' ? '#16a34a' : (voiceMode === 'quantity' ? '#f59e0b' : (voiceMode === 'client' ? '#4f46e5' : '#dc2626'));
     indicator.innerHTML = '<i class="fas ' + icon + '" style="color:' + color + ';"></i> ' + 
                           (voiceModeMessage || '🎤 Recherche vocale active') +
-                          ' <span style="font-size:0.7rem; color:#94a3b8; margin-left:auto;">' + voiceMode + '</span>';
+                          ' <span style="font-size:0.6rem; color:#94a3b8; margin-left:auto;">' + voiceMode + '</span>';
     indicator.style.borderColor = color;
     indicator.style.background = voiceMode === 'search' ? '#f0fdf4' : '#fefce8';
 }
@@ -615,17 +610,16 @@ function posStartVoiceRecording() {
 
     voiceRecognition = new SpeechRecognition();
     voiceRecognition.lang = 'fr-FR';
-    voiceRecognition.continuous = true;  // ← TOUJOURS CONTINU
+    voiceRecognition.continuous = true;
     voiceRecognition.interimResults = true;
     voiceRecognition.maxAlternatives = 3;
 
     var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     if (isIOS) {
-        voiceRecognition.continuous = true; // iOS gère mieux en continu
+        voiceRecognition.continuous = true;
         voiceRecognition.interimResults = true;
     }
 
-    // Feedback visuel
     if (micBtn) {
         micBtn.classList.add('recording');
         micBtn.innerHTML = '<i class="fas fa-circle" style="color:#ef4444; animation: pulse 0.5s ease-in-out infinite;"></i>';
@@ -637,7 +631,7 @@ function posStartVoiceRecording() {
     }
 
     if (searchInput) {
-        searchInput.placeholder = '🎤 Écoute continue... Parlez à tout moment';
+        searchInput.placeholder = '🎤 Écoute continue...';
         searchInput.style.background = '#fef2f2';
         searchInput.style.borderColor = '#ef4444';
         searchInput.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.2)';
@@ -679,7 +673,6 @@ function posStartVoiceRecording() {
             if (finalTranscriptTemp) {
                 searchInput.value = finalTranscriptTemp;
                 finalTranscript = finalTranscriptTemp;
-                // Traiter LA COMMANDE immédiatement
                 if (!processing) {
                     processing = true;
                     var command = parseVoiceCommand(finalTranscript);
@@ -694,7 +687,6 @@ function posStartVoiceRecording() {
     };
 
     voiceRecognition.onend = function() {
-        // Si le micro s'arrête (erreur), on le redémarre automatiquement
         if (isRecording) {
             console.log('🔄 Redémarrage du micro...');
             try {
@@ -709,10 +701,8 @@ function posStartVoiceRecording() {
     voiceRecognition.onerror = function(event) {
         console.error('🎤 Erreur :', event.error);
         if (event.error === 'aborted' || event.error === 'no-speech') {
-            // Pas d'action, le micro redémarrera via onend
             return;
         }
-        // Pour les autres erreurs, on affiche mais on continue
         if (event.error !== 'aborted') {
             alert('Erreur de reconnaissance: ' + event.error + '. Le micro va redémarrer.');
         }
@@ -737,7 +727,7 @@ function posStartVoiceRecording() {
             micBtn.style.border = '3px solid #16a34a';
         }
         if (searchInput) {
-            searchInput.placeholder = '🔍 Rechercher (nom, catégorie, description)...';
+            searchInput.placeholder = '🔍 Rechercher...';
             searchInput.style.background = '#fff';
             searchInput.style.borderColor = '#e2e8f0';
             searchInput.style.boxShadow = 'none';
@@ -768,7 +758,7 @@ function posStopVoiceSearch() {
         micBtn.style.border = '3px solid #16a34a';
     }
     if (searchInput) {
-        searchInput.placeholder = '🔍 Rechercher (nom, catégorie, description)...';
+        searchInput.placeholder = '🔍 Rechercher...';
         searchInput.style.background = '#fff';
         searchInput.style.borderColor = '#e2e8f0';
         searchInput.style.boxShadow = 'none';
@@ -905,15 +895,15 @@ function posAfficherCommandesTables() {
     }
 
     var html = `
-    <div style="margin-bottom:15px; display:flex; gap:10px; align-items:center;">
+    <div style="margin-bottom:12px; display:flex; gap:8px; align-items:center;">
         <input type="text" id="posCmdFilterInput" placeholder="🔍 Filtrer (table, produit, option)..."
-        style="flex:1; padding:10px 14px; border:2px solid #e2e8f0; border-radius:40px; font-size:0.9rem;"
+        style="flex:1; padding:8px 12px; border:2px solid #e2e8f0; border-radius:30px; font-size:0.8rem;"
         value="${escapeHtml(posCommandesFilterText)}"
         onkeyup="posApplyCommandesFilter(this.value)">
-        <button class="btn-add" onclick="posApplyCommandesFilter('')" style="padding:8px 20px;">❌ Réinitialiser</button>
+        <button class="btn-add" onclick="posApplyCommandesFilter('')" style="padding:6px 14px; font-size:0.7rem;">❌ Réinitialiser</button>
     </div>
-    <div style="max-height:65vh; overflow-y:auto;">
-    <table class="data-table" style="width:100%; font-size:0.75rem;">
+    <div style="max-height:60vh; overflow-y:auto;">
+    <table class="data-table" style="width:100%; font-size:0.7rem;">
     <thead><tr>
         ${renderSortableHeader('Table', 'table')}
         <th>Produits</th>
@@ -925,7 +915,7 @@ function posAfficherCommandesTables() {
     <tbody>`;
 
     if (filteredData.length === 0) {
-        html += '<tr><td colspan="6" style="text-align:center; padding:30px;">Aucune commande correspondante</td></tr>';
+        html += '<tr><td colspan="6" style="text-align:center; padding:20px;">Aucune commande correspondante</td></tr>';
     } else {
         filteredData.forEach(function(cmd) {
             var table = cmd.table || '?';
@@ -948,8 +938,8 @@ function posAfficherCommandesTables() {
             html += '<td><strong style="color:#2E7D32;">' + cmd.total.toFixed(2) + ' MAD</strong></td>';
             html += '<td><small>' + dateHeure + '</small></td>';
             html += '<td style="white-space:nowrap;">' +
-                '<button class="btn-add" style="padding:4px 8px;font-size:0.7rem;margin-right:4px;" onclick="posChargerCommandeTable(\'' + cmd.id + '\')"><i class="fas fa-check"></i> Accepter</button>' +
-                '<button class="btn-save" style="padding:4px 8px;font-size:0.7rem;" onclick="posPayerCommandeTable(\'' + cmd.id + '\')"><i class="fas fa-money-bill-wave"></i> Payé</button>' +
+                '<button class="btn-add" style="padding:3px 6px;font-size:0.65rem;margin-right:3px;" onclick="posChargerCommandeTable(\'' + cmd.id + '\')"><i class="fas fa-check"></i> Accepter</button>' +
+                '<button class="btn-save" style="padding:3px 6px;font-size:0.65rem;" onclick="posPayerCommandeTable(\'' + cmd.id + '\')"><i class="fas fa-money-bill-wave"></i> Payé</button>' +
                 '</td>';
             html += '</tr>';
         });
@@ -1056,17 +1046,17 @@ function renderClientDropdown() {
     if(!d) return;
     var h = '';
     if(posFilteredClients.length === 0) {
-        h = '<div style="padding:10px;color:#94a3b8;text-align:center;">Aucun</div>';
+        h = '<div style="padding:8px;color:#94a3b8;text-align:center;">Aucun</div>';
     } else {
         posFilteredClients.forEach(function(c) {
-            h += '<div onclick="posSelectClientFromDropdown(\'' + c.id + '\',\'' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + '\')" style="padding:10px;cursor:pointer;border-bottom:1px solid #f1f5f9;">' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + ' <span style="color:#94a3b8;font-size:0.7rem;">(' + (c.telephone||'') + ')</span></div>';
+            h += '<div onclick="posSelectClientFromDropdown(\'' + c.id + '\',\'' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + '\')" style="padding:8px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:0.85rem;">' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + ' <span style="color:#94a3b8;font-size:0.65rem;">(' + (c.telephone||'') + ')</span></div>';
         });
     }
     d.innerHTML = h;
     d.style.display = 'block';
 }
 
-// ==================== POS SELECT CLIENT FROM DROPDOWN (avec synchro vocale) ====================
+// ==================== POS SELECT CLIENT FROM DROPDOWN ====================
 function posSelectClientFromDropdown(cid, cn) {
     posCurrentClient = {id: cid, name: cn};
     posCurrentTable = '';
@@ -1077,8 +1067,7 @@ function posSelectClientFromDropdown(cid, cn) {
     if(t) t.value = '';
     if(d) d.style.display = 'none';
     updatePaymentButtons();
-    // ← SYNCHRONISATION : Passage automatique en mode paiement
-    setVoiceMode('payment', '🎤 Dites le montant donné ou "valide"', null);
+    setVoiceMode('payment', '🎤 Dites le montant ou "valide"', null);
     renderPOS();
 }
 
@@ -1116,7 +1105,7 @@ function posSetTable(v) {
     }
 }
 
-// ==================== AJOUT AU PANIER / OPTIONS (avec synchro vocale) ====================
+// ==================== AJOUT AU PANIER / OPTIONS ====================
 function posAddToCartOrOpenOptions(pid) {
     var p = posProductsList.find(function(x) { return x.id === pid; });
     if (!p) return;
@@ -1149,9 +1138,9 @@ function posAddToCartOrOpenOptions(pid) {
             });
             lastAddedProductId = p.id;
         }
-        // ← SYNCHRONISATION : Passage automatique en mode quantité
-        setVoiceMode('quantity', '🎤 Dites un nombre pour la quantité, "passe" ou "valide"', lastAddedProductId);
-        renderPOS();
+        setVoiceMode('quantity', '🎤 Dites un nombre, "passe" ou "valide"', lastAddedProductId);
+        updateCartOnly();
+        showVoiceModeIndicator();
     }
 }
 
@@ -1201,14 +1190,14 @@ async function posOpenOptionsModal(pid) {
     var h = '<h4>' + escapeHtml(p.nom) + '</h4>';
 
     if (sortedCats.length === 0) {
-        h += '<div style="margin-bottom:12px;color:#94a3b8;font-size:0.85rem;">Aucun ingrédient à exclure</div>';
+        h += '<div style="margin-bottom:10px;color:#94a3b8;font-size:0.8rem;">Aucun ingrédient à exclure</div>';
     } else {
         sortedCats.forEach(function(cat) {
-            h += '<div style="margin-bottom:12px;">';
-            h += '<label style="font-weight:600;">🥫 ' + escapeHtml(cat) + '</label>';
-            h += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+            h += '<div style="margin-bottom:10px;">';
+            h += '<label style="font-weight:600;font-size:0.8rem;">🥫 ' + escapeHtml(cat) + '</label>';
+            h += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
             grouped[cat].forEach(function(ingredient) {
-                h += '<label style="display:flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:0.75rem;">';
+                h += '<label style="display:flex;align-items:center;gap:3px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:0.7rem;">';
                 h += '<input type="checkbox" class="pos-interdit-check" value="' + escapeHtml(ingredient) + '"> ' + escapeHtml(ingredient);
                 h += '</label>';
             });
@@ -1216,18 +1205,18 @@ async function posOpenOptionsModal(pid) {
         });
     }
 
-    h += '<div style="margin-bottom:12px;"><label style="font-weight:600;">🌶️ Épices:</label><div style="display:flex;flex-wrap:wrap;gap:5px;">';
+    h += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.8rem;">🌶️ Épices:</label><div style="display:flex;flex-wrap:wrap;gap:4px;">';
     posEpicesList.forEach(function(s, idx) {
-        h += '<label style="display:flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:0.75rem;"><input type="radio" name="pos-epice" value="' + s + '" ' + (idx === 0 ? 'checked' : '') + '> ' + s + '</label>';
+        h += '<label style="display:flex;align-items:center;gap:3px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:0.7rem;"><input type="radio" name="pos-epice" value="' + s + '" ' + (idx === 0 ? 'checked' : '') + '> ' + s + '</label>';
     });
     h += '</div></div>';
-    h += '<div style="margin-bottom:12px;"><label style="font-weight:600;">🧂 Sel:</label><div style="display:flex;flex-wrap:wrap;gap:5px;">';
+    h += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.8rem;">🧂 Sel:</label><div style="display:flex;flex-wrap:wrap;gap:4px;">';
     posSelList.forEach(function(s, idx) {
-        h += '<label style="display:flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:0.75rem;"><input type="radio" name="pos-sel" value="' + s + '" ' + (idx === 0 ? 'checked' : '') + '> ' + s + '</label>';
+        h += '<label style="display:flex;align-items:center;gap:3px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:0.7rem;"><input type="radio" name="pos-sel" value="' + s + '" ' + (idx === 0 ? 'checked' : '') + '> ' + s + '</label>';
     });
     h += '</div></div>';
 
-    h += '<div style="text-align:right;"><button class="btn-cancel" onclick="closeModal()" style="float:none;margin-right:8px;">Annuler</button><button class="btn-save" onclick="posConfirmOptions()" style="float:none;">Ajouter</button></div>';
+    h += '<div style="text-align:right;"><button class="btn-cancel" onclick="closeModal()" style="font-size:0.85rem;padding:8px 18px;float:none;margin-right:8px;">Annuler</button><button class="btn-save" onclick="posConfirmOptions()" style="font-size:0.85rem;padding:8px 18px;float:none;">Ajouter</button></div>';
     openModal('Personnaliser', h);
 }
 
@@ -1254,20 +1243,70 @@ function posConfirmOptions() {
         });
         lastAddedProductId = p.id;
     }
-    // ← SYNCHRONISATION : Passage en mode quantité après confirmation
-    setVoiceMode('quantity', '🎤 Dites un nombre pour la quantité, "passe" ou "valide"', lastAddedProductId);
+    setVoiceMode('quantity', '🎤 Dites un nombre, "passe" ou "valide"', lastAddedProductId);
     closeModal(); 
-    renderPOS();
+    updateCartOnly();
+    showVoiceModeIndicator();
 }
 
-// ==================== RENDER POS ====================
+// ==================== MISE À JOUR CIBLÉE DU PANIER ====================
+function updateCartOnly() {
+    var cartItems = document.querySelector('.pos-cart-items');
+    if (!cartItems) return;
+    var html = '';
+    if (posCart.length === 0) {
+        html = '<div class="pos-cart-empty"><i class="fas fa-shopping-basket"></i><p>Panier vide</p></div>';
+    } else {
+        for (var k = 0; k < posCart.length; k++) {
+            var it = posCart[k];
+            var opts = '';
+            if (it.interdits && it.interdits.length > 0) opts += ' <span style="color:#ef4444;font-size:0.6rem;">🚫' + escapeHtml(it.interdits.join(',')) + '</span>';
+            if (it.epice && it.epice !== 'Normal') opts += ' <span style="color:#d97706;font-size:0.6rem;">🌶️' + escapeHtml(it.epice) + '</span>';
+            if (it.sel && it.sel !== 'Normal') opts += ' <span style="color:#4f46e5;font-size:0.6rem;">🧂' + escapeHtml(it.sel) + '</span>';
+            html += '<div class="pos-cart-item"><div class="pos-cart-item-info"><span class="pos-cart-item-name">' + escapeHtml(it.nom) + opts + '</span><span class="pos-cart-item-price">' + it.prixUnitaire.toFixed(2) + ' MAD/u</span></div><div class="pos-cart-item-actions"><button class="pos-qty-btn" onclick="posUpdateQty(' + k + ',-1)"><i class="fas fa-minus"></i></button><span class="pos-qty-value">' + it.quantite + '</span><button class="pos-qty-btn" onclick="posUpdateQty(' + k + ',1)"><i class="fas fa-plus"></i></button><button class="pos-remove-btn" onclick="posRemoveItem(' + k + ')"><i class="fas fa-times"></i></button></div><span class="pos-cart-item-total">' + (it.prixUnitaire * it.quantite).toFixed(2) + ' MAD</span></div>';
+        }
+    }
+    cartItems.innerHTML = html;
+    var badge = document.querySelector('.pos-cart-badge');
+    if (badge) badge.textContent = posCart.length;
+    var totalRow = document.querySelector('.pos-cart-total-row span:last-child');
+    if (totalRow) {
+        var st = posCalculateTotal();
+        var t = st - posDiscountMAD;
+        totalRow.textContent = t.toFixed(2) + ' MAD';
+    }
+    var validateBtn = document.querySelector('.pos-validate-btn');
+    if (validateBtn) {
+        validateBtn.disabled = posCart.length === 0;
+    }
+}
+
+// ==================== GÉNÉRATION DU NUMÉRO DE FACTURE ATOMIQUE ====================
+async function getNextFactureNum() {
+    var counterRef = db.collection('counters').doc('facture');
+    try {
+        var result = await db.runTransaction(async function(transaction) {
+            var doc = await transaction.get(counterRef);
+            var newNum = (doc.data()?.value || 0) + 1;
+            transaction.set(counterRef, { value: newNum });
+            return newNum;
+        });
+        return 'FACT-' + new Date().getFullYear() + '-' + String(result).padStart(5, '0');
+    } catch(e) {
+        // Fallback si transaction échoue
+        var ts = Date.now().toString().slice(-8);
+        return 'FACT-' + new Date().getFullYear() + '-' + ts;
+    }
+}
+
+// ==================== RENDER POS (PAIEMENT COMPACT SANS SCROLL) ====================
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
 
     if (posProductsList.length === 0 && posCategoriesList.length === 0) {
-        c.innerHTML = '<div style="text-align:center;padding:60px;">' +
+        c.innerHTML = '<div style="text-align:center;padding:40px;">' +
             '<i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2E7D32;"></i>' +
-            '<p style="margin-top:15px;">Chargement du POS...</p>' +
+            '<p style="margin-top:12px;">Chargement du POS...</p>' +
             '</div>';
         return;
     }
@@ -1275,46 +1314,43 @@ function renderPOS() {
     var st = posCalculateTotal(); var t = st - posDiscountMAD;
     var h = '<div class="pos-container"><div class="pos-products-panel">';
 
-    // ===== BARRE DE RECHERCHE AVEC MICRO =====
-    h += '<div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">';
-
-    // Barre de recherche
-    h += '<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">';
-    h += '<div style="flex:1; min-width:180px; position:relative; display:flex; align-items:center; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:4px 16px; transition:all 0.3s ease;">';
-    h += '<i class="fas fa-search" style="color:#94a3b8; margin-right:8px;"></i>';
-    h += '<input type="text" id="posSearchInput" placeholder="🔍 Rechercher (nom, catégorie, description)..." value="' + escapeHtml(posSearchQuery) + '" ';
-    h += 'onkeyup="posSearchProducts(this.value)" style="border:none; outline:none; padding:10px 0; width:100%; font-size:0.95rem; background:transparent;">';
+    // Barre de recherche + micro
+    h += '<div style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;">';
+    h += '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">';
+    h += '<div style="flex:1; min-width:160px; position:relative; display:flex; align-items:center; background:#fff; border:2px solid #e2e8f0; border-radius:40px; padding:2px 12px; transition:all 0.3s ease;">';
+    h += '<i class="fas fa-search" style="color:#94a3b8; margin-right:6px; font-size:0.9rem;"></i>';
+    h += '<input type="text" id="posSearchInput" placeholder="🔍 Rechercher..." value="' + escapeHtml(posSearchQuery) + '" ';
+    h += 'onkeyup="posSearchProducts(this.value)" style="border:none; outline:none; padding:8px 0; width:100%; font-size:0.85rem; background:transparent;">';
     if (posSearchQuery) {
-        h += '<button onclick="document.getElementById(\'posSearchInput\').value=\'\'; posSearchProducts(\'\');" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:4px 8px; font-size:1rem;">';
+        h += '<button onclick="document.getElementById(\'posSearchInput\').value=\'\'; posSearchProducts(\'\');" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:2px 6px; font-size:0.9rem;">';
         h += '<i class="fas fa-times-circle"></i></button>';
     }
     h += '</div>';
 
-    // Bouton micro
     var support = checkVoiceSupport();
     var isSupported = support.supported;
     var isOnline = navigator.onLine;
     var isActive = isSupported && isOnline && !isIOSStandalone();
 
-    h += '<button id="posMicBtn" title="' + (isActive ? 'Cliquez pour activer l\'écoute continue' : (isIOSStandalone() ? 'Ouvrir dans Safari' : 'Non disponible')) + '" style="background:' + (isActive ? '#dcfce7' : (isIOSStandalone() ? '#fef3c7' : '#e2e8f0')) + '; border:3px solid ' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#f59e0b' : '#94a3b8')) + '; border-radius:50%; width:56px; height:56px; cursor:' + (isActive ? 'pointer' : (isIOSStandalone() ? 'pointer' : 'not-allowed')) + '; font-size:1.4rem; color:' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#d97706' : '#94a3b8')) + '; transition:all 0.3s; display:flex; align-items:center; justify-content:center; user-select:none; touch-action:manipulation; flex-shrink:0; box-shadow:0 2px 8px rgba(0,0,0,0.08);"';
+    h += '<button id="posMicBtn" title="' + (isActive ? 'Cliquez pour l\'écoute continue' : (isIOSStandalone() ? 'Ouvrir dans Safari' : 'Non disponible')) + '" style="background:' + (isActive ? '#dcfce7' : (isIOSStandalone() ? '#fef3c7' : '#e2e8f0')) + '; border:3px solid ' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#f59e0b' : '#94a3b8')) + '; border-radius:50%; width:46px; height:46px; cursor:' + (isActive ? 'pointer' : (isIOSStandalone() ? 'pointer' : 'not-allowed')) + '; font-size:1.2rem; color:' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#d97706' : '#94a3b8')) + '; transition:all 0.3s; display:flex; align-items:center; justify-content:center; user-select:none; touch-action:manipulation; flex-shrink:0; box-shadow:0 2px 8px rgba(0,0,0,0.08);"';
     h += ' onclick="' + (isActive ? 'posToggleVoiceSearch()' : (isIOSStandalone() ? 'window.open(window.location.href.split(\'?\')[0],\'_blank\')' : '')) + '"';
     h += '><i class="fas fa-' + (isActive ? (isRecording ? 'circle' : 'microphone') : (isIOSStandalone() ? 'exclamation-triangle' : 'microphone-slash')) + '" style="' + (isRecording ? 'color:#ef4444; animation: pulse 0.5s ease-in-out infinite;' : '') + '"></i></button>';
 
     // Boutons Tables et En ligne
-    h += '<div style="display:flex; gap:6px; flex-wrap:wrap;">';
-    h += '<button onclick="posAfficherCommandesTables()" style="position:relative; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:8px 16px; cursor:pointer; font-weight:600; color:#1e293b; display:flex; align-items:center; gap:6px; white-space:nowrap;">';
+    h += '<div style="display:flex; gap:4px; flex-wrap:wrap;">';
+    h += '<button onclick="posAfficherCommandesTables()" style="position:relative; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:5px 12px; cursor:pointer; font-weight:600; font-size:0.7rem; color:#1e293b; display:flex; align-items:center; gap:4px; white-space:nowrap;">';
     h += '<i class="fas fa-utensils"></i> Tables';
-    h += '<span style="background:#ef4444; color:#fff; border-radius:20px; padding:2px 8px; font-size:0.7rem; margin-left:4px;">' + posCommandesTablesCount + '</span>';
+    h += '<span style="background:#ef4444; color:#fff; border-radius:20px; padding:1px 6px; font-size:0.55rem; margin-left:2px;">' + posCommandesTablesCount + '</span>';
     h += '</button>';
-    h += '<button onclick="navigateTo(\'commandes\')" style="position:relative; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:8px 16px; cursor:pointer; font-weight:600; color:#1e293b; display:flex; align-items:center; gap:6px; white-space:nowrap;">';
+    h += '<button onclick="navigateTo(\'commandes\')" style="position:relative; background:#fff; border:2px solid #e2e8f0; border-radius:50px; padding:5px 12px; cursor:pointer; font-weight:600; font-size:0.7rem; color:#1e293b; display:flex; align-items:center; gap:4px; white-space:nowrap;">';
     h += '<i class="fas fa-globe"></i> En ligne';
-    h += '<span style="background:#ef4444; color:#fff; border-radius:20px; padding:2px 8px; font-size:0.7rem; margin-left:4px;">' + posCommandesEnLigneCount + '</span>';
+    h += '<span style="background:#ef4444; color:#fff; border-radius:20px; padding:1px 6px; font-size:0.55rem; margin-left:2px;">' + posCommandesEnLigneCount + '</span>';
     h += '</button>';
     h += '</div>';
     h += '</div>';
 
     // Catégories
-    h += '<div class="pos-categories-bar" style="margin-bottom:0;">';
+    h += '<div class="pos-categories-bar" style="margin-bottom:6px;">';
     h += '<button class="pos-cat-btn ' + (posSelectedCategory === 'all' ? 'active' : '') + '" onclick="posFilterCategory(\'all\')"><i class="fas fa-th-large"></i> Tous</button>';
     for (var i = 0; i < posCategoriesList.length; i++) {
         var ca = posCategoriesList[i];
@@ -1325,7 +1361,7 @@ function renderPOS() {
     h += '</div>';
     h += '</div>';
 
-    // ===== GRILLE PRODUITS =====
+    // Grille produits
     h += '<div class="pos-products-grid" id="posProductGrid">';
     h += '</div></div>';
 
@@ -1345,21 +1381,27 @@ function renderPOS() {
             }
         }
         h += '</div>';
-        h += '<div style="padding:10px 0;display:flex;gap:10px;align-items:center;"><label>Remise (MAD):</label><input type="number" id="posDiscountMAD" value="' + posDiscountMAD + '" min="0" step="0.01" onchange="posUpdateDiscountMAD(this.value)" style="width:100px;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"></div>';
+        h += '<div style="padding:8px 0;display:flex;gap:8px;align-items:center;font-size:0.8rem;"><label>Remise (MAD):</label><input type="number" id="posDiscountMAD" value="' + posDiscountMAD + '" min="0" step="0.01" onchange="posUpdateDiscountMAD(this.value)" style="width:80px;padding:4px 8px;border:2px solid #e2e8f0;border-radius:6px;font-size:0.85rem;"></div>';
         h += '<div class="pos-cart-footer">';
-        if (posDiscountMAD > 0) h += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;"><span>Sous-total</span><span>' + st.toFixed(2) + '</span></div><div style="display:flex;justify-content:space-between;font-size:0.85rem;color:#ef4444;"><span>Remise</span><span>-' + posDiscountMAD.toFixed(2) + '</span></div>';
+        if (posDiscountMAD > 0) h += '<div style="display:flex;justify-content:space-between;font-size:0.8rem;"><span>Sous-total</span><span>' + st.toFixed(2) + '</span></div><div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#ef4444;"><span>Remise</span><span>-' + posDiscountMAD.toFixed(2) + '</span></div>';
         h += '<div class="pos-cart-total-row"><span>Total</span><span>' + t.toFixed(2) + ' MAD</span></div><button class="pos-validate-btn" onclick="posGoToStep2()" ' + (posCart.length === 0 ? 'disabled' : '') + '><i class="fas fa-check-circle"></i> Valider</button></div>';
     } else if (posStep === 2) {
         var canCredit = posCurrentClient && posCurrentClient.id;
-        h += '<div class="pos-cart-header"><h3><i class="fas fa-credit-card"></i> Paiement</h3><button class="pos-back-btn" onclick="posGoToStep1()"><i class="fas fa-arrow-left"></i> Retour</button></div><div class="pos-payment-form">';
-        h += '<div class="pos-payment-section"><label>Client</label><div style="position:relative;"><input type="text" id="posClientSearchInput" placeholder="🔍 Cliquez et tapez pour rechercher..." onkeyup="posSearchClient(this.value)" onfocus="if(this.value)posSearchClient(this.value)" autocomplete="off" value="' + (posCurrentClient ? escapeHtml(posCurrentClient.name) : '') + '" style="width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:12px;"><div id="posClientDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:2px solid #e2e8f0;border-radius:0 0 12px 12px;max-height:200px;overflow-y:auto;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,0.15);"></div></div></div>';
-        h += '<div class="pos-or-divider">— OU —</div>';
-        h += '<div class="pos-payment-section"><label>Table</label><input type="text" id="posTableNum" value="' + escapeHtml(posCurrentTable) + '" onchange="posSetTable(this.value)" style="width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:12px;"></div>';
-        h += '<div class="pos-payment-section"><div class="pos-summary-box"><div class="pos-summary-row"><span>Articles</span><span>' + posCart.length + '</span></div>'; if (posDiscountMAD > 0) h += '<div class="pos-summary-row"><span>Remise</span><span style="color:#ef4444;">-' + posDiscountMAD.toFixed(2) + '</span></div>'; h += '<div class="pos-summary-total"><span>Total</span><span>' + t.toFixed(2) + ' MAD</span></div></div></div>';
-        h += '<div class="pos-payment-section"><label>Vendeur</label><input type="text" id="posVendeur" value="' + (window.currentUserData ? escapeHtml(window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom) : '') + '" style="width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:12px;"></div>';
-        h += '<div class="pos-payment-section"><label>Paiement</label><div class="pos-payment-methods"><button class="pos-payment-btn ' + (posPaymentMethod === 'espece' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'espece\')"><i class="fas fa-money-bill-wave"></i> Espèces</button><button class="pos-payment-btn ' + (posPaymentMethod === 'credit' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'credit\')" id="posCreditBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"') + '><i class="fas fa-credit-card"></i> Crédit</button><button class="pos-payment-btn ' + (posPaymentMethod === 'partiel' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'partiel\')" id="posPartielBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"') + '><i class="fas fa-hand-holding-usd"></i> Partiel</button></div></div>';
-        if (posPaymentMethod === 'espece' || posPaymentMethod === 'partiel') h += '<div class="pos-payment-section"><label>Montant donné</label><input type="number" id="posAmountGiven" placeholder="0.00" value="' + (posAmountGiven > 0 ? posAmountGiven : '') + '" onkeyup="posCalculateChange()"><div id="posChangeDisplay"></div></div>';
-        h += '<button class="pos-finalize-btn" onclick="posFinalizeSale()"><i class="fas fa-check-circle"></i> Finaliser</button></div>';
+        h += '<div class="pos-cart-header"><h3><i class="fas fa-credit-card"></i> Paiement</h3><button class="pos-back-btn" onclick="posGoToStep1()"><i class="fas fa-arrow-left"></i> Retour</button></div>';
+        h += '<div class="pos-payment-form" style="display:flex; flex-direction:column; gap:6px; padding:0; overflow:hidden;">';
+        h += '<div class="pos-payment-section" style="margin-bottom:4px;"><label style="font-size:0.75rem; margin-bottom:2px;">Client</label><div style="position:relative;"><input type="text" id="posClientSearchInput" placeholder="🔍 Cliquez et tapez..." onkeyup="posSearchClient(this.value)" onfocus="if(this.value)posSearchClient(this.value)" autocomplete="off" value="' + (posCurrentClient ? escapeHtml(posCurrentClient.name) : '') + '" style="width:100%;padding:8px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.85rem;"><div id="posClientDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:2px solid #e2e8f0;border-radius:0 0 8px 8px;max-height:150px;overflow-y:auto;z-index:50;box-shadow:0 5px 15px rgba(0,0,0,0.1);"></div></div></div>';
+        h += '<div class="pos-or-divider" style="margin:2px 0;font-size:0.7rem;">— OU —</div>';
+        h += '<div class="pos-payment-section" style="margin-bottom:4px;"><label style="font-size:0.75rem; margin-bottom:2px;">Table</label><input type="text" id="posTableNum" value="' + escapeHtml(posCurrentTable) + '" onchange="posSetTable(this.value)" style="width:100%;padding:8px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.85rem;"></div>';
+        h += '<div class="pos-payment-section" style="margin-bottom:4px;"><div class="pos-summary-box" style="padding:8px 12px;"><div class="pos-summary-row" style="font-size:0.8rem;margin-bottom:2px;"><span>Articles</span><span>' + posCart.length + '</span></div>';
+        if (posDiscountMAD > 0) h += '<div class="pos-summary-row" style="font-size:0.8rem;margin-bottom:2px;color:#ef4444;"><span>Remise</span><span>-' + posDiscountMAD.toFixed(2) + '</span></div>';
+        h += '<div class="pos-summary-total" style="font-size:1.1rem;margin-top:2px;"><span>Total</span><span>' + t.toFixed(2) + ' MAD</span></div></div></div>';
+        h += '<div class="pos-payment-section" style="margin-bottom:4px;"><label style="font-size:0.75rem; margin-bottom:2px;">Vendeur</label><input type="text" id="posVendeur" value="' + (window.currentUserData ? escapeHtml(window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom) : '') + '" style="width:100%;padding:8px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.85rem;"></div>';
+        h += '<div class="pos-payment-section" style="margin-bottom:4px;"><label style="font-size:0.75rem; margin-bottom:2px;">Paiement</label><div class="pos-payment-methods" style="gap:6px;"><button class="pos-payment-btn ' + (posPaymentMethod === 'espece' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'espece\')" style="padding:6px 0;font-size:0.75rem;"><i class="fas fa-money-bill-wave"></i> Espèces</button><button class="pos-payment-btn ' + (posPaymentMethod === 'credit' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'credit\')" id="posCreditBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"') + ' style="padding:6px 0;font-size:0.75rem;"><i class="fas fa-credit-card"></i> Crédit</button><button class="pos-payment-btn ' + (posPaymentMethod === 'partiel' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'partiel\')" id="posPartielBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"') + ' style="padding:6px 0;font-size:0.75rem;"><i class="fas fa-hand-holding-usd"></i> Partiel</button></div></div>';
+        if (posPaymentMethod === 'espece' || posPaymentMethod === 'partiel') {
+            h += '<div class="pos-payment-section" style="margin-bottom:4px;"><label style="font-size:0.75rem; margin-bottom:2px;">Montant donné</label><input type="number" id="posAmountGiven" placeholder="0.00" value="' + (posAmountGiven > 0 ? posAmountGiven : '') + '" onkeyup="posCalculateChange()" style="width:100%;padding:8px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.9rem;"><div id="posChangeDisplay"></div></div>';
+        }
+        h += '<button class="pos-finalize-btn" onclick="posFinalizeSale()" style="padding:10px;font-size:0.9rem;margin-top:4px;"><i class="fas fa-check-circle"></i> Finaliser</button>';
+        h += '</div>';
     }
     h += '</div></div>';
     c.innerHTML = h;
@@ -1368,7 +1410,6 @@ function renderPOS() {
 
     if (posStep === 2) setTimeout(posCalculateChange, 200);
 
-    // Afficher l'indicateur de mode vocal (toujours visible si micro actif)
     if (isRecording || voiceMode !== 'search') {
         showVoiceModeIndicator();
     } else {
@@ -1377,6 +1418,7 @@ function renderPOS() {
     }
 }
 
+// ==================== FONCTIONS MÉTIER ====================
 function posFilterCategory(ca) {
     posSelectedCategory = ca;
     var searchInput = document.getElementById('posSearchInput');
@@ -1397,10 +1439,10 @@ function posUpdateQty(i, ch) {
         if (p && p.stock !== undefined && nq > p.stock) { alert('Max: ' + p.stock); return; }
         it.quantite = nq;
     }
-    renderPOS();
+    updateCartOnly();
 }
 
-function posRemoveItem(i) { posCart.splice(i, 1); renderPOS(); }
+function posRemoveItem(i) { posCart.splice(i, 1); updateCartOnly(); }
 
 function posCalculateTotal() {
     var t = 0;
@@ -1445,7 +1487,7 @@ function posCalculateChange() {
     }
 }
 
-// ==================== FINALISATION ====================
+// ==================== FINALISATION ULTRA RAPIDE ====================
 async function posFinalizeSale() {
     var st = posCalculateTotal(); var t = st - posDiscountMAD;
     if (!posCurrentClient && !posCurrentTable) { alert('Client ou table requis.'); return; }
@@ -1453,13 +1495,17 @@ async function posFinalizeSale() {
     if ((posPaymentMethod === 'credit' || posPaymentMethod === 'partiel') && !posCurrentClient) { alert('Client requis pour crédit/partiel.'); return; }
     if (posPaymentMethod === 'espece') { posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0; if (posAmountGiven < t) { alert('Montant insuffisant.'); return; } }
     var vendeur = document.getElementById('posVendeur').value.trim() || (window.currentUserData ? window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom : '');
+
     try {
-        var fcs = await db.collection('ventes').get(); var fn = 'FACT-' + new Date().getFullYear() + '-' + String(fcs.size + 1).padStart(5, '0');
+        // 1. Génération du numéro de facture (rapide)
+        var fn = await getNextFactureNum();
+
         var remaining = 0, paid = true, statutPaiement = 'payé', change = 0;
         if (posPaymentMethod === 'credit') { paid = false; remaining = t; statutPaiement = 'crédit'; }
         else if (posPaymentMethod === 'partiel') { posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0; remaining = t - posAmountGiven; paid = false; statutPaiement = 'partiel'; change = Math.max(0, posAmountGiven - t); }
         else { posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0; change = posAmountGiven - t; paid = true; statutPaiement = 'payé'; }
         if (posCurrentTable && !posCurrentClient) { paid = false; statutPaiement = 'en_attente'; remaining = t; }
+
         var profitTotal = 0;
         var itemsDetail = posCart.map(function(it) {
             var pa = it.prixAchat || 0, pvn = it.prixVente || 0, pp = it.prixPromo || 0, pvr = (pp > 0) ? pp : pvn;
@@ -1471,6 +1517,7 @@ async function posFinalizeSale() {
                 epice: it.epice || 'Normal', sel: it.sel || 'Normal'
             };
         });
+
         var sd = {
             factureNum: fn, items: itemsDetail, subtotal: st, discountMAD: posDiscountMAD, total: t,
             clientId: posCurrentClient ? posCurrentClient.id : null,
@@ -1486,23 +1533,24 @@ async function posFinalizeSale() {
             profitTotal: profitTotal,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
-        await CacheDB.write('ventes', null, sd, 'add');
-        if (!paid) await CacheDB.write('credits', null, sd, 'add');
+
+        // 2. Écrire la vente et le crédit (si nécessaire)
+        var writes = [CacheDB.write('ventes', null, sd, 'add')];
+        if (!paid) writes.push(CacheDB.write('credits', null, sd, 'add'));
         if (window.posCommandeId) {
-            await CacheDB.write('commandes', window.posCommandeId, { statut: 'payé', paidAt: firebase.firestore.FieldValue.serverTimestamp(), factureNum: fn }, 'update');
+            writes.push(CacheDB.write('commandes', window.posCommandeId, { statut: 'payé', paidAt: firebase.firestore.FieldValue.serverTimestamp(), factureNum: fn }, 'update'));
             delete window.posCommandeId;
         }
         if (window.posVenteId) {
-            await CacheDB.write('ventes', window.posVenteId, { paid: true, statutPaiement: 'payé', remainingAmount: 0, paidAt: firebase.firestore.FieldValue.serverTimestamp() }, 'update');
-            var venteDoc = await db.collection('ventes').doc(window.posVenteId).get();
-            if (venteDoc.exists) {
-                var creditSnap = await db.collection('credits').where('factureNum', '==', venteDoc.data().factureNum).get();
-                creditSnap.forEach(function(cd) { CacheDB.write('credits', cd.id, { paid: true, remainingAmount: 0 }, 'update'); });
-            }
+            writes.push(CacheDB.write('ventes', window.posVenteId, { paid: true, statutPaiement: 'payé', remainingAmount: 0, paidAt: firebase.firestore.FieldValue.serverTimestamp() }, 'update'));
             delete window.posVenteId;
         }
+        await Promise.all(writes);
 
-        // Mise à jour du stock
+        // 3. Mises à jour de stock et produits en parallèle
+        var stockUpdates = [];
+        var productUpdates = [];
+
         for (var i = 0; i < posCart.length; i++) {
             var it = posCart[i];
             try {
@@ -1519,29 +1567,31 @@ async function posFinalizeSale() {
                                 var stockData = stockDoc.data();
                                 var qteUtilisee = ing.quantite * it.quantite;
                                 var newQte = Math.max(0, (stockData.quantite || 0) - qteUtilisee);
-                                await CacheDB.write('stock', ing.idStock, {
+                                stockUpdates.push(CacheDB.write('stock', ing.idStock, {
                                     quantite: newQte,
                                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                                }, 'update');
+                                }, 'update'));
                             }
                         }
                     } else {
-                        var pr = await db.collection('products').doc(it.id).get();
-                        if (pr.exists) {
-                            var pd = pr.data();
-                            await CacheDB.write('products', it.id, {
-                                stock: Math.max(0, (pd.stock || 0) - it.quantite),
-                                vendues: (pd.vendues || 0) + it.quantite,
-                                ca: (pd.ca || 0) + (it.prixUnitaire * it.quantite),
-                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                            }, 'update');
-                        }
+                        var newStock = Math.max(0, (productData.stock || 0) - it.quantite);
+                        var newVendues = (productData.vendues || 0) + it.quantite;
+                        var newCA = (productData.ca || 0) + (it.prixUnitaire * it.quantite);
+                        productUpdates.push(CacheDB.write('products', it.id, {
+                            stock: newStock,
+                            vendues: newVendues,
+                            ca: newCA,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, 'update'));
                     }
                 }
             } catch(e) {}
         }
 
-        // Fidélité
+        // Exécuter toutes les mises à jour en parallèle
+        await Promise.all([...stockUpdates, ...productUpdates]);
+
+        // 4. Fidélité (mise en cache des paramètres)
         if (posCurrentClient && posCurrentClient.id && paid) {
             try {
                 var cr = await db.collection('clients').doc(posCurrentClient.id).get();
@@ -1552,40 +1602,37 @@ async function posFinalizeSale() {
                         profit: (cd.profit || 0) + profitTotal,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     };
-                    var fideliteActive = true;
-                    var pointsParVente = 1;
-                    try {
-                        const fDoc = await db.collection('settings').doc('fidelite').get();
-                        if (fDoc.exists) {
-                            fideliteActive = fDoc.data().active === true;
-                            pointsParVente = fDoc.data().pointsParVente || 1;
-                        } else {
-                            var storedActive = localStorage.getItem('fidelite_active');
-                            fideliteActive = storedActive === null ? true : storedActive === 'true';
-                            var storedPoints = localStorage.getItem('fidelite_points');
-                            pointsParVente = storedPoints ? parseInt(storedPoints) || 1 : 1;
+
+                    // Paramètres de fidélité en cache
+                    if (!fideliteSettingsCache) {
+                        try {
+                            var fDoc = await db.collection('settings').doc('fidelite').get();
+                            fideliteSettingsCache = fDoc.exists ? fDoc.data() : { active: true, pointsParVente: 1 };
+                        } catch(e) {
+                            fideliteSettingsCache = { active: true, pointsParVente: 1 };
                         }
-                    } catch(e) {
-                        var storedActive = localStorage.getItem('fidelite_active');
-                        fideliteActive = storedActive === null ? true : storedActive === 'true';
-                        var storedPoints = localStorage.getItem('fidelite_points');
-                        pointsParVente = storedPoints ? parseInt(storedPoints) || 1 : 1;
                     }
-                    if (fideliteActive) {
-                        updateData.pointsFidelite = (cd.pointsFidelite || 0) + pointsParVente;
+                    if (fideliteSettingsCache.active) {
+                        var points = parseInt(fideliteSettingsCache.pointsParVente) || 1;
+                        updateData.pointsFidelite = (cd.pointsFidelite || 0) + points;
                     }
                     await CacheDB.write('clients', posCurrentClient.id, updateData, 'update');
                 }
             } catch(e) { console.error('Erreur fidélité :', e); }
         }
 
+        // 5. Message de confirmation
         var msg = '✅ Vente: ' + fn + '\n💰 Total: ' + t.toFixed(2) + ' MAD';
         if (posPaymentMethod === 'espece' && posAmountGiven > t) msg += '\n💵 Rendu: ' + change.toFixed(2) + ' MAD';
         if (statutPaiement === 'crédit') msg += '\n📋 Crédit enregistré.';
         if (statutPaiement === 'partiel') msg += '\n📋 Reste: ' + remaining.toFixed(2) + ' MAD';
         if (statutPaiement === 'en_attente') msg += '\n⏳ En attente de paiement.';
-        alert(msg); posResetCart(); renderPOS(); CacheDB.sync();
+        alert(msg);
+        posResetCart();
+        renderPOS();
+        CacheDB.sync();
+
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS (écoute continue, modes synchronisés)');
+console.log('🛒 Mixmax Minimarket - POS ultra rapide (paiement sans scroll)');
