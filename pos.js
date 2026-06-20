@@ -1,10 +1,11 @@
-// ==================== POS.JS - MIXMAX MINIMARKET (RECHERCHE NOM + CATÉGORIE + DESCRIPTION + VOCALE) ====================
+// ==================== POS.JS - MIXMAX MINIMARKET (RECHERCHE VOCALE CORRIGÉE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
 var posSearchQuery = ''; // Variable pour la recherche de produits
 var voiceRecognition = null; // Variable pour la recherche vocale
 var isRecording = false; // Indicateur d'enregistrement
+var voiceTimeout = null; // Timeout pour la fin de l'enregistrement
 
 // Commandes tables
 var posCommandesTables = [];
@@ -273,7 +274,7 @@ html += '</span></div></div>';
 grid.innerHTML = html;
 }
 
-// ==================== RECHERCHE VOCALE (STYLE WHATSAPP - BOUTON AGRANDI) ====================
+// ==================== RECHERCHE VOCALE CORRIGÉE ====================
 function posStartVoiceSearch() {
     // Vérifier si le navigateur supporte la reconnaissance vocale
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -288,13 +289,23 @@ function posStartVoiceSearch() {
     var micBtn = document.getElementById('posMicBtn');
     var searchInput = document.getElementById('posSearchInput');
 
+    // Nettoyer toute reconnaissance précédente
+    if (voiceRecognition) {
+        try {
+            voiceRecognition.abort();
+        } catch(e) {}
+        voiceRecognition = null;
+    }
+
     // Initialiser la reconnaissance vocale
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     voiceRecognition = new SpeechRecognition();
+    
+    // Configuration pour une meilleure reconnaissance
     voiceRecognition.lang = 'fr-FR';
-    voiceRecognition.continuous = false;
+    voiceRecognition.continuous = true;  // ← Important : continue pour capter toute la parole
     voiceRecognition.interimResults = true;
-    voiceRecognition.maxAlternatives = 1;
+    voiceRecognition.maxAlternatives = 3;
 
     // === FEEDBACK VISUEL - ENREGISTREMENT ===
     if (micBtn) {
@@ -316,8 +327,12 @@ function posStartVoiceSearch() {
     }
 
     // Style d'animation pour le point clignotant
-    var style = document.createElement('style');
-    style.id = 'voiceStyle';
+    var style = document.getElementById('voiceStyle');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'voiceStyle';
+        document.head.appendChild(style);
+    }
     style.textContent = `
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
@@ -330,10 +345,9 @@ function posStartVoiceSearch() {
             transition: all 0.3s ease;
         }
     `;
-    document.head.appendChild(style);
 
-    // Variable pour stocker le texte final
     var finalTranscript = '';
+    var lastInterim = '';
 
     // === RÉSULTATS DE LA RECONNAISSANCE ===
     voiceRecognition.onresult = function(event) {
@@ -354,10 +368,20 @@ function posStartVoiceSearch() {
             if (finalTranscriptTemp) {
                 searchInput.value = finalTranscriptTemp;
                 finalTranscript = finalTranscriptTemp;
-            } else if (interimTranscript) {
+                // Animation de confirmation
+                searchInput.style.background = '#f0fdf4';
+                searchInput.style.borderColor = '#16a34a';
+                setTimeout(function() {
+                    if (searchInput) {
+                        searchInput.style.background = '#fef2f2';
+                        searchInput.style.borderColor = '#ef4444';
+                    }
+                }, 300);
+            } else if (interimTranscript && interimTranscript !== lastInterim) {
                 searchInput.value = interimTranscript + ' ✍️';
                 searchInput.style.background = '#fefce8';
                 searchInput.style.borderColor = '#f59e0b';
+                lastInterim = interimTranscript;
             }
         }
     };
@@ -369,7 +393,7 @@ function posStartVoiceSearch() {
         // Récupérer le texte final
         var transcript = searchInput ? searchInput.value.replace(' ✍️', '').trim() : '';
 
-        // === RESTAURER L'INTERFACE ===
+        // Restaurer l'interface
         if (micBtn) {
             micBtn.classList.remove('recording');
             micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
@@ -381,7 +405,7 @@ function posStartVoiceSearch() {
         }
 
         if (searchInput) {
-            if (transcript) {
+            if (transcript && transcript.length > 0) {
                 // Texte reconnu - LANCER LA RECHERCHE IMMÉDIATEMENT
                 searchInput.value = transcript;
                 searchInput.placeholder = '🔍 Rechercher (nom, catégorie, description)...';
@@ -394,7 +418,7 @@ function posStartVoiceSearch() {
                 posSearchQuery = transcript.toLowerCase().trim();
                 filterProductGrid();
 
-                // Remettre le focus dans la barre de recherche
+                // Remettre le focus
                 setTimeout(function() {
                     if (searchInput) {
                         searchInput.focus();
@@ -428,18 +452,21 @@ function posStartVoiceSearch() {
         }
 
         // Nettoyer
-        var styleEl = document.getElementById('voiceStyle');
-        if (styleEl) styleEl.remove();
         voiceRecognition = null;
         isRecording = false;
+        lastInterim = '';
+        if (voiceTimeout) {
+            clearTimeout(voiceTimeout);
+            voiceTimeout = null;
+        }
     };
 
     // === GESTION DES ERREURS ===
     voiceRecognition.onerror = function(event) {
         console.error('🎤 Erreur de reconnaissance :', event.error);
 
-        // Ne pas afficher d'alerte pour 'no-speech' (silence)
-        if (event.error === 'no-speech') {
+        // Ne pas afficher d'alerte pour 'no-speech' (silence) ou 'aborted'
+        if (event.error === 'no-speech' || event.error === 'aborted') {
             if (micBtn) {
                 micBtn.classList.remove('recording');
                 micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
@@ -456,10 +483,12 @@ function posStartVoiceSearch() {
                 searchInput.style.boxShadow = 'none';
                 searchInput.style.border = '2px solid #e2e8f0';
             }
-            var styleEl = document.getElementById('voiceStyle');
-            if (styleEl) styleEl.remove();
             voiceRecognition = null;
             isRecording = false;
+            if (voiceTimeout) {
+                clearTimeout(voiceTimeout);
+                voiceTimeout = null;
+            }
             return;
         }
 
@@ -489,7 +518,7 @@ function posStartVoiceSearch() {
         }
 
         // Restaurer l'interface après 2s
-        setTimeout(function() {
+        voiceTimeout = setTimeout(function() {
             if (micBtn) {
                 micBtn.classList.remove('recording');
                 micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
@@ -506,22 +535,48 @@ function posStartVoiceSearch() {
                 searchInput.style.boxShadow = 'none';
                 searchInput.style.border = '2px solid #e2e8f0';
             }
-            var styleEl = document.getElementById('voiceStyle');
-            if (styleEl) styleEl.remove();
             voiceRecognition = null;
             isRecording = false;
+            voiceTimeout = null;
         }, 2000);
     };
 
     // Démarrer l'écoute
-    voiceRecognition.start();
+    try {
+        voiceRecognition.start();
+    } catch(e) {
+        console.error('Erreur démarrage reconnaissance :', e);
+        isRecording = false;
+        if (micBtn) {
+            micBtn.classList.remove('recording');
+            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            micBtn.style.background = '#dcfce7';
+            micBtn.style.borderColor = '#16a34a';
+            micBtn.style.boxShadow = 'none';
+            micBtn.style.transform = 'scale(1)';
+            micBtn.style.border = '3px solid #16a34a';
+        }
+        if (searchInput) {
+            searchInput.placeholder = '🔍 Rechercher (nom, catégorie, description)...';
+            searchInput.style.background = '#fff';
+            searchInput.style.borderColor = '#e2e8f0';
+            searchInput.style.boxShadow = 'none';
+            searchInput.style.border = '2px solid #e2e8f0';
+        }
+    }
 }
 
 function posCancelVoiceSearch() {
     if (voiceRecognition) {
-        try { voiceRecognition.abort(); } catch(e) {}
+        try {
+            voiceRecognition.abort();
+        } catch(e) {}
         voiceRecognition = null;
-        isRecording = false;
+    }
+    isRecording = false;
+    if (voiceTimeout) {
+        clearTimeout(voiceTimeout);
+        voiceTimeout = null;
     }
 
     var micBtn = document.getElementById('posMicBtn');
@@ -544,9 +599,6 @@ function posCancelVoiceSearch() {
         searchInput.style.boxShadow = 'none';
         searchInput.style.border = '2px solid #e2e8f0';
     }
-
-    var styleEl = document.getElementById('voiceStyle');
-    if (styleEl) styleEl.remove();
 }
 
 // ========== CHARGEMENT DES COMMANDES TABLES ==========
@@ -785,6 +837,10 @@ try { voiceRecognition.abort(); } catch(e) {}
 voiceRecognition = null;
 isRecording = false;
 }
+if (voiceTimeout) {
+clearTimeout(voiceTimeout);
+voiceTimeout = null;
+}
 var micBtn = document.getElementById('posMicBtn');
 if (micBtn) {
 micBtn.classList.remove('recording');
@@ -1010,7 +1066,7 @@ epice: epice, sel: sel
 closeModal(); renderPOS();
 }
 
-// ==================== RENDER POS AVEC RECHERCHE (sans perte de focus) ====================
+// ==================== RENDER POS AVEC RECHERCHE ====================
 function renderPOS() {
 var c = document.getElementById('dynamicContent'); if (!c) return;
 
@@ -1041,7 +1097,7 @@ h += '<i class="fas fa-times-circle"></i></button>';
 }
 h += '</div>';
 
-// === BOUTON MICRO AGRANDI (style WhatsApp - appui long) ===
+// === BOUTON MICRO AGRANDI ===
 h += '<button id="posMicBtn" title="Appuyez et maintenez pour la recherche vocale" style="background:#dcfce7; border:3px solid #16a34a; border-radius:50%; width:56px; height:56px; cursor:pointer; font-size:1.4rem; color:#16a34a; transition:all 0.3s; display:flex; align-items:center; justify-content:center; user-select:none; touch-action:manipulation; flex-shrink:0; box-shadow:0 2px 8px rgba(22, 163, 74, 0.2);"';
 h += ' onmousedown="posStartVoiceSearch()" onmouseup="posCancelVoiceSearch()" onmouseleave="posCancelVoiceSearch()"';
 h += ' ontouchstart="posStartVoiceSearch()" ontouchend="posCancelVoiceSearch()" ontouchcancel="posCancelVoiceSearch()"';
@@ -1072,7 +1128,7 @@ h += '<button class="pos-cat-btn ' + ac + '" onclick="posFilterCategory(\'' + es
 h += '</div>';
 h += '</div>';
 
-// ===== GRILLE PRODUITS (avec un ID pour le filtrage) =====
+// ===== GRILLE PRODUITS =====
 h += '<div class="pos-products-grid" id="posProductGrid">';
 h += '</div></div>'; // Fermeture de la grille et du products panel
 
@@ -1328,4 +1384,4 @@ alert(msg); posResetCart(); renderPOS(); CacheDB.sync();
 } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS JS (bouton audio agrandi, recherche instantanée)');
+console.log('🛒 Mixmax Minimarket - POS JS (recherche vocale corrigée)');
