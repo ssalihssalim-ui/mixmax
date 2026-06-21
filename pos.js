@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION ULTRA RAPIDE (PAIEMENT VOCAL) ====================
+// ==================== POS.JS - VERSION ULTRA OPTIMISÉE ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -6,6 +6,7 @@ var posSearchQuery = '';
 var voiceRecognition = null;
 var isRecording = false;
 var voiceTimeout = null;
+var searchTimeout = null; // Pour le débounce
 
 // ========== MODE VOCAL ==========
 var voiceMode = 'search';
@@ -15,6 +16,13 @@ var lastVoiceCommandTime = 0;
 
 // Cache pour la fidélité
 var fideliteSettingsCache = null;
+
+// Cache pour la recherche (index des produits)
+var productNameIndex = {};
+var productIndexBuilt = false;
+
+// Compteur de facture local
+var factureCounter = parseInt(localStorage.getItem('factureCounter')) || 0;
 
 // ========== COMMANDES VOCALES DE PAIEMENT ==========
 var paymentKeywords = {
@@ -120,7 +128,55 @@ function posEnrichirItemsAvecPrixAchat(items) {
     });
 }
 
-// ==================== CHARGEMENT ====================
+// ==================== CONSTRUCTION DE L'INDEX DE RECHERCHE ====================
+function buildProductIndex() {
+    if (productIndexBuilt) return;
+    productNameIndex = {};
+    posProductsList.forEach(function(p) {
+        if (!p.nom) return;
+        var words = p.nom.toLowerCase().split(' ');
+        words.forEach(function(w) {
+            if (w.length < 2) return;
+            if (!productNameIndex[w]) productNameIndex[w] = [];
+            productNameIndex[w].push(p);
+        });
+    });
+    productIndexBuilt = true;
+}
+
+// ==================== RECHERCHE RAPIDE AVEC INDEX ====================
+function fastSearch(query) {
+    if (!query) return posProductsList;
+    buildProductIndex();
+    
+    var words = query.toLowerCase().split(' ');
+    var results = [];
+    var seen = {};
+    
+    words.forEach(function(w) {
+        if (w.length < 2) return;
+        var matches = productNameIndex[w] || [];
+        matches.forEach(function(p) {
+            if (!seen[p.id]) {
+                seen[p.id] = true;
+                results.push(p);
+            }
+        });
+    });
+    
+    // Si aucun résultat avec l'index, faire une recherche classique
+    if (results.length === 0) {
+        return posProductsList.filter(function(p) {
+            return (p.nom || '').toLowerCase().indexOf(query) !== -1 ||
+                   (p.categorie || '').toLowerCase().indexOf(query) !== -1 ||
+                   (p.description || '').toLowerCase().indexOf(query) !== -1;
+        });
+    }
+    
+    return results;
+}
+
+// ==================== CHARGEMENT OPTIMISÉ ====================
 async function loadPosPage(c) {
     posResetCart(); posStep = 1;
     posCommandesFilterText = '';
@@ -128,77 +184,97 @@ async function loadPosPage(c) {
     posCommandesSortOrder = 'desc';
     posSearchQuery = '';
     setVoiceMode('search', '🎤 Recherche vocale active', null);
+    productIndexBuilt = false;
 
     posCategoriesList = [];
     posProductsList = [];
     posAllClients = [];
     posFilteredClients = [];
 
-    if (c) {
-        c.innerHTML = '<div style="text-align:center;padding:60px;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2E7D32;"></i><p style="margin-top:15px;">Chargement du POS...</p></div>';
-    }
-
+    // ⚡ AFFICHAGE RAPIDE - CHARGER LE CACHE D'ABORD
     try {
-        const [cs, ps, cl] = await Promise.all([
-            db.collection('categories').get(),
-            db.collection('products').get(),
-            db.collection('clients').limit(500).get()
-        ]);
-
-        posCategoriesList = [];
-        cs.forEach(d => {
-            let cat = { id: d.id, nom: d.data().nom, imageBase64: d.data().imageBase64, recette: d.data().recette || false };
-            posCategoriesList.push(cat);
-            CacheDB.set('categories', d.id, cat);
-        });
-
-        posProductsList = [];
-        ps.forEach(d => {
-            const dd = d.data();
-            if (dd.disponible !== false) {
-                let prod = {
-                    id: d.id, 
-                    nom: dd.nom || '', 
-                    description: dd.description || '',
-                    prixVente: dd.prixVente||0, 
-                    prixPromo: dd.prixPromo||0,
-                    prixAchat: dd.prixAchat||0, 
-                    stock: dd.stock, 
-                    categorie: dd.categorie||'',
-                    imageBase64: dd.imageBase64||''
-                };
-                posProductsList.push(prod);
-                CacheDB.set('products', d.id, prod);
-            }
-        });
-
-        posAllClients = [];
-        cl.forEach(d => {
-            let cli = { id: d.id, nom: d.data().nom, prenom: d.data().prenom, telephone: d.data().telephone };
-            posAllClients.push(cli);
-            CacheDB.set('clients', d.id, cli);
-        });
-        posFilteredClients = [...posAllClients];
-
-    } catch(e) {
-        console.error('Erreur chargement POS:', e);
         let cachedCategories = await CacheDB.getAll('categories');
         let cachedProducts = await CacheDB.getAll('products');
         let cachedClients = await CacheDB.getAll('clients');
-        if (cachedCategories.length) posCategoriesList = cachedCategories.map(cat => ({
-            id: cat.id, nom: cat.nom, imageBase64: cat.imageBase64, recette: cat.recette || false
-        }));
+        
+        if (cachedCategories.length) {
+            posCategoriesList = cachedCategories.map(cat => ({
+                id: cat.id, nom: cat.nom, imageBase64: cat.imageBase64, recette: cat.recette || false
+            }));
+        }
         if (cachedProducts.length) {
             posProductsList = cachedProducts.filter(p => p.disponible !== false).map(p => ({
                 ...p,
                 description: p.description || ''
             }));
+            productIndexBuilt = false;
         }
         if (cachedClients.length) {
             posAllClients = cachedClients.map(c => ({ id: c.id, nom: c.nom, prenom: c.prenom, telephone: c.telephone }));
             posFilteredClients = [...posAllClients];
         }
+        
+        // Afficher immédiatement
+        renderPOS();
+    } catch(e) {
+        console.error('Erreur cache:', e);
     }
+
+    // ⚡ CHARGEMENT FIRESTORE EN ARRIÈRE-PLAN
+    setTimeout(async function() {
+        try {
+            const [cs, ps, cl] = await Promise.all([
+                db.collection('categories').get(),
+                db.collection('products').get(),
+                db.collection('clients').limit(500).get()
+            ]);
+
+            // Mettre à jour les catégories
+            posCategoriesList = [];
+            cs.forEach(d => {
+                let cat = { id: d.id, nom: d.data().nom, imageBase64: d.data().imageBase64, recette: d.data().recette || false };
+                posCategoriesList.push(cat);
+                CacheDB.set('categories', d.id, cat);
+            });
+
+            // Mettre à jour les produits
+            posProductsList = [];
+            ps.forEach(d => {
+                const dd = d.data();
+                if (dd.disponible !== false) {
+                    let prod = {
+                        id: d.id, 
+                        nom: dd.nom || '', 
+                        description: dd.description || '',
+                        prixVente: dd.prixVente||0, 
+                        prixPromo: dd.prixPromo||0,
+                        prixAchat: dd.prixAchat||0, 
+                        stock: dd.stock, 
+                        categorie: dd.categorie||'',
+                        imageBase64: dd.imageBase64||''
+                    };
+                    posProductsList.push(prod);
+                    CacheDB.set('products', d.id, prod);
+                }
+            });
+            productIndexBuilt = false;
+
+            // Mettre à jour les clients
+            posAllClients = [];
+            cl.forEach(d => {
+                let cli = { id: d.id, nom: d.data().nom, prenom: d.data().prenom, telephone: d.data().telephone };
+                posAllClients.push(cli);
+                CacheDB.set('clients', d.id, cli);
+            });
+            posFilteredClients = [...posAllClients];
+
+            // Re-rendre avec les données fraîches
+            renderPOS();
+
+        } catch(e) {
+            console.error('Erreur chargement Firestore:', e);
+        }
+    }, 300);
 
     await posChargerCommandesTables();
     await posChargerCommandesEnLigneCount();
@@ -266,13 +342,16 @@ async function loadPosPage(c) {
     }
 }
 
-// ==================== RECHERCHE DE PRODUITS ====================
+// ==================== RECHERCHE DE PRODUITS AVEC DÉBOUNCE ====================
 function posSearchProducts(query) {
-    posSearchQuery = query.toLowerCase().trim();
-    filterProductGrid();
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(function() {
+        posSearchQuery = query.toLowerCase().trim();
+        filterProductGrid();
+    }, 150);
 }
 
-// ==================== FILTRER LA GRILLE ====================
+// ==================== FILTRER LA GRILLE (OPTIMISÉ) ====================
 function filterProductGrid() {
     var grid = document.getElementById('posProductGrid');
     if (!grid) {
@@ -280,19 +359,12 @@ function filterProductGrid() {
     }
     if (!grid) return;
 
-    var f = posProductsList;
+    // Utiliser la recherche rapide avec index
+    var f = fastSearch(posSearchQuery);
+    
+    // Filtrer par catégorie
     if (posSelectedCategory !== 'all') {
         f = f.filter(function(p) { return p.categorie === posSelectedCategory; });
-    }
-
-    if (posSearchQuery) {
-        var query = posSearchQuery.toLowerCase();
-        f = f.filter(function(p) {
-            if (p.nom && p.nom.toLowerCase().indexOf(query) !== -1) return true;
-            if (p.categorie && p.categorie.toLowerCase().indexOf(query) !== -1) return true;
-            if (p.description && p.description.toLowerCase().indexOf(query) !== -1) return true;
-            return false;
-        });
     }
 
     f.sort(function(a, b) {
@@ -349,7 +421,6 @@ function filterProductGrid() {
 function detectPaymentMode(text) {
     text = text.toLowerCase().trim();
     
-    // Vérifier chaque mode
     for (var mode in paymentKeywords) {
         for (var i = 0; i < paymentKeywords[mode].length; i++) {
             if (text.indexOf(paymentKeywords[mode][i]) !== -1) {
@@ -357,7 +428,6 @@ function detectPaymentMode(text) {
             }
         }
     }
-    // Vérifier les mots simples
     if (text === 'espece' || text === 'especes' || text === 'cash') return 'espece';
     if (text === 'credit' || text === 'credit') return 'credit';
     if (text === 'partiel' || text === 'partial') return 'partiel';
@@ -374,7 +444,6 @@ function parseVoiceCommand(transcript) {
     }
     lastVoiceCommandTime = now;
     
-    // 1. Détection du mode de paiement (prioritaire en mode paiement)
     if (posStep === 2) {
         var paymentMode = detectPaymentMode(transcript);
         if (paymentMode) {
@@ -382,7 +451,6 @@ function parseVoiceCommand(transcript) {
         }
     }
     
-    // 2. Détection des nombres
     var numberMap = {
         'un': 1, 'une': 1, 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
         'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
@@ -401,7 +469,6 @@ function parseVoiceCommand(transcript) {
         }
     }
 
-    // 3. Commandes de navigation
     if (transcript.includes('passe') || transcript.includes('passer') || transcript.includes('suivant')) {
         return { type: 'next' };
     }
@@ -418,7 +485,6 @@ function parseVoiceCommand(transcript) {
         return { type: 'finalize' };
     }
 
-    // 4. Recherche de produit
     var foundProduct = null;
     var bestMatchLength = 0;
     for (var i = 0; i < posProductsList.length; i++) {
@@ -433,7 +499,6 @@ function parseVoiceCommand(transcript) {
         return { type: 'product', product: foundProduct };
     }
 
-    // 5. Recherche de client
     for (var j = 0; j < posAllClients.length; j++) {
         var client = posAllClients[j];
         var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
@@ -442,7 +507,6 @@ function parseVoiceCommand(transcript) {
         }
     }
 
-    // 6. Montant
     var amountMatch = transcript.match(/\d+[.,]?\d*/);
     if (amountMatch) {
         var amount = parseFloat(amountMatch[0].replace(',', '.'));
@@ -460,7 +524,6 @@ function handleVoiceCommand(command) {
 
     switch (command.type) {
         case 'payment_mode':
-            // Mode de paiement vocal
             var mode = command.mode;
             if ((mode === 'credit' || mode === 'partiel') && (!posCurrentClient || !posCurrentClient.id)) {
                 alert('Client requis pour ' + mode);
@@ -469,9 +532,7 @@ function handleVoiceCommand(command) {
             }
             posSetPaymentMethod(mode);
             showVoiceResult('✅ Paiement en ' + mode + ' sélectionné');
-            // Mettre à jour l'interface
             renderPOS();
-            // Si espèces, focus sur le montant
             if (mode === 'espece') {
                 setTimeout(function() {
                     var amountInput = document.getElementById('posAmountGiven');
@@ -1378,24 +1439,15 @@ function updateCartOnly() {
     }
 }
 
-// ==================== NUMÉRO DE FACTURE ====================
-async function getNextFactureNum() {
-    var counterRef = db.collection('counters').doc('facture');
-    try {
-        var result = await db.runTransaction(async function(transaction) {
-            var doc = await transaction.get(counterRef);
-            var newNum = (doc.data()?.value || 0) + 1;
-            transaction.set(counterRef, { value: newNum });
-            return newNum;
-        });
-        return 'FACT-' + new Date().getFullYear() + '-' + String(result).padStart(5, '0');
-    } catch(e) {
-        var ts = Date.now().toString().slice(-8);
-        return 'FACT-' + new Date().getFullYear() + '-' + ts;
-    }
+// ==================== NUMÉRO DE FACTURE (LOCAL) ====================
+function getNextFactureNum() {
+    factureCounter = parseInt(localStorage.getItem('factureCounter')) || 0;
+    factureCounter++;
+    localStorage.setItem('factureCounter', factureCounter);
+    return 'FACT-' + new Date().getFullYear() + '-' + String(factureCounter).padStart(5, '0');
 }
 
-// ==================== RENDER POS ====================
+// ==================== RENDER POS OPTIMISÉ ====================
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
 
@@ -1583,7 +1635,7 @@ function posCalculateChange() {
     }
 }
 
-// ==================== FINALISATION ULTRA RAPIDE ====================
+// ==================== FINALISATION OPTIMISÉE (AVEC BATCH) ====================
 async function posFinalizeSale() {
     var st = posCalculateTotal(); var t = st - posDiscountMAD;
     if (!posCurrentClient && !posCurrentTable) { alert('Client ou table requis.'); return; }
@@ -1593,7 +1645,7 @@ async function posFinalizeSale() {
     var vendeur = document.getElementById('posVendeur').value.trim() || (window.currentUserData ? window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom : '');
 
     try {
-        var fn = await getNextFactureNum();
+        var fn = getNextFactureNum();
 
         var remaining = 0, paid = true, statutPaiement = 'payé', change = 0;
         if (posPaymentMethod === 'credit') { paid = false; remaining = t; statutPaiement = 'crédit'; }
@@ -1629,60 +1681,51 @@ async function posFinalizeSale() {
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        var writes = [CacheDB.write('ventes', null, sd, 'add')];
-        if (!paid) writes.push(CacheDB.write('credits', null, sd, 'add'));
+        // ⚡ BATCH POUR LES ÉCRITURES (RAPIDE)
+        var batch = db.batch();
+        var ventesRef = db.collection('ventes').doc();
+        batch.set(ventesRef, sd);
+        
+        if (!paid) {
+            var creditsRef = db.collection('credits').doc();
+            batch.set(creditsRef, sd);
+        }
+        
         if (window.posCommandeId) {
-            writes.push(CacheDB.write('commandes', window.posCommandeId, { statut: 'payé', paidAt: firebase.firestore.FieldValue.serverTimestamp(), factureNum: fn }, 'update'));
+            var cmdRef = db.collection('commandes').doc(window.posCommandeId);
+            batch.update(cmdRef, { 
+                statut: 'payé', 
+                paidAt: firebase.firestore.FieldValue.serverTimestamp(), 
+                factureNum: fn 
+            });
             delete window.posCommandeId;
         }
         if (window.posVenteId) {
-            writes.push(CacheDB.write('ventes', window.posVenteId, { paid: true, statutPaiement: 'payé', remainingAmount: 0, paidAt: firebase.firestore.FieldValue.serverTimestamp() }, 'update'));
+            var ventRef = db.collection('ventes').doc(window.posVenteId);
+            batch.update(ventRef, { 
+                paid: true, 
+                statutPaiement: 'payé', 
+                remainingAmount: 0, 
+                paidAt: firebase.firestore.FieldValue.serverTimestamp() 
+            });
             delete window.posVenteId;
         }
-        await Promise.all(writes);
 
-        var stockUpdates = [];
-        var productUpdates = [];
-
+        // ⚡ BATCH POUR LE STOCK (RAPIDE)
         for (var i = 0; i < posCart.length; i++) {
             var it = posCart[i];
-            try {
-                var productDoc = await db.collection('products').doc(it.id).get();
-                if (productDoc.exists) {
-                    var productData = productDoc.data();
-                    if (productData.ingredients && productData.ingredients.length > 0) {
-                        var interditsItem = it.interdits || [];
-                        for (var j = 0; j < productData.ingredients.length; j++) {
-                            var ing = productData.ingredients[j];
-                            if (interditsItem.indexOf(ing.nom) !== -1) continue;
-                            var stockDoc = await db.collection('stock').doc(ing.idStock).get();
-                            if (stockDoc.exists) {
-                                var stockData = stockDoc.data();
-                                var qteUtilisee = ing.quantite * it.quantite;
-                                var newQte = Math.max(0, (stockData.quantite || 0) - qteUtilisee);
-                                stockUpdates.push(CacheDB.write('stock', ing.idStock, {
-                                    quantite: newQte,
-                                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                                }, 'update'));
-                            }
-                        }
-                    } else {
-                        var newStock = Math.max(0, (productData.stock || 0) - it.quantite);
-                        var newVendues = (productData.vendues || 0) + it.quantite;
-                        var newCA = (productData.ca || 0) + (it.prixUnitaire * it.quantite);
-                        productUpdates.push(CacheDB.write('products', it.id, {
-                            stock: newStock,
-                            vendues: newVendues,
-                            ca: newCA,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                        }, 'update'));
-                    }
-                }
-            } catch(e) {}
+            var prodRef = db.collection('products').doc(it.id);
+            batch.update(prodRef, {
+                stock: firebase.firestore.FieldValue.increment(-it.quantite),
+                vendues: firebase.firestore.FieldValue.increment(it.quantite),
+                ca: firebase.firestore.FieldValue.increment(it.prixUnitaire * it.quantite)
+            });
         }
 
-        await Promise.all([...stockUpdates, ...productUpdates]);
+        // ⚡ EXÉCUTER LE BATCH (UNE SEULE REQUÊTE)
+        await batch.commit();
 
+        // 4. Fidélité (en arrière-plan)
         if (posCurrentClient && posCurrentClient.id && paid) {
             try {
                 var cr = await db.collection('clients').doc(posCurrentClient.id).get();
@@ -1690,10 +1733,8 @@ async function posFinalizeSale() {
                     var cd = cr.data();
                     var updateData = {
                         ca: (cd.ca || 0) + t,
-                        profit: (cd.profit || 0) + profitTotal,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        profit: (cd.profit || 0) + profitTotal
                     };
-
                     if (!fideliteSettingsCache) {
                         try {
                             var fDoc = await db.collection('settings').doc('fidelite').get();
@@ -1724,4 +1765,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('🛒 Mixmax Minimarket - POS ultra rapide avec paiement vocal (crédit/especes/partiel)');
+console.log('⚡ Mixmax Minimarket - POS ULTRA OPTIMISÉ (Batch + Cache + Index)');
