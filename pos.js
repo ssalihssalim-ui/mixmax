@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION ULTRA OPTIMISÉE FINALE ====================
+// ==================== POS.JS - VERSION ULTRA OPTIMISÉE FINALE AVEC RESET ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -1143,17 +1143,32 @@ async function posPayerCommandeTable(commandeId) {
     } catch(e) { alert('❌ Erreur: ' + e.message); }
 }
 
-// ==================== POS RESET CART ====================
+// ==================== POS RESET CART (CORRIGÉE) ====================
 function posResetCart() {
-    posCart = []; posStep = 1; posSelectedCategory = 'all';
-    posCurrentClient = null; posCurrentTable = '';
-    posPaymentMethod = 'espece'; posAmountGiven = 0; posDiscountMAD = 0;
-    posFilteredClients = posAllClients.slice();
+    // ⚡ VIDER COMPLÈTEMENT LE PANIER
+    posCart = [];
+    posStep = 1;
+    posSelectedCategory = 'all';
+    posCurrentClient = null;
+    posCurrentTable = '';
+    posPaymentMethod = 'espece';
+    posAmountGiven = 0;
+    posDiscountMAD = 0;
     posSearchQuery = '';
+    posFilteredClients = posAllClients.slice();
+    
+    // ⚡ RÉINITIALISER LES MODES VOCAUX
     setVoiceMode('search', '🎤 Recherche vocale active', null);
-    delete window.posCommandeId; delete window.posVenteId;
+    
+    // ⚡ SUPPRIMER LES RÉFÉRENCES
+    delete window.posCommandeId;
+    delete window.posVenteId;
+    
+    // ⚡ VIDER LA BARRE DE RECHERCHE
     var searchInput = document.getElementById('posSearchInput');
     if (searchInput) searchInput.value = '';
+    
+    // ⚡ ARRÊTER LA RECONNAISSANCE VOCALE
     if (voiceRecognition) {
         try { voiceRecognition.abort(); } catch(e) {}
         voiceRecognition = null;
@@ -1163,6 +1178,8 @@ function posResetCart() {
         clearTimeout(voiceTimeout);
         voiceTimeout = null;
     }
+    
+    // ⚡ RÉINITIALISER LE BOUTON MICRO
     var micBtn = document.getElementById('posMicBtn');
     if (micBtn) {
         micBtn.classList.remove('recording');
@@ -1173,6 +1190,8 @@ function posResetCart() {
         micBtn.style.transform = 'scale(1)';
         micBtn.style.border = '3px solid #16a34a';
     }
+    
+    // ⚡ SUPPRIMER LES INDICATEURS
     var styleEl = document.getElementById('voiceStyle');
     if (styleEl) styleEl.remove();
     var indicator = document.getElementById('voiceModeIndicator');
@@ -1439,12 +1458,21 @@ function getNextFactureNum() {
     return 'FACT-' + new Date().getFullYear() + '-' + String(factureCounter).padStart(5, '0');
 }
 
-// ==================== RENDER POS OPTIMISÉ ====================
+// ==================== RENDER POS OPTIMISÉ AVEC RESET ====================
 function renderPOS() {
-    var c = document.getElementById('dynamicContent'); if (!c) return;
+    var c = document.getElementById('dynamicContent'); 
+    if (!c) return;
+
+    // ⚡ SI LE PANIER EST VIDE ET QU'ON EST À L'ÉTAPE 1, FORCER UN RENDU COMPLET
+    if (posCart.length === 0 && posStep === 1) {
+        var indicator = document.getElementById('voiceModeIndicator');
+        if (indicator) indicator.remove();
+        buildFullPOS(c);
+        return;
+    }
 
     // ⚡ RENDU CIBLÉ SI LA PAGE EXISTE DÉJÀ
-    if (document.querySelector('.pos-container') && posStep === 1) {
+    if (document.querySelector('.pos-container') && posStep === 1 && posCart.length > 0) {
         updateCartOnly();
         filterProductGrid();
         var totalRow = document.querySelector('.pos-cart-total-row span:last-child');
@@ -1453,15 +1481,18 @@ function renderPOS() {
             var t = st - posDiscountMAD;
             totalRow.textContent = t.toFixed(2) + ' MAD';
         }
-        var indicator = document.getElementById('voiceModeIndicator');
         if (isRecording || voiceMode !== 'search') {
-            if (!indicator) showVoiceModeIndicator();
-        } else if (indicator) {
-            indicator.remove();
+            showVoiceModeIndicator();
         }
         return;
     }
 
+    // ⚡ CONSTRUCTION COMPLÈTE
+    buildFullPOS(c);
+}
+
+// ==================== CONSTRUCTION COMPLÈTE DU POS ====================
+function buildFullPOS(c) {
     if (posProductsList.length === 0 && posCategoriesList.length === 0) {
         c.innerHTML = '<div style="text-align:center;padding:40px;">' +
             '<i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2E7D32;"></i>' +
@@ -1470,7 +1501,8 @@ function renderPOS() {
         return;
     }
 
-    var st = posCalculateTotal(); var t = st - posDiscountMAD;
+    var st = posCalculateTotal(); 
+    var t = st - posDiscountMAD;
     var h = '<div class="pos-container"><div class="pos-products-panel">';
 
     // Barre de recherche + micro
@@ -1566,9 +1598,8 @@ function renderPOS() {
     c.innerHTML = h;
 
     filterProductGrid();
-
     if (posStep === 2) setTimeout(posCalculateChange, 200);
-
+    
     if (isRecording || voiceMode !== 'search') {
         showVoiceModeIndicator();
     } else {
@@ -1646,14 +1677,49 @@ function posCalculateChange() {
     }
 }
 
-// ==================== FINALISATION OPTIMISÉE (AVEC BATCH) ====================
+// ==================== FIDÉLITÉ ASYNCHRONE ====================
+async function updateClientFidelityAsync(clientId, total, profitTotal) {
+    try {
+        if (!fideliteSettingsCache) {
+            try {
+                var fDoc = await db.collection('settings').doc('fidelite').get();
+                fideliteSettingsCache = fDoc.exists ? fDoc.data() : { active: true, pointsParVente: 1 };
+            } catch(e) {
+                fideliteSettingsCache = { active: true, pointsParVente: 1 };
+            }
+        }
+        if (!fideliteSettingsCache.active) return;
+        var cr = await db.collection('clients').doc(clientId).get();
+        if (!cr.exists) return;
+        var cd = cr.data();
+        var points = parseInt(fideliteSettingsCache.pointsParVente) || 1;
+        await CacheDB.write('clients', clientId, {
+            ca: (cd.ca || 0) + total,
+            profit: (cd.profit || 0) + profitTotal,
+            pointsFidelite: (cd.pointsFidelite || 0) + points,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, 'update');
+        console.log('⭐ Fidélité: +' + points + ' points');
+    } catch(e) { 
+        console.warn('Erreur fidélité:', e); 
+    }
+}
+
+// ==================== FINALISATION AVEC RESET COMPLET ====================
 async function posFinalizeSale() {
-    var st = posCalculateTotal(); var t = st - posDiscountMAD;
+    var st = posCalculateTotal(); 
+    var t = st - posDiscountMAD;
+    
     if (!posCurrentClient && !posCurrentTable) { alert('Client ou table requis.'); return; }
     if (posCurrentTable && (posPaymentMethod === 'credit' || posPaymentMethod === 'partiel')) { alert('Table = espèces uniquement.'); return; }
     if ((posPaymentMethod === 'credit' || posPaymentMethod === 'partiel') && !posCurrentClient) { alert('Client requis pour crédit/partiel.'); return; }
-    if (posPaymentMethod === 'espece') { posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0; if (posAmountGiven < t) { alert('Montant insuffisant.'); return; } }
-    var vendeur = document.getElementById('posVendeur').value.trim() || (window.currentUserData ? window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom : '');
+    if (posPaymentMethod === 'espece') { 
+        posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0; 
+        if (posAmountGiven < t) { alert('Montant insuffisant.'); return; } 
+    }
+    
+    var vendeur = document.getElementById('posVendeur').value.trim() || 
+                  (window.currentUserData ? window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom : '');
 
     try {
         var fn = getNextFactureNum();
@@ -1669,11 +1735,7 @@ async function posFinalizeSale() {
             var pa = it.prixAchat || 0, pvn = it.prixVente || 0, pp = it.prixPromo || 0, pvr = (pp > 0) ? pp : pvn;
             var prof = (pvr - pa) * it.quantite;
             profitTotal += prof;
-            return {
-                id: it.id, nom: it.nom, quantite: it.quantite, prixVente: pvr, prixAchat: pa, prixPromo: pp,
-                profit: prof, sauces: [], interdits: it.interdits || [],
-                epice: it.epice || 'Normal', sel: it.sel || 'Normal'
-            };
+            return { id: it.id, nom: it.nom, quantite: it.quantite, prixVente: pvr, prixAchat: pa, prixPromo: pp, profit: prof, sauces: [], interdits: it.interdits || [], epice: it.epice || 'Normal', sel: it.sel || 'Normal' };
         });
 
         var sd = {
@@ -1692,75 +1754,17 @@ async function posFinalizeSale() {
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        // ⚡ BATCH POUR LES ÉCRITURES (RAPIDE)
         var batch = db.batch();
         var ventesRef = db.collection('ventes').doc();
         batch.set(ventesRef, sd);
-
-        if (!paid) {
-            var creditsRef = db.collection('credits').doc();
-            batch.set(creditsRef, sd);
-        }
-
-        if (window.posCommandeId) {
-            var cmdRef = db.collection('commandes').doc(window.posCommandeId);
-            batch.update(cmdRef, {
-                statut: 'payé',
-                paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-                factureNum: fn
-            });
-            delete window.posCommandeId;
-        }
-        if (window.posVenteId) {
-            var ventRef = db.collection('ventes').doc(window.posVenteId);
-            batch.update(ventRef, {
-                paid: true,
-                statutPaiement: 'payé',
-                remainingAmount: 0,
-                paidAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            delete window.posVenteId;
-        }
-
-        // ⚡ BATCH POUR LE STOCK (RAPIDE)
-        for (var i = 0; i < posCart.length; i++) {
-            var it = posCart[i];
-            var prodRef = db.collection('products').doc(it.id);
-            batch.update(prodRef, {
-                stock: firebase.firestore.FieldValue.increment(-it.quantite),
-                vendues: firebase.firestore.FieldValue.increment(it.quantite),
-                ca: firebase.firestore.FieldValue.increment(it.prixUnitaire * it.quantite)
-            });
-        }
-
-        // ⚡ EXÉCUTER LE BATCH (UNE SEULE REQUÊTE)
+        if (!paid) { var creditsRef = db.collection('credits').doc(); batch.set(creditsRef, sd); }
+        if (window.posCommandeId) { var cmdRef = db.collection('commandes').doc(window.posCommandeId); batch.update(cmdRef, { statut: 'payé', paidAt: firebase.firestore.FieldValue.serverTimestamp(), factureNum: fn }); delete window.posCommandeId; }
+        if (window.posVenteId) { var ventRef = db.collection('ventes').doc(window.posVenteId); batch.update(ventRef, { paid: true, statutPaiement: 'payé', remainingAmount: 0, paidAt: firebase.firestore.FieldValue.serverTimestamp() }); delete window.posVenteId; }
+        for (var i = 0; i < posCart.length; i++) { var it = posCart[i]; var prodRef = db.collection('products').doc(it.id); batch.update(prodRef, { stock: firebase.firestore.FieldValue.increment(-it.quantite), vendues: firebase.firestore.FieldValue.increment(it.quantite), ca: firebase.firestore.FieldValue.increment(it.prixUnitaire * it.quantite) }); }
         await batch.commit();
 
-        // 4. Fidélité (en arrière-plan)
         if (posCurrentClient && posCurrentClient.id && paid) {
-            try {
-                var cr = await db.collection('clients').doc(posCurrentClient.id).get();
-                if (cr.exists) {
-                    var cd = cr.data();
-                    var updateData = {
-                        ca: (cd.ca || 0) + t,
-                        profit: (cd.profit || 0) + profitTotal
-                    };
-                    if (!fideliteSettingsCache) {
-                        try {
-                            var fDoc = await db.collection('settings').doc('fidelite').get();
-                            fideliteSettingsCache = fDoc.exists ? fDoc.data() : { active: true, pointsParVente: 1 };
-                        } catch(e) {
-                            fideliteSettingsCache = { active: true, pointsParVente: 1 };
-                        }
-                    }
-                    if (fideliteSettingsCache.active) {
-                        var points = parseInt(fideliteSettingsCache.pointsParVente) || 1;
-                        updateData.pointsFidelite = (cd.pointsFidelite || 0) + points;
-                    }
-                    await CacheDB.write('clients', posCurrentClient.id, updateData, 'update');
-                }
-            } catch(e) { console.error('Erreur fidélité :', e); }
+            updateClientFidelityAsync(posCurrentClient.id, t, profitTotal);
         }
 
         var msg = '✅ Vente: ' + fn + '\n💰 Total: ' + t.toFixed(2) + ' MAD';
@@ -1769,11 +1773,52 @@ async function posFinalizeSale() {
         if (statutPaiement === 'partiel') msg += '\n📋 Reste: ' + remaining.toFixed(2) + ' MAD';
         if (statutPaiement === 'en_attente') msg += '\n⏳ En attente de paiement.';
         alert(msg);
-        posResetCart();
+
+        // ⚡ RESET COMPLET
+        posCart = [];
+        posStep = 1;
+        posSelectedCategory = 'all';
+        posCurrentClient = null;
+        posCurrentTable = '';
+        posPaymentMethod = 'espece';
+        posAmountGiven = 0;
+        posDiscountMAD = 0;
+        posSearchQuery = '';
+        posFilteredClients = posAllClients.slice();
+        setVoiceMode('search', '🎤 Recherche vocale active', null);
+        delete window.posCommandeId;
+        delete window.posVenteId;
+        
+        var searchInput = document.getElementById('posSearchInput');
+        if (searchInput) searchInput.value = '';
+        
+        if (voiceRecognition) { try { voiceRecognition.abort(); } catch(e) {} voiceRecognition = null; isRecording = false; }
+        if (voiceTimeout) { clearTimeout(voiceTimeout); voiceTimeout = null; }
+        
+        var micBtn = document.getElementById('posMicBtn');
+        if (micBtn) {
+            micBtn.classList.remove('recording');
+            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            micBtn.style.background = '#dcfce7';
+            micBtn.style.borderColor = '#16a34a';
+            micBtn.style.boxShadow = 'none';
+            micBtn.style.transform = 'scale(1)';
+            micBtn.style.border = '3px solid #16a34a';
+        }
+        
+        var styleEl = document.getElementById('voiceStyle');
+        if (styleEl) styleEl.remove();
+        var indicator = document.getElementById('voiceModeIndicator');
+        if (indicator) indicator.remove();
+
+        // ⚡ FORCER UN RENDU COMPLET
         renderPOS();
-        CacheDB.sync();
+
+        if (navigator.onLine) {
+            setTimeout(function() { CacheDB.sync().catch(function(e) {}); }, 500);
+        }
 
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('⚡ Mixmax Minimarket - POS ULTRA OPTIMISÉ FINAL (Batch + Cache + Index + Rendu ciblé)');
+console.log('⚡ Mixmax Minimarket - POS ULTRA OPTIMISÉ FINAL (avec reset complet après vente)');
