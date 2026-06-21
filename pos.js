@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION ULTRA OPTIMISÉE ====================
+// ==================== POS.JS - VERSION ULTRA OPTIMISÉE FINALE ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -6,7 +6,7 @@ var posSearchQuery = '';
 var voiceRecognition = null;
 var isRecording = false;
 var voiceTimeout = null;
-var searchTimeout = null; // Pour le débounce
+var searchTimeout = null;
 
 // ========== MODE VOCAL ==========
 var voiceMode = 'search';
@@ -164,7 +164,6 @@ function fastSearch(query) {
         });
     });
     
-    // Si aucun résultat avec l'index, faire une recherche classique
     if (results.length === 0) {
         return posProductsList.filter(function(p) {
             return (p.nom || '').toLowerCase().indexOf(query) !== -1 ||
@@ -214,7 +213,6 @@ async function loadPosPage(c) {
             posFilteredClients = [...posAllClients];
         }
         
-        // Afficher immédiatement
         renderPOS();
     } catch(e) {
         console.error('Erreur cache:', e);
@@ -229,7 +227,6 @@ async function loadPosPage(c) {
                 db.collection('clients').limit(500).get()
             ]);
 
-            // Mettre à jour les catégories
             posCategoriesList = [];
             cs.forEach(d => {
                 let cat = { id: d.id, nom: d.data().nom, imageBase64: d.data().imageBase64, recette: d.data().recette || false };
@@ -237,7 +234,6 @@ async function loadPosPage(c) {
                 CacheDB.set('categories', d.id, cat);
             });
 
-            // Mettre à jour les produits
             posProductsList = [];
             ps.forEach(d => {
                 const dd = d.data();
@@ -259,7 +255,6 @@ async function loadPosPage(c) {
             });
             productIndexBuilt = false;
 
-            // Mettre à jour les clients
             posAllClients = [];
             cl.forEach(d => {
                 let cli = { id: d.id, nom: d.data().nom, prenom: d.data().prenom, telephone: d.data().telephone };
@@ -268,7 +263,6 @@ async function loadPosPage(c) {
             });
             posFilteredClients = [...posAllClients];
 
-            // Re-rendre avec les données fraîches
             renderPOS();
 
         } catch(e) {
@@ -351,7 +345,7 @@ function posSearchProducts(query) {
     }, 150);
 }
 
-// ==================== FILTRER LA GRILLE (OPTIMISÉ) ====================
+// ==================== FILTRER LA GRILLE ====================
 function filterProductGrid() {
     var grid = document.getElementById('posProductGrid');
     if (!grid) {
@@ -359,10 +353,8 @@ function filterProductGrid() {
     }
     if (!grid) return;
 
-    // Utiliser la recherche rapide avec index
     var f = fastSearch(posSearchQuery);
     
-    // Filtrer par catégorie
     if (posSelectedCategory !== 'all') {
         f = f.filter(function(p) { return p.categorie === posSelectedCategory; });
     }
@@ -1451,6 +1443,25 @@ function getNextFactureNum() {
 function renderPOS() {
     var c = document.getElementById('dynamicContent'); if (!c) return;
 
+    // ⚡ RENDU CIBLÉ SI LA PAGE EXISTE DÉJÀ
+    if (document.querySelector('.pos-container') && posStep === 1) {
+        updateCartOnly();
+        filterProductGrid();
+        var totalRow = document.querySelector('.pos-cart-total-row span:last-child');
+        if (totalRow) {
+            var st = posCalculateTotal();
+            var t = st - posDiscountMAD;
+            totalRow.textContent = t.toFixed(2) + ' MAD';
+        }
+        var indicator = document.getElementById('voiceModeIndicator');
+        if (isRecording || voiceMode !== 'search') {
+            if (!indicator) showVoiceModeIndicator();
+        } else if (indicator) {
+            indicator.remove();
+        }
+        return;
+    }
+
     if (posProductsList.length === 0 && posCategoriesList.length === 0) {
         c.innerHTML = '<div style="text-align:center;padding:40px;">' +
             '<i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2E7D32;"></i>' +
@@ -1765,4 +1776,4 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('⚡ Mixmax Minimarket - POS ULTRA OPTIMISÉ (Batch + Cache + Index)');
+console.log('⚡ Mixmax Minimarket - POS ULTRA OPTIMISÉ FINAL (Batch + Cache + Index + Rendu ciblé)');
