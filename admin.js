@@ -1,4 +1,4 @@
-// ==================== ADMIN.JS - MIXMAX MINIMARKET (COMPLET AVEC FILTRE DESC) ====================
+// ==================== ADMIN.JS - MIXMAX MINIMARKET (COMPLET AVEC VOCAL) ====================
 // ==================== VARIABLES GLOBALES ====================
 var editingId = null;
 var currentCollection = '';
@@ -1157,13 +1157,11 @@ function cancelCommande(cid) {
     }
 }
 
-// ==================== VENTES AVEC FILTRE DESC PAR DÉFAUT ====================
+// ==================== VENTES AVEC FILTRE DESC + VOCAL ====================
 function loadVentesPage(c) {
-    // ⭐ FORCER LE TRI DESCENDANT PAR DÉFAUT POUR LES VENTES
     ventesPeriod = 'all';
     ventesSearch = '';
     
-    // ⚡ FORCER LE TRI DESC SUR createdAt
     if (!sortOrders.ventes) sortOrders.ventes = {};
     if (!sortOrders.ventes.createdAt) {
         sortOrders.ventes.createdAt = 'desc';
@@ -1171,6 +1169,7 @@ function loadVentesPage(c) {
     
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-shopping-cart"></i> Ventes</h3><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
         '<input type="text" id="ventesSearchInput" placeholder="🔍 Rechercher (client, produit)..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:250px;" onkeyup="ventesSearch = this.value; currentPages.ventes=1; applyVentesFilters();">' +
+        '<button id="ventesMicBtn" onclick="toggleVoiceSearchForAdmin(\'ventes\')" style="background:#dcfce7; border:3px solid #16a34a; border-radius:50%; width:46px; height:46px; cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center;"><i class="fas fa-microphone"></i></button>' +
         '<select id="ventesPeriodSelect" style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px;" onchange="ventesPeriod = this.value; currentPages.ventes=1; applyVentesFilters();">' + getPeriodOptions('all') + '</select>' +
         '<button class="btn-add" onclick="loadVentes()"><i class="fas fa-sync"></i> Actualiser</button>' +
         '</div></div><div id="ventesTableContainer"></div><div id="ventesPagination" style="margin-top:10px;"></div>' +
@@ -1205,7 +1204,6 @@ async function loadVentes() {
             });
         }
         
-        // ⭐ FORCER LE TRI DÉFAUT (desc) APRÈS CHARGEMENT
         if (!sortOrders.ventes) sortOrders.ventes = {};
         if (!sortOrders.ventes.createdAt) {
             sortOrders.ventes.createdAt = 'desc';
@@ -1222,12 +1220,11 @@ function applyVentesFilters() {
     var filtered = filterByPeriod(allVentesData, ventesPeriod);
     filtered = filterBySearch(filtered, ventesSearch, ['clientName', 'items.nom']);
     
-    // ⭐ APPLIQUER LE TRI (DESC PAR DÉFAUT)
     if (!sortOrders.ventes || !sortOrders.ventes.createdAt) {
         filtered.sort(function(a, b) {
             var da = a.createdAt?.seconds || 0;
             var db = b.createdAt?.seconds || 0;
-            return db - da; // DESC
+            return db - da;
         });
     } else {
         filtered = applySort('ventes', filtered, 'createdAt');
@@ -1243,7 +1240,6 @@ function renderVentesTable() {
     var isAdmin = window.currentUserData && window.currentUserData.userData.role === 'admin';
     var data = (window.filteredVentes || allVentesData).slice();
     
-    // ⭐ APPLIQUER LE TRI S'IL EXISTE
     if (sortOrders.ventes && sortOrders.ventes.createdAt) {
         data = applySort('ventes', data, 'createdAt');
     } else {
@@ -1387,13 +1383,11 @@ function imprimerFacture(d, id) {
     setTimeout(function() { w.print(); }, 500);
 }
 
-// ==================== CRÉDITS AVEC FILTRE DESC PAR DÉFAUT ====================
+// ==================== CRÉDITS AVEC FILTRE DESC + VOCAL ====================
 function loadCreditsPage(c) {
-    // ⭐ FORCER LE TRI DESCENDANT PAR DÉFAUT POUR LES CRÉDITS
     creditsPeriod = 'all';
     creditsSearch = '';
     
-    // ⚡ FORCER LE TRI DESC SUR createdAt
     if (!sortOrders.credits) sortOrders.credits = {};
     if (!sortOrders.credits.createdAt) {
         sortOrders.credits.createdAt = 'desc';
@@ -1401,6 +1395,7 @@ function loadCreditsPage(c) {
     
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-credit-card"></i> Crédits</h3><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
         '<input type="text" id="creditsSearchInput" placeholder="🔍 Rechercher (client)..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:250px;" onkeyup="creditsSearch = this.value; currentPages.credits=1; applyCreditsFilters();">' +
+        '<button id="creditsMicBtn" onclick="toggleVoiceSearchForAdmin(\'credits\')" style="background:#dcfce7; border:3px solid #16a34a; border-radius:50%; width:46px; height:46px; cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center;"><i class="fas fa-microphone"></i></button>' +
         '<select id="creditsPeriodSelect" style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px;" onchange="creditsPeriod = this.value; currentPages.credits=1; applyCreditsFilters();">' + getPeriodOptions('all') + '</select>' +
         '<button class="btn-add" onclick="loadCredits()"><i class="fas fa-sync"></i> Actualiser</button>' +
         '</div></div><div id="creditsTableContainer"></div><div id="creditsPagination" style="margin-top:10px;"></div>' +
@@ -1428,7 +1423,6 @@ async function loadCredits() {
             });
         }
         
-        // ⭐ FORCER LE TRI DÉFAUT (desc) APRÈS CHARGEMENT
         if (!sortOrders.credits) sortOrders.credits = {};
         if (!sortOrders.credits.createdAt) {
             sortOrders.credits.createdAt = 'desc';
@@ -1445,12 +1439,11 @@ function applyCreditsFilters() {
     var filtered = filterByPeriod(allCreditsData, creditsPeriod);
     filtered = filterBySearch(filtered, creditsSearch, ['clientName']);
     
-    // ⭐ APPLIQUER LE TRI (DESC PAR DÉFAUT)
     if (!sortOrders.credits || !sortOrders.credits.createdAt) {
         filtered.sort(function(a, b) {
             var da = a.createdAt?.seconds || 0;
             var db = b.createdAt?.seconds || 0;
-            return db - da; // DESC
+            return db - da;
         });
     } else {
         filtered = applySort('credits', filtered, 'createdAt');
@@ -1466,7 +1459,6 @@ function renderCreditsTable() {
     
     var data = (window.filteredCredits || allCreditsData).slice();
     
-    // ⭐ APPLIQUER LE TRI S'IL EXISTE
     if (sortOrders.credits && sortOrders.credits.createdAt) {
         data = applySort('credits', data, 'createdAt');
     } else {
@@ -1564,6 +1556,270 @@ async function markCreditPaid(cid) {
         alert('✅ Payé'); loadCredits(); CacheDB.sync();
     }
 }
+
+// ==================== FONCTIONS VOCALES POUR VENTES ====================
+function filterVentesByClient(clientName) {
+    if (!clientName) return;
+    ventesSearch = clientName;
+    currentPages.ventes = 1;
+    applyVentesFilters();
+    var count = (window.filteredVentes || []).length;
+    showVoiceResult('✅ ' + count + ' vente(s) trouvée(s) pour ' + clientName);
+}
+
+function filterVentesByAmount(amount) {
+    if (!amount || amount <= 0) return;
+    var filtered = allVentesData.filter(v => Math.abs(v.total - amount) < 0.01);
+    window.filteredVentes = filtered;
+    currentPages.ventes = 1;
+    renderVentesTable();
+    showVoiceResult('✅ ' + filtered.length + ' vente(s) trouvée(s) pour ' + amount.toFixed(2) + ' MAD');
+}
+
+function printFactureByReference(reference) {
+    if (reference) {
+        var vente = allVentesData.find(v => 
+            v.factureNum && v.factureNum.toUpperCase() === reference.toUpperCase() || 
+            v.id === reference
+        );
+        if (vente) {
+            imprimerFacture(vente, vente.id);
+            showVoiceResult('🖨️ Impression facture ' + (vente.factureNum || vente.id));
+        } else {
+            showVoiceResult('❌ Facture ' + reference + ' introuvable');
+        }
+    } else {
+        var data = window.filteredVentes || allVentesData;
+        if (data.length > 0) {
+            imprimerFacture(data[0], data[0].id);
+            showVoiceResult('🖨️ Impression de la première facture');
+        } else {
+            showVoiceResult('❌ Aucune vente disponible');
+        }
+    }
+}
+
+// ==================== FONCTIONS VOCALES POUR CRÉDITS ====================
+function filterCreditsByClient(clientName) {
+    if (!clientName) return;
+    creditsSearch = clientName;
+    currentPages.credits = 1;
+    applyCreditsFilters();
+    var count = (window.filteredCredits || []).length;
+    showVoiceResult('✅ ' + count + ' crédit(s) trouvé(s) pour ' + clientName);
+}
+
+function filterCreditsByAmount(amount) {
+    if (!amount || amount <= 0) return;
+    var filtered = allCreditsData.filter(c => Math.abs(c.total - amount) < 0.01);
+    window.filteredCredits = filtered;
+    currentPages.credits = 1;
+    renderCreditsTable();
+    showVoiceResult('✅ ' + filtered.length + ' crédit(s) trouvé(s) pour ' + amount.toFixed(2) + ' MAD');
+}
+
+function markCreditPaidVocal() {
+    var creditData = window.filteredCredits || allCreditsData;
+    if (creditData.length === 0) {
+        showVoiceResult('❌ Aucun crédit à payer');
+        return;
+    }
+    var credit = creditData[0];
+    var total = credit.total || 0;
+    var reste = credit.remainingAmount || total;
+    var client = credit.clientName || 'Client';
+    
+    var msg = 'Montant à payer pour ' + client + ' (reste : ' + reste.toFixed(2) + ' MAD)';
+    var amountStr = prompt(msg);
+    if (amountStr === null) {
+        showVoiceResult('Paiement annulé');
+        return;
+    }
+    var amount = parseFloat(amountStr.replace(',', '.'));
+    if (isNaN(amount) || amount <= 0) {
+        showVoiceResult('❌ Montant invalide');
+        return;
+    }
+    
+    var newReste = Math.max(0, reste - amount);
+    var paid = newReste <= 0;
+    var updateData = {
+        paid: paid,
+        remainingAmount: newReste,
+        amountGiven: (credit.amountGiven || 0) + amount,
+        paidAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    
+    CacheDB.write('credits', credit.id, updateData, 'update')
+        .then(() => {
+            if (paid) {
+                showVoiceResult('✅ Crédit soldé !');
+            } else {
+                showVoiceResult('✅ Paiement enregistré. Reste : ' + newReste.toFixed(2) + ' MAD');
+            }
+            loadCredits();
+            CacheDB.sync();
+        })
+        .catch(e => {
+            showVoiceResult('❌ Erreur : ' + e.message);
+        });
+}
+
+function closeCreditList() {
+    creditsSearch = '';
+    currentPages.credits = 1;
+    window.filteredCredits = null;
+    applyCreditsFilters();
+    showVoiceResult('📋 Liste complète des crédits');
+}
+
+// ==================== VOCAL ADMIN (micro sur pages Ventes/Crédits) ====================
+var adminVoiceRecognition = null;
+var adminIsRecording = false;
+
+function toggleVoiceSearchForAdmin(page) {
+    if (adminIsRecording) {
+        stopAdminVoice();
+        return;
+    }
+    // Vérifier support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        showVoiceResult('❌ Reconnaissance vocale non disponible.');
+        return;
+    }
+    if (!navigator.onLine) {
+        showVoiceResult('⚠️ Connexion internet requise.');
+        return;
+    }
+    requestMicrophonePermission().then(hasPermission => {
+        if (!hasPermission) {
+            showVoiceResult('❌ Accès au microphone refusé.');
+            return;
+        }
+        startAdminVoice(page);
+    });
+}
+
+function startAdminVoice(page) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        showVoiceResult('❌ Reconnaissance vocale non disponible.');
+        return;
+    }
+
+    adminVoiceRecognition = new SpeechRecognition();
+    adminVoiceRecognition.lang = 'fr-FR';
+    adminVoiceRecognition.continuous = true;
+    adminVoiceRecognition.interimResults = true;
+    adminVoiceRecognition.maxAlternatives = 5;
+
+    adminVoiceRecognition.onresult = function(event) {
+        let final = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                final += event.results[i][0].transcript;
+            }
+        }
+        if (final) {
+            // Utiliser parseVoiceCommand depuis pos.js
+            if (typeof parseVoiceCommand === 'function') {
+                const command = parseVoiceCommand(final);
+                if (command.type !== 'ignore') {
+                    // Exécuter la commande via handleVoiceCommand (pos.js)
+                    if (typeof handleVoiceCommand === 'function') {
+                        handleVoiceCommand(command);
+                    } else {
+                        // Fallback : exécuter directement
+                        executeVoiceCommandDirect(command);
+                    }
+                }
+            }
+        }
+    };
+
+    adminVoiceRecognition.onend = function() {
+        if (adminIsRecording) {
+            try { adminVoiceRecognition.start(); } catch(e) {
+                console.warn('Relance auto échouée:', e);
+                setTimeout(() => { if (adminIsRecording) startAdminVoice(page); }, 500);
+            }
+        }
+    };
+
+    adminVoiceRecognition.onerror = function(event) {
+        console.error('🎤 Erreur admin voice:', event.error);
+        if (event.error === 'aborted' || event.error === 'no-speech') return;
+        showVoiceResult('⚠️ Erreur micro: ' + event.error);
+        stopAdminVoice();
+    };
+
+    adminVoiceRecognition.start();
+    adminIsRecording = true;
+
+    // Mise à jour du bouton
+    const btn = document.getElementById(page + 'MicBtn');
+    if (btn) {
+        btn.style.background = '#fee2e2';
+        btn.style.borderColor = '#ef4444';
+        btn.innerHTML = '<i class="fas fa-circle" style="color:#ef4444; animation: pulse 0.5s infinite;"></i>';
+    }
+    showVoiceResult('🎤 Écoute active sur ' + page);
+}
+
+function stopAdminVoice() {
+    if (adminVoiceRecognition) {
+        try { adminVoiceRecognition.abort(); } catch(e) {}
+        adminVoiceRecognition = null;
+    }
+    adminIsRecording = false;
+    document.querySelectorAll('[id$="MicBtn"]').forEach(function(btn) {
+        btn.style.background = '#dcfce7';
+        btn.style.borderColor = '#16a34a';
+        btn.innerHTML = '<i class="fas fa-microphone"></i>';
+    });
+    showVoiceResult('🔇 Micro désactivé');
+}
+
+// ==================== EXÉCUTION DIRECTE DES COMMANDES (fallback) ====================
+function executeVoiceCommandDirect(command) {
+    switch (command.type) {
+        case 'filter_ventes_by_client':
+            filterVentesByClient(command.clientName);
+            break;
+        case 'filter_ventes_by_amount':
+            filterVentesByAmount(command.amount);
+            break;
+        case 'print_facture':
+            printFactureByReference(command.reference);
+            break;
+        case 'filter_credits_by_client':
+            filterCreditsByClient(command.clientName);
+            break;
+        case 'filter_credits_by_amount':
+            filterCreditsByAmount(command.amount);
+            break;
+        case 'mark_credit_paid':
+            markCreditPaidVocal();
+            break;
+        case 'close_credit_list':
+            closeCreditList();
+            break;
+        default:
+            showVoiceResult('❓ Commande non reconnue');
+    }
+}
+
+// Exposer les fonctions globalement pour pos.js
+window.filterVentesByClient = filterVentesByClient;
+window.filterVentesByAmount = filterVentesByAmount;
+window.printFactureByReference = printFactureByReference;
+window.filterCreditsByClient = filterCreditsByClient;
+window.filterCreditsByAmount = filterCreditsByAmount;
+window.markCreditPaidVocal = markCreditPaidVocal;
+window.closeCreditList = closeCreditList;
+window.toggleVoiceSearchForAdmin = toggleVoiceSearchForAdmin;
+window.executeVoiceCommandDirect = executeVoiceCommandDirect;
 
 // ==================== OPTIONS ====================
 function loadOptionsPage(c) {
@@ -1813,4 +2069,15 @@ async function saveFideliteSettings() {
     alert('✅ Paramètres de fidélité enregistrés');
 }
 
-console.log('🛒 Mixmax Minimarket - Admin JS complet (VENTES et CRÉDITS en DESC)');
+// ==================== EXPOSER LES FONCTIONS ====================
+window.filterVentesByClient = filterVentesByClient;
+window.filterVentesByAmount = filterVentesByAmount;
+window.printFactureByReference = printFactureByReference;
+window.filterCreditsByClient = filterCreditsByClient;
+window.filterCreditsByAmount = filterCreditsByAmount;
+window.markCreditPaidVocal = markCreditPaidVocal;
+window.closeCreditList = closeCreditList;
+window.toggleVoiceSearchForAdmin = toggleVoiceSearchForAdmin;
+window.executeVoiceCommandDirect = executeVoiceCommandDirect;
+
+console.log('🛒 Mixmax Minimarket - Admin JS complet (avec VOCAL)');
