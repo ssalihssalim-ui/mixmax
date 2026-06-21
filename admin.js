@@ -1,4 +1,4 @@
-// ==================== ADMIN.JS - MIXMAX MINIMARKET (COMPLET) ====================
+// ==================== ADMIN.JS - MIXMAX MINIMARKET (COMPLET AVEC FILTRE DESC) ====================
 // ==================== VARIABLES GLOBALES ====================
 var editingId = null;
 var currentCollection = '';
@@ -1157,8 +1157,18 @@ function cancelCommande(cid) {
     }
 }
 
-// ==================== VENTES ====================
+// ==================== VENTES AVEC FILTRE DESC PAR DÉFAUT ====================
 function loadVentesPage(c) {
+    // ⭐ FORCER LE TRI DESCENDANT PAR DÉFAUT POUR LES VENTES
+    ventesPeriod = 'all';
+    ventesSearch = '';
+    
+    // ⚡ FORCER LE TRI DESC SUR createdAt
+    if (!sortOrders.ventes) sortOrders.ventes = {};
+    if (!sortOrders.ventes.createdAt) {
+        sortOrders.ventes.createdAt = 'desc';
+    }
+    
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-shopping-cart"></i> Ventes</h3><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
         '<input type="text" id="ventesSearchInput" placeholder="🔍 Rechercher (client, produit)..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:250px;" onkeyup="ventesSearch = this.value; currentPages.ventes=1; applyVentesFilters();">' +
         '<select id="ventesPeriodSelect" style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px;" onchange="ventesPeriod = this.value; currentPages.ventes=1; applyVentesFilters();">' + getPeriodOptions('all') + '</select>' +
@@ -1171,7 +1181,9 @@ function loadVentesPage(c) {
 async function loadVentes() {
     var isAdmin = window.currentUserData && window.currentUserData.userData.role === 'admin';
     var vendeurCaissier = '';
-    if (!isAdmin && window.currentUserData) vendeurCaissier = window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom;
+    if (!isAdmin && window.currentUserData) {
+        vendeurCaissier = window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom;
+    }
     try {
         const snapshot = await db.collection('ventes').orderBy('createdAt', 'desc').limit(2000).get();
         allVentesData = [];
@@ -1187,8 +1199,21 @@ async function loadVentes() {
             d.achat = achat; d.profit = profit;
             allVentesData.push(d);
         });
-        if (!isAdmin) allVentesData = allVentesData.filter(function(d) { return d.vendeur === vendeurCaissier; });
-    } catch (e) { console.error(e); }
+        if (!isAdmin) {
+            allVentesData = allVentesData.filter(function(d) { 
+                return d.vendeur === vendeurCaissier; 
+            });
+        }
+        
+        // ⭐ FORCER LE TRI DÉFAUT (desc) APRÈS CHARGEMENT
+        if (!sortOrders.ventes) sortOrders.ventes = {};
+        if (!sortOrders.ventes.createdAt) {
+            sortOrders.ventes.createdAt = 'desc';
+        }
+        
+    } catch (e) { 
+        console.error('Erreur chargement ventes:', e); 
+    }
     currentPages.ventes = 1;
     applyVentesFilters();
 }
@@ -1196,6 +1221,18 @@ async function loadVentes() {
 function applyVentesFilters() {
     var filtered = filterByPeriod(allVentesData, ventesPeriod);
     filtered = filterBySearch(filtered, ventesSearch, ['clientName', 'items.nom']);
+    
+    // ⭐ APPLIQUER LE TRI (DESC PAR DÉFAUT)
+    if (!sortOrders.ventes || !sortOrders.ventes.createdAt) {
+        filtered.sort(function(a, b) {
+            var da = a.createdAt?.seconds || 0;
+            var db = b.createdAt?.seconds || 0;
+            return db - da; // DESC
+        });
+    } else {
+        filtered = applySort('ventes', filtered, 'createdAt');
+    }
+    
     window.filteredVentes = filtered;
     renderVentesTable();
 }
@@ -1204,7 +1241,19 @@ function renderVentesTable() {
     var cont = document.getElementById('ventesTableContainer');
     if (!cont) return;
     var isAdmin = window.currentUserData && window.currentUserData.userData.role === 'admin';
-    var data = applySort('ventes', (window.filteredVentes || allVentesData).slice(), 'createdAt');
+    var data = (window.filteredVentes || allVentesData).slice();
+    
+    // ⭐ APPLIQUER LE TRI S'IL EXISTE
+    if (sortOrders.ventes && sortOrders.ventes.createdAt) {
+        data = applySort('ventes', data, 'createdAt');
+    } else {
+        data.sort(function(a, b) {
+            var da = a.createdAt?.seconds || 0;
+            var db = b.createdAt?.seconds || 0;
+            return db - da;
+        });
+    }
+    
     var pageData = getPageData('ventes', data);
     if (pageData.length === 0) {
         cont.innerHTML = '<p style="text-align:center;padding:40px;">Aucune vente trouvée</p>';
@@ -1338,8 +1387,18 @@ function imprimerFacture(d, id) {
     setTimeout(function() { w.print(); }, 500);
 }
 
-// ==================== CRÉDITS ====================
+// ==================== CRÉDITS AVEC FILTRE DESC PAR DÉFAUT ====================
 function loadCreditsPage(c) {
+    // ⭐ FORCER LE TRI DESCENDANT PAR DÉFAUT POUR LES CRÉDITS
+    creditsPeriod = 'all';
+    creditsSearch = '';
+    
+    // ⚡ FORCER LE TRI DESC SUR createdAt
+    if (!sortOrders.credits) sortOrders.credits = {};
+    if (!sortOrders.credits.createdAt) {
+        sortOrders.credits.createdAt = 'desc';
+    }
+    
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-credit-card"></i> Crédits</h3><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
         '<input type="text" id="creditsSearchInput" placeholder="🔍 Rechercher (client)..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:250px;" onkeyup="creditsSearch = this.value; currentPages.credits=1; applyCreditsFilters();">' +
         '<select id="creditsPeriodSelect" style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px;" onchange="creditsPeriod = this.value; currentPages.credits=1; applyCreditsFilters();">' + getPeriodOptions('all') + '</select>' +
@@ -1352,13 +1411,32 @@ function loadCreditsPage(c) {
 async function loadCredits() {
     var isAdmin = window.currentUserData && window.currentUserData.userData.role === 'admin';
     var vendeurCaissier = '';
-    if (!isAdmin && window.currentUserData) vendeurCaissier = window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom;
+    if (!isAdmin && window.currentUserData) {
+        vendeurCaissier = window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom;
+    }
     try {
         const snapshot = await db.collection('credits').orderBy('createdAt', 'desc').limit(2000).get();
         allCreditsData = [];
-        snapshot.forEach(dc => { var d = dc.data(); d.id = dc.id; allCreditsData.push(d); });
-        if (!isAdmin) allCreditsData = allCreditsData.filter(function(d) { return d.vendeur === vendeurCaissier; });
-    } catch (e) { console.error(e); }
+        snapshot.forEach(dc => { 
+            var d = dc.data(); 
+            d.id = dc.id; 
+            allCreditsData.push(d); 
+        });
+        if (!isAdmin) {
+            allCreditsData = allCreditsData.filter(function(d) { 
+                return d.vendeur === vendeurCaissier; 
+            });
+        }
+        
+        // ⭐ FORCER LE TRI DÉFAUT (desc) APRÈS CHARGEMENT
+        if (!sortOrders.credits) sortOrders.credits = {};
+        if (!sortOrders.credits.createdAt) {
+            sortOrders.credits.createdAt = 'desc';
+        }
+        
+    } catch (e) { 
+        console.error('Erreur chargement crédits:', e); 
+    }
     currentPages.credits = 1;
     applyCreditsFilters();
 }
@@ -1366,6 +1444,18 @@ async function loadCredits() {
 function applyCreditsFilters() {
     var filtered = filterByPeriod(allCreditsData, creditsPeriod);
     filtered = filterBySearch(filtered, creditsSearch, ['clientName']);
+    
+    // ⭐ APPLIQUER LE TRI (DESC PAR DÉFAUT)
+    if (!sortOrders.credits || !sortOrders.credits.createdAt) {
+        filtered.sort(function(a, b) {
+            var da = a.createdAt?.seconds || 0;
+            var db = b.createdAt?.seconds || 0;
+            return db - da; // DESC
+        });
+    } else {
+        filtered = applySort('credits', filtered, 'createdAt');
+    }
+    
     window.filteredCredits = filtered;
     renderCreditsTable();
 }
@@ -1373,13 +1463,28 @@ function applyCreditsFilters() {
 function renderCreditsTable() {
     var cont = document.getElementById('creditsTableContainer');
     if (!cont) return;
-    var data = applySort('credits', (window.filteredCredits || allCreditsData).slice(), 'createdAt');
+    
+    var data = (window.filteredCredits || allCreditsData).slice();
+    
+    // ⭐ APPLIQUER LE TRI S'IL EXISTE
+    if (sortOrders.credits && sortOrders.credits.createdAt) {
+        data = applySort('credits', data, 'createdAt');
+    } else {
+        data.sort(function(a, b) {
+            var da = a.createdAt?.seconds || 0;
+            var db = b.createdAt?.seconds || 0;
+            return db - da;
+        });
+    }
+    
     var pageData = getPageData('credits', data);
+    
     if (pageData.length === 0) {
         cont.innerHTML = '<p style="text-align:center;padding:40px;">Aucun crédit trouvé</p>';
         document.getElementById('creditsPagination').innerHTML = '';
         return;
     }
+    
     var tc = 0;
     var h = '<div class="table-container"><table class="data-table" style="font-size:0.55rem;"><thead><tr>' +
         makeSortableHeader('credits', 'factureNum', 'Facture', 'renderCreditsTable') +
@@ -1392,6 +1497,7 @@ function renderCreditsTable() {
         makeSortableHeader('credits', 'vendeur', 'Vendeur', 'renderCreditsTable') +
         '<th>Actions</th>' +
         '</thead><tbody>';
+    
     pageData.forEach(function(d) {
         var reste = d.remainingAmount || d.total || 0;
         if (!d.paid) tc += reste;
@@ -1417,6 +1523,7 @@ function renderCreditsTable() {
             '<td>' + actions + '</td>' +
             '</tr>';
     });
+    
     h += '</tbody>' +
         '</div><div style="margin-top:15px;padding:15px;background:#fef2f2;border-radius:12px;text-align:center;"><strong>Impayés: ' + tc.toFixed(2) + ' MAD</strong></div>';
     cont.innerHTML = h;
@@ -1706,4 +1813,4 @@ async function saveFideliteSettings() {
     alert('✅ Paramètres de fidélité enregistrés');
 }
 
-console.log('🛒 Mixmax Minimarket - Admin JS complet');
+console.log('🛒 Mixmax Minimarket - Admin JS complet (VENTES et CRÉDITS en DESC)');
