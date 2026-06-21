@@ -66,9 +66,9 @@ function escapeHtml(str) {
 
 // ==================== SUPPORT VOCAL ====================
 function isIOSStandalone() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent) && 
-           !window.MSStream && 
-           (window.navigator.standalone === true || 
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+           !window.MSStream &&
+           (window.navigator.standalone === true ||
             window.matchMedia('(display-mode: standalone)').matches);
 }
 
@@ -148,11 +148,11 @@ function buildProductIndex() {
 function fastSearch(query) {
     if (!query) return posProductsList;
     buildProductIndex();
-    
+
     var words = query.toLowerCase().split(' ');
     var results = [];
     var seen = {};
-    
+
     words.forEach(function(w) {
         if (w.length < 2) return;
         var matches = productNameIndex[w] || [];
@@ -163,7 +163,7 @@ function fastSearch(query) {
             }
         });
     });
-    
+
     if (results.length === 0) {
         return posProductsList.filter(function(p) {
             return (p.nom || '').toLowerCase().indexOf(query) !== -1 ||
@@ -171,7 +171,7 @@ function fastSearch(query) {
                    (p.description || '').toLowerCase().indexOf(query) !== -1;
         });
     }
-    
+
     return results;
 }
 
@@ -195,7 +195,7 @@ async function loadPosPage(c) {
         let cachedCategories = await CacheDB.getAll('categories');
         let cachedProducts = await CacheDB.getAll('products');
         let cachedClients = await CacheDB.getAll('clients');
-        
+
         if (cachedCategories.length) {
             posCategoriesList = cachedCategories.map(cat => ({
                 id: cat.id, nom: cat.nom, imageBase64: cat.imageBase64, recette: cat.recette || false
@@ -212,7 +212,7 @@ async function loadPosPage(c) {
             posAllClients = cachedClients.map(c => ({ id: c.id, nom: c.nom, prenom: c.prenom, telephone: c.telephone }));
             posFilteredClients = [...posAllClients];
         }
-        
+
         renderPOS();
     } catch(e) {
         console.error('Erreur cache:', e);
@@ -239,13 +239,13 @@ async function loadPosPage(c) {
                 const dd = d.data();
                 if (dd.disponible !== false) {
                     let prod = {
-                        id: d.id, 
-                        nom: dd.nom || '', 
+                        id: d.id,
+                        nom: dd.nom || '',
                         description: dd.description || '',
-                        prixVente: dd.prixVente||0, 
+                        prixVente: dd.prixVente||0,
                         prixPromo: dd.prixPromo||0,
-                        prixAchat: dd.prixAchat||0, 
-                        stock: dd.stock, 
+                        prixAchat: dd.prixAchat||0,
+                        stock: dd.stock,
                         categorie: dd.categorie||'',
                         imageBase64: dd.imageBase64||''
                     };
@@ -354,7 +354,7 @@ function filterProductGrid() {
     if (!grid) return;
 
     var f = fastSearch(posSearchQuery);
-    
+
     if (posSelectedCategory !== 'all') {
         f = f.filter(function(p) { return p.categorie === posSelectedCategory; });
     }
@@ -412,7 +412,7 @@ function filterProductGrid() {
 // ==================== DÉTECTION DU MODE DE PAIEMENT ====================
 function detectPaymentMode(text) {
     text = text.toLowerCase().trim();
-    
+
     for (var mode in paymentKeywords) {
         for (var i = 0; i < paymentKeywords[mode].length; i++) {
             if (text.indexOf(paymentKeywords[mode][i]) !== -1) {
@@ -423,7 +423,7 @@ function detectPaymentMode(text) {
     if (text === 'espece' || text === 'especes' || text === 'cash') return 'espece';
     if (text === 'credit' || text === 'credit') return 'credit';
     if (text === 'partiel' || text === 'partial') return 'partiel';
-    
+
     return null;
 }
 
@@ -435,14 +435,14 @@ function parseVoiceCommand(transcript) {
         return { type: 'ignore' };
     }
     lastVoiceCommandTime = now;
-    
+
     if (posStep === 2) {
         var paymentMode = detectPaymentMode(transcript);
         if (paymentMode) {
             return { type: 'payment_mode', mode: paymentMode };
         }
     }
-    
+
     var numberMap = {
         'un': 1, 'une': 1, 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
         'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
@@ -584,7 +584,7 @@ function handleVoiceCommand(command) {
                     var st = posCalculateTotal();
                     var t = st - posDiscountMAD;
                     var c = posAmountGiven - t;
-                    changeEl.innerHTML = c >= 0 ? 
+                    changeEl.innerHTML = c >= 0 ?
                         '<div class="pos-change-positive"><span>Rendu</span><span>' + c.toFixed(2) + ' MAD</span></div>' :
                         '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c).toFixed(2) + ' MAD</span></div>';
                 }
@@ -613,7 +613,7 @@ function handleVoiceCommand(command) {
                     var st2 = posCalculateTotal();
                     var t2 = st2 - posDiscountMAD;
                     var c2 = posAmountGiven - t2;
-                    changeEl2.innerHTML = c2 >= 0 ? 
+                    changeEl2.innerHTML = c2 >= 0 ?
                         '<div class="pos-change-positive"><span>Rendu</span><span>' + c2.toFixed(2) + ' MAD</span></div>' :
                         '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c2).toFixed(2) + ' MAD</span></div>';
                 }
@@ -689,7 +689,7 @@ function showVoiceModeIndicator() {
     }
     var icon = voiceMode === 'search' ? 'fa-microphone' : (voiceMode === 'quantity' ? 'fa-hashtag' : (voiceMode === 'client' ? 'fa-user' : 'fa-money-bill-wave'));
     var color = voiceMode === 'search' ? '#16a34a' : (voiceMode === 'quantity' ? '#f59e0b' : (voiceMode === 'client' ? '#4f46e5' : '#dc2626'));
-    indicator.innerHTML = '<i class="fas ' + icon + '" style="color:' + color + ';"></i> ' + 
+    indicator.innerHTML = '<i class="fas ' + icon + '" style="color:' + color + ';"></i> ' +
                           (voiceModeMessage || '🎤 Recherche vocale active') +
                           ' <span style="font-size:0.6rem; color:#94a3b8; margin-left:auto;">' + voiceMode + '</span>';
     indicator.style.borderColor = color;
@@ -705,12 +705,12 @@ function showVoiceResult(message) {
         resultDiv.style.cssText = 'position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#2E7D32; color:#fff; padding:12px 24px; border-radius:12px; font-weight:600; font-size:1rem; z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.3); transition:all 0.3s ease; display:none; max-width:90%; text-align:center;';
         document.body.appendChild(resultDiv);
     }
-    
+
     var isError = message.indexOf('⚠️') !== -1 || message.indexOf('❌') !== -1;
     resultDiv.style.background = isError ? '#ef4444' : '#2E7D32';
     resultDiv.textContent = message;
     resultDiv.style.display = 'block';
-    
+
     clearTimeout(window._voiceResultTimeout);
     window._voiceResultTimeout = setTimeout(function() {
         resultDiv.style.display = 'none';
@@ -1394,7 +1394,7 @@ function posConfirmOptions() {
         lastAddedProductId = p.id;
     }
     setVoiceMode('quantity', '🎤 Dites un nombre, "passe" ou "valide"', lastAddedProductId);
-    closeModal(); 
+    closeModal();
     updateCartOnly();
     showVoiceModeIndicator();
 }
@@ -1696,28 +1696,28 @@ async function posFinalizeSale() {
         var batch = db.batch();
         var ventesRef = db.collection('ventes').doc();
         batch.set(ventesRef, sd);
-        
+
         if (!paid) {
             var creditsRef = db.collection('credits').doc();
             batch.set(creditsRef, sd);
         }
-        
+
         if (window.posCommandeId) {
             var cmdRef = db.collection('commandes').doc(window.posCommandeId);
-            batch.update(cmdRef, { 
-                statut: 'payé', 
-                paidAt: firebase.firestore.FieldValue.serverTimestamp(), 
-                factureNum: fn 
+            batch.update(cmdRef, {
+                statut: 'payé',
+                paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+                factureNum: fn
             });
             delete window.posCommandeId;
         }
         if (window.posVenteId) {
             var ventRef = db.collection('ventes').doc(window.posVenteId);
-            batch.update(ventRef, { 
-                paid: true, 
-                statutPaiement: 'payé', 
-                remainingAmount: 0, 
-                paidAt: firebase.firestore.FieldValue.serverTimestamp() 
+            batch.update(ventRef, {
+                paid: true,
+                statutPaiement: 'payé',
+                remainingAmount: 0,
+                paidAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             delete window.posVenteId;
         }
