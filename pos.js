@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION ULTRA OPTIMISÉE FINALE AVEC RESET ====================
+// ==================== POS.JS - VERSION ULTRA OPTIMISÉE AVEC NAVIGATION VOCALE ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -427,7 +427,7 @@ function detectPaymentMode(text) {
     return null;
 }
 
-// ==================== COMMANDES VOCALES ====================
+// ==================== COMMANDES VOCALES (AVEC NAVIGATION) ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
@@ -436,13 +436,53 @@ function parseVoiceCommand(transcript) {
     }
     lastVoiceCommandTime = now;
 
+    // ⭐ NAVIGATION VOCALE VERS LES CRÉDITS ET VENTES
+    if (transcript.includes('liste des crédits') || transcript.includes('crédits') || 
+        transcript.includes('credit') || transcript.includes('liste crédit') ||
+        transcript.includes('crédit client') || transcript.includes('impayés')) {
+        return { type: 'navigate', page: 'credits' };
+    }
+    
+    if (transcript.includes('liste des ventes') || transcript.includes('ventes') || 
+        transcript.includes('vente') || transcript.includes('liste vente') ||
+        transcript.includes('historique des ventes')) {
+        return { type: 'navigate', page: 'ventes' };
+    }
+    
+    if (transcript.includes('dashboard') || transcript.includes('tableau de bord') || 
+        transcript.includes('accueil') || transcript.includes('retour') ||
+        transcript.includes('home')) {
+        return { type: 'navigate', page: 'dashboard' };
+    }
+    
+    if (transcript.includes('produits') || transcript.includes('liste des produits') || 
+        transcript.includes('catalogue') || transcript.includes('article')) {
+        return { type: 'navigate', page: 'products' };
+    }
+    
+    if (transcript.includes('clients') || transcript.includes('liste des clients') ||
+        transcript.includes('clientèle')) {
+        return { type: 'navigate', page: 'clients' };
+    }
+    
+    if (transcript.includes('commandes') || transcript.includes('liste des commandes') ||
+        transcript.includes('commande en ligne')) {
+        return { type: 'navigate', page: 'commandes' };
+    }
+    
+    if (transcript.includes('catégories') || transcript.includes('liste des catégories')) {
+        return { type: 'navigate', page: 'categories' };
+    }
+
+    // Si on est en mode paiement
     if (posStep === 2) {
         var paymentMode = detectPaymentMode(transcript);
         if (paymentMode) {
             return { type: 'payment_mode', mode: paymentMode };
         }
     }
-
+    
+    // ========== DÉTECTION DES NOMBRES ==========
     var numberMap = {
         'un': 1, 'une': 1, 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
         'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
@@ -461,6 +501,7 @@ function parseVoiceCommand(transcript) {
         }
     }
 
+    // ========== COMMANDES DE NAVIGATION ==========
     if (transcript.includes('passe') || transcript.includes('passer') || transcript.includes('suivant')) {
         return { type: 'next' };
     }
@@ -477,6 +518,7 @@ function parseVoiceCommand(transcript) {
         return { type: 'finalize' };
     }
 
+    // ========== RECHERCHE DE PRODUIT ==========
     var foundProduct = null;
     var bestMatchLength = 0;
     for (var i = 0; i < posProductsList.length; i++) {
@@ -491,6 +533,7 @@ function parseVoiceCommand(transcript) {
         return { type: 'product', product: foundProduct };
     }
 
+    // ========== RECHERCHE DE CLIENT ==========
     for (var j = 0; j < posAllClients.length; j++) {
         var client = posAllClients[j];
         var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
@@ -499,6 +542,7 @@ function parseVoiceCommand(transcript) {
         }
     }
 
+    // ========== MONTANT ==========
     var amountMatch = transcript.match(/\d+[.,]?\d*/);
     if (amountMatch) {
         var amount = parseFloat(amountMatch[0].replace(',', '.'));
@@ -515,6 +559,41 @@ function handleVoiceCommand(command) {
     console.log('🎤 Commande vocale:', command);
 
     switch (command.type) {
+        
+        // ⭐ NAVIGATION VOCALE
+        case 'navigate':
+            var page = command.page;
+            var currentPage = document.getElementById('pageTitle')?.textContent || '';
+            
+            // Si déjà sur la page demandée
+            var pageTitles = {
+                'credits': 'Crédits',
+                'ventes': 'Ventes',
+                'dashboard': 'Dashboard',
+                'products': 'Produits',
+                'clients': 'Clients',
+                'commandes': 'Commandes en ligne',
+                'categories': 'Catégories'
+            };
+            
+            if (currentPage === pageTitles[page]) {
+                showVoiceResult('✅ Vous êtes déjà sur ' + pageTitles[page]);
+                return;
+            }
+            
+            // Vérifier si on a des articles dans le panier
+            if (posCart.length > 0 && posStep === 1) {
+                if (!confirm('⚠️ Vous avez ' + posCart.length + ' article(s) dans le panier. Voulez-vous les garder ?')) {
+                    posResetCart();
+                }
+            }
+            
+            showVoiceResult('📋 Navigation vers ' + pageTitles[page] + '...');
+            setTimeout(function() {
+                navigateTo(page);
+            }, 500);
+            break;
+
         case 'payment_mode':
             var mode = command.mode;
             if ((mode === 'credit' || mode === 'partiel') && (!posCurrentClient || !posCurrentClient.id)) {
@@ -1143,7 +1222,7 @@ async function posPayerCommandeTable(commandeId) {
     } catch(e) { alert('❌ Erreur: ' + e.message); }
 }
 
-// ==================== POS RESET CART (CORRIGÉE) ====================
+// ==================== POS RESET CART ====================
 function posResetCart() {
     // ⚡ VIDER COMPLÈTEMENT LE PANIER
     posCart = [];
@@ -1821,4 +1900,21 @@ async function posFinalizeSale() {
     } catch(e) { alert('Erreur: ' + e.message); }
 }
 
-console.log('⚡ Mixmax Minimarket - POS ULTRA OPTIMISÉ FINAL (avec reset complet après vente)');
+// ==================== RETOUR VERS LE POS ====================
+function goBackToPOS() {
+    if (window.currentUserData && (window.currentUserData.userData.role === 'caissier' || window.currentUserData.userData.role === 'admin')) {
+        navigateTo('pos');
+    }
+}
+
+// ⚡ RACCOURCI CLAVIER ÉCHAP POUR RETOURNER AU POS
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        var currentPage = document.getElementById('pageTitle')?.textContent || '';
+        if (currentPage !== 'POS' && currentPage !== 'Dashboard' && currentPage !== '') {
+            goBackToPOS();
+        }
+    }
+});
+
+console.log('⚡ Mixmax Minimarket - POS ULTRA OPTIMISÉ FINAL (avec navigation vocale vers crédits et ventes)');
