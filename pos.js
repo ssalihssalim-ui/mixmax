@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION ULTRA OPTIMISÉE AVEC NAVIGATION VOCALE ====================
+// ==================== POS.JS - VERSION COMPLÈTE AVEC RECHERCHE VOCALE CLIENT ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -427,7 +427,7 @@ function detectPaymentMode(text) {
     return null;
 }
 
-// ==================== COMMANDES VOCALES (AVEC NAVIGATION) ====================
+// ==================== COMMANDES VOCALES AVEC RECHERCHE CLIENT ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
@@ -436,7 +436,60 @@ function parseVoiceCommand(transcript) {
     }
     lastVoiceCommandTime = now;
 
-    // ⭐ NAVIGATION VOCALE VERS LES CRÉDITS ET VENTES
+    // ========== RECHERCHE DE CLIENT DANS LES LISTES ==========
+    var currentPage = document.getElementById('pageTitle')?.textContent || '';
+    
+    // Si on est sur la page Ventes
+    if (currentPage === 'Ventes') {
+        var clientMatch = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
+        var searchMatch = transcript.match(/rechercher\s+([a-z]+(?:\s+[a-z]+)*)/i);
+        var directMatch = transcript.match(/^([a-z]+(?:\s+[a-z]+)*)$/);
+        
+        var clientName = null;
+        if (clientMatch) clientName = clientMatch[1];
+        else if (searchMatch) clientName = searchMatch[1];
+        else if (directMatch && directMatch[1].length > 2) {
+            var name = directMatch[1].toLowerCase();
+            var found = posAllClients.some(function(c) {
+                var fullName = (c.nom + ' ' + c.prenom).toLowerCase();
+                return fullName.indexOf(name) !== -1 || 
+                       c.nom.toLowerCase().indexOf(name) !== -1 || 
+                       c.prenom.toLowerCase().indexOf(name) !== -1;
+            });
+            if (found) clientName = directMatch[1];
+        }
+        
+        if (clientName) {
+            return { type: 'search_client_in_ventes', clientName: clientName };
+        }
+    }
+    
+    // Si on est sur la page Crédits
+    if (currentPage === 'Crédits') {
+        var clientMatch2 = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
+        var searchMatch2 = transcript.match(/rechercher\s+([a-z]+(?:\s+[a-z]+)*)/i);
+        var directMatch2 = transcript.match(/^([a-z]+(?:\s+[a-z]+)*)$/);
+        
+        var clientName2 = null;
+        if (clientMatch2) clientName2 = clientMatch2[1];
+        else if (searchMatch2) clientName2 = searchMatch2[1];
+        else if (directMatch2 && directMatch2[1].length > 2) {
+            var name2 = directMatch2[1].toLowerCase();
+            var found2 = posAllClients.some(function(c) {
+                var fullName = (c.nom + ' ' + c.prenom).toLowerCase();
+                return fullName.indexOf(name2) !== -1 || 
+                       c.nom.toLowerCase().indexOf(name2) !== -1 || 
+                       c.prenom.toLowerCase().indexOf(name2) !== -1;
+            });
+            if (found2) clientName2 = directMatch2[1];
+        }
+        
+        if (clientName2) {
+            return { type: 'search_client_in_credits', clientName: clientName2 };
+        }
+    }
+
+    // ========== NAVIGATION VOCALE ==========
     if (transcript.includes('liste des crédits') || transcript.includes('crédits') || 
         transcript.includes('credit') || transcript.includes('liste crédit') ||
         transcript.includes('crédit client') || transcript.includes('impayés')) {
@@ -554,18 +607,113 @@ function parseVoiceCommand(transcript) {
     return { type: 'unknown', text: transcript };
 }
 
+// ==================== RECHERCHE CLIENT DANS VENTES ====================
+function searchClientInVentes(clientName) {
+    if (!clientName) return;
+    
+    var searchInput = document.getElementById('ventesSearchInput');
+    if (searchInput) {
+        searchInput.value = clientName;
+        ventesSearch = clientName;
+        currentPages.ventes = 1;
+        applyVentesFilters();
+        showVoiceResult('🔍 Client trouvé: ' + clientName);
+    } else {
+        navigateTo('ventes');
+        setTimeout(function() {
+            var searchInput2 = document.getElementById('ventesSearchInput');
+            if (searchInput2) {
+                searchInput2.value = clientName;
+                ventesSearch = clientName;
+                currentPages.ventes = 1;
+                applyVentesFilters();
+                showVoiceResult('🔍 Client trouvé: ' + clientName);
+            }
+        }, 500);
+    }
+}
+
+// ==================== RECHERCHE CLIENT DANS CRÉDITS ====================
+function searchClientInCredits(clientName) {
+    if (!clientName) return;
+    
+    var searchInput = document.getElementById('creditsSearchInput');
+    if (searchInput) {
+        searchInput.value = clientName;
+        creditsSearch = clientName;
+        currentPages.credits = 1;
+        applyCreditsFilters();
+        showVoiceResult('🔍 Client trouvé: ' + clientName);
+    } else {
+        navigateTo('credits');
+        setTimeout(function() {
+            var searchInput2 = document.getElementById('creditsSearchInput');
+            if (searchInput2) {
+                searchInput2.value = clientName;
+                creditsSearch = clientName;
+                currentPages.credits = 1;
+                applyCreditsFilters();
+                showVoiceResult('🔍 Client trouvé: ' + clientName);
+            }
+        }, 500);
+    }
+}
+
 // ==================== HANDLER DES COMMANDES VOCALES ====================
 function handleVoiceCommand(command) {
     console.log('🎤 Commande vocale:', command);
 
     switch (command.type) {
         
+        // ⭐ RECHERCHE CLIENT DANS VENTES
+        case 'search_client_in_ventes':
+            var clientName = command.clientName;
+            if (typeof searchClientInVentes === 'function') {
+                searchClientInVentes(clientName);
+            } else {
+                showVoiceResult('📋 Recherche du client ' + clientName + ' dans les ventes...');
+                navigateTo('ventes');
+                setTimeout(function() {
+                    var searchInput = document.getElementById('ventesSearchInput');
+                    if (searchInput) {
+                        searchInput.value = clientName;
+                        ventesSearch = clientName;
+                        currentPages.ventes = 1;
+                        if (typeof applyVentesFilters === 'function') {
+                            applyVentesFilters();
+                        }
+                    }
+                }, 500);
+            }
+            break;
+        
+        // ⭐ RECHERCHE CLIENT DANS CRÉDITS
+        case 'search_client_in_credits':
+            var clientName2 = command.clientName;
+            if (typeof searchClientInCredits === 'function') {
+                searchClientInCredits(clientName2);
+            } else {
+                showVoiceResult('📋 Recherche du client ' + clientName2 + ' dans les crédits...');
+                navigateTo('credits');
+                setTimeout(function() {
+                    var searchInput = document.getElementById('creditsSearchInput');
+                    if (searchInput) {
+                        searchInput.value = clientName2;
+                        creditsSearch = clientName2;
+                        currentPages.credits = 1;
+                        if (typeof applyCreditsFilters === 'function') {
+                            applyCreditsFilters();
+                        }
+                    }
+                }, 500);
+            }
+            break;
+
         // ⭐ NAVIGATION VOCALE
         case 'navigate':
             var page = command.page;
             var currentPage = document.getElementById('pageTitle')?.textContent || '';
             
-            // Si déjà sur la page demandée
             var pageTitles = {
                 'credits': 'Crédits',
                 'ventes': 'Ventes',
@@ -581,7 +729,6 @@ function handleVoiceCommand(command) {
                 return;
             }
             
-            // Vérifier si on a des articles dans le panier
             if (posCart.length > 0 && posStep === 1) {
                 if (!confirm('⚠️ Vous avez ' + posCart.length + ' article(s) dans le panier. Voulez-vous les garder ?')) {
                     posResetCart();
@@ -1917,4 +2064,5 @@ document.addEventListener('keydown', function(event) {
     }
 });
 
-console.log('⚡ Mixmax Minimarket - POS ULTRA OPTIMISÉ FINAL (avec navigation vocale vers crédits et ventes)');
+// ⚡ RENDU COMPLET APRÈS CHARGEMENT
+console.log('⚡ Mixmax Minimarket - POS ULTRA OPTIMISÉ FINAL (avec recherche vocale client dans ventes et crédits)');
