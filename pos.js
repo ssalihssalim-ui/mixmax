@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION COMPLÈTE FINALE ====================
+// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -487,6 +487,49 @@ function parseVoiceCommand(transcript) {
         if (clientName2) {
             return { type: 'search_client_in_credits', clientName: clientName2 };
         }
+
+        // ---------- COMMANDES VOCALES POUR CRÉDITS ----------
+        
+        // 1. Activer le mode sélection
+        if (transcript.includes('sélectionner') || transcript.includes('select') || 
+            transcript.includes('choisir') || transcript.includes('cocher')) {
+            return { type: 'activate_credit_selection' };
+        }
+
+        // 2. Sélectionner une ligne : "ligne 3", "numéro 3", ou simplement "3" si mode sélection actif
+        let lineMatch = transcript.match(/(?:ligne|numéro)\s+(\d+)/i);
+        if (lineMatch) {
+            return { type: 'select_credit_line', lineNumber: parseInt(lineMatch[1]) };
+        }
+        // Si un nombre seul est prononcé et que le mode sélection est actif (via variable globale)
+        let numberMatchForLine = transcript.match(/^(\d+)$/);
+        if (numberMatchForLine && window.creditSelectionMode) {
+            return { type: 'select_credit_line', lineNumber: parseInt(numberMatchForLine[1]) };
+        }
+
+        // 3. Marquer comme payé
+        if (transcript.includes('marquer payé') || transcript.includes('payer') || transcript.includes('régler')) {
+            return { type: 'mark_credit_paid' };
+        }
+
+        // 4. Saisir un montant : "montant 100"
+        let amountMatch = transcript.match(/montant\s+(\d+[.,]?\d*)/i);
+        if (amountMatch) {
+            let amount = parseFloat(amountMatch[1].replace(',', '.'));
+            if (!isNaN(amount) && amount > 0) {
+                return { type: 'set_credit_amount', amount: amount };
+            }
+        }
+
+        // 5. Valider le paiement
+        if (transcript.includes('valide') || transcript.includes('confirmer') || transcript.includes('ok')) {
+            return { type: 'validate_credit_payment' };
+        }
+
+        // 6. Fermer / réinitialiser
+        if (transcript.includes('fermer') || transcript.includes('retour')) {
+            return { type: 'close_credit_list' };
+        }
     }
 
     // ========== NAVIGATION VOCALE ==========
@@ -741,6 +784,61 @@ function handleVoiceCommand(command) {
                         }
                     }
                 }, 500);
+            }
+            break;
+
+        // ⭐ ACTIVATION DE LA SÉLECTION (Crédits)
+        case 'activate_credit_selection':
+            if (typeof window.activateCreditSelection === 'function') {
+                window.activateCreditSelection();
+                showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne');
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
+            break;
+
+        // ⭐ SÉLECTION D'UNE LIGNE (Crédits)
+        case 'select_credit_line':
+            if (typeof window.selectCreditLine === 'function') {
+                window.selectCreditLine(command.lineNumber);
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
+            break;
+
+        // ⭐ MARQUER COMME PAYÉ (Crédits)
+        case 'mark_credit_paid':
+            if (typeof window.markCreditForPayment === 'function') {
+                window.markCreditForPayment();
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
+            break;
+
+        // ⭐ SAISIR UN MONTANT (Crédits)
+        case 'set_credit_amount':
+            if (typeof window.setCreditPaymentAmount === 'function') {
+                window.setCreditPaymentAmount(command.amount);
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
+            break;
+
+        // ⭐ VALIDER LE PAIEMENT (Crédits)
+        case 'validate_credit_payment':
+            if (typeof window.validateCreditPayment === 'function') {
+                window.validateCreditPayment();
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
+            break;
+
+        // ⭐ FERMER / RÉINITIALISER (Crédits)
+        case 'close_credit_list':
+            if (typeof window.closeCreditSelection === 'function') {
+                window.closeCreditSelection();
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
             }
             break;
 
