@@ -1,6 +1,5 @@
 // ==================== POS-AUDIO.JS - RECONNAISSANCE VOCALE ====================
 // Ce module gère toute la logique de reconnaissance vocale pour le POS et les pages crédits.
-// Il s'appuie sur les fonctions métier exposées dans pos.js (via window).
 
 // ========== VARIABLES VOCALES ==========
 var voiceRecognition = null;
@@ -179,7 +178,7 @@ function markCreditForPayment() {
     }
     window.creditPaymentStep = 'payment';
     var reste = credit.remainingAmount || credit.total || 0;
-    showVoiceResult('💳 Paiement du crédit - Restant: ' + reste.toFixed(2) + ' MAD. Dites "montant [prix]" ou tapez le montant');
+    showVoiceResult('💳 Paiement du crédit - Restant: ' + reste.toFixed(2) + ' MAD. Dites "montant [prix]" ou le montant directement');
     // Afficher la zone de paiement (gérée dans admin.js)
     var zone = document.getElementById('creditPaymentZone');
     var info = document.getElementById('creditPaymentInfo');
@@ -276,7 +275,6 @@ function closeCreditSelection() {
     if (typeof window.closeCreditSelection === 'function') {
         window.closeCreditSelection();
     } else {
-        // Fallback : réinitialiser les filtres
         if (typeof window.applyCreditsFilters === 'function') {
             window.creditsSearch = '';
             window.currentPages.credits = 1;
@@ -366,7 +364,7 @@ function parseVoiceCommand(transcript) {
             return { type: 'activate_credit_selection' };
         }
 
-        // 2. Sélectionner une ligne
+        // 2. Sélectionner une ligne : gère "ligne 3", "numéro 3", "trois", ou simplement "3" (sauf si paiement)
         var lineMatch = transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if (lineMatch) {
             var numStr = lineMatch[1];
@@ -383,7 +381,8 @@ function parseVoiceCommand(transcript) {
                 return { type: 'select_credit_line', lineNumber: num };
             }
         }
-        if (window.creditSelectionMode) {
+        // Si un nombre seul est prononcé et que le mode sélection est actif, mais PAS en mode paiement
+        if (window.creditSelectionMode && (window.creditPaymentStep !== 'payment' && window.creditPaymentStep !== 'amount')) {
             var anyNumber = transcript.match(/\b(\d+)\b/);
             var num = null;
             if (anyNumber) {
@@ -723,10 +722,8 @@ function handleVoiceCommand(command) {
                     showVoiceResult('⚠️ Rupture de stock: ' + prod.nom);
                     return;
                 }
-                // Appeler la fonction d'ajout au panier du POS
                 if (typeof window.posAddToCartOrOpenOptions === 'function') {
                     window.posAddToCartOrOpenOptions(prod.id);
-                    // Le mode vocal sera géré par le callback onProductAdded
                 }
             }
             break;
@@ -959,7 +956,6 @@ function posStartVoiceRecording() {
             }
         }
 
-        // Déterminer le champ de recherche selon la page
         var currentPage = document.getElementById('pageTitle')?.textContent || '';
         var searchInputId = (currentPage === 'Crédits') ? 'creditsSearchInput' : 'posSearchInput';
         var searchInputElem = document.getElementById(searchInputId);
@@ -1080,7 +1076,7 @@ window.setCreditPaymentAmount = setCreditPaymentAmount;
 window.validateCreditPayment = validateCreditPayment;
 window.closeCreditSelection = closeCreditSelection;
 
-// Callback pour savoir quand un produit est ajouté
+// Callback pour savoir quand un produit est ajouté (appelé depuis pos.js)
 window.onProductAdded = function(productId) {
     lastAddedProductId = productId;
     setVoiceMode('quantity', '🎤 Dites un nombre, "passe" ou "valide"', productId);
