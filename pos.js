@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS ====================
+// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS (CORRIGÉE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -438,7 +438,7 @@ function parseVoiceCommand(transcript) {
 
     // ========== RECHERCHE DE CLIENT DANS LES LISTES ==========
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
-    
+
     // Si on est sur la page Ventes
     if (currentPage === 'Ventes') {
         var clientMatch = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
@@ -463,7 +463,7 @@ function parseVoiceCommand(transcript) {
             return { type: 'search_client_in_ventes', clientName: clientName };
         }
     }
-    
+
     // Si on est sur la page Crédits
     if (currentPage === 'Crédits') {
         var clientMatch2 = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
@@ -496,15 +496,45 @@ function parseVoiceCommand(transcript) {
             return { type: 'activate_credit_selection' };
         }
 
-        // 2. Sélectionner une ligne : "ligne 3", "numéro 3", ou simplement "3" si mode sélection actif
-        let lineMatch = transcript.match(/(?:ligne|numéro)\s+(\d+)/i);
+        // 2. Sélectionner une ligne : gère "ligne 3", "numéro 3", "trois", ou simplement "3" si mode sélection actif
+        // On cherche d'abord "ligne X" ou "numéro X"
+        let lineMatch = transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if (lineMatch) {
-            return { type: 'select_credit_line', lineNumber: parseInt(lineMatch[1]) };
+            let numStr = lineMatch[1];
+            let num = parseInt(numStr);
+            if (isNaN(num)) {
+                // Convertir les mots en nombres (ex: "deux" -> 2)
+                for (var word in numberMap) {
+                    if (numStr.toLowerCase() === word) {
+                        num = numberMap[word];
+                        break;
+                    }
+                }
+            }
+            if (!isNaN(num) && num > 0) {
+                return { type: 'select_credit_line', lineNumber: num };
+            }
         }
-        // Si un nombre seul est prononcé et que le mode sélection est actif (via variable globale)
-        let numberMatchForLine = transcript.match(/^(\d+)$/);
-        if (numberMatchForLine && window.creditSelectionMode) {
-            return { type: 'select_credit_line', lineNumber: parseInt(numberMatchForLine[1]) };
+
+        // Si on est en mode sélection, on capture n'importe quel nombre (chiffre ou lettre)
+        if (window.creditSelectionMode) {
+            // Chercher un nombre dans la phrase (ex: "le 2" ou "deux")
+            let anyNumber = transcript.match(/\b(\d+)\b/);
+            let num = null;
+            if (anyNumber) {
+                num = parseInt(anyNumber[1]);
+            } else {
+                // Chercher un mot correspondant à un nombre (ex: "deux", "trois")
+                for (var word in numberMap) {
+                    if (transcript.includes(word)) {
+                        num = numberMap[word];
+                        break;
+                    }
+                }
+            }
+            if (num !== null && !isNaN(num) && num > 0) {
+                return { type: 'select_credit_line', lineNumber: num };
+            }
         }
 
         // 3. Marquer comme payé
@@ -512,12 +542,23 @@ function parseVoiceCommand(transcript) {
             return { type: 'mark_credit_paid' };
         }
 
-        // 4. Saisir un montant : "montant 100"
+        // 4. Saisir un montant : "montant 100" ou "cent"
         let amountMatch = transcript.match(/montant\s+(\d+[.,]?\d*)/i);
         if (amountMatch) {
             let amount = parseFloat(amountMatch[1].replace(',', '.'));
             if (!isNaN(amount) && amount > 0) {
                 return { type: 'set_credit_amount', amount: amount };
+            }
+        } else {
+            // Si on est en mode paiement, on peut capturer un nombre seul comme montant
+            if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
+                let amountNumber = transcript.match(/\b(\d+[.,]?\d*)\b/);
+                if (amountNumber) {
+                    let amount = parseFloat(amountNumber[1].replace(',', '.'));
+                    if (!isNaN(amount) && amount > 0) {
+                        return { type: 'set_credit_amount', amount: amount };
+                    }
+                }
             }
         }
 
