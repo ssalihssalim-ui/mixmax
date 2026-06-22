@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS ====================
+// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS (CORRIGÉE) ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -792,8 +792,11 @@ function handleVoiceCommand(command) {
             if (typeof window.activateCreditSelection === 'function') {
                 window.activateCreditSelection();
                 showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne');
+            } else if (typeof activateCreditSelection === 'function') {
+                activateCreditSelection();
+                showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne');
             } else {
-                showVoiceResult('❌ Fonction non disponible');
+                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
             }
             break;
 
@@ -801,8 +804,10 @@ function handleVoiceCommand(command) {
         case 'select_credit_line':
             if (typeof window.selectCreditLine === 'function') {
                 window.selectCreditLine(command.lineNumber);
+            } else if (typeof selectCreditLine === 'function') {
+                selectCreditLine(command.lineNumber);
             } else {
-                showVoiceResult('❌ Fonction non disponible');
+                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
             }
             break;
 
@@ -810,8 +815,10 @@ function handleVoiceCommand(command) {
         case 'mark_credit_paid':
             if (typeof window.markCreditForPayment === 'function') {
                 window.markCreditForPayment();
+            } else if (typeof markCreditForPayment === 'function') {
+                markCreditForPayment();
             } else {
-                showVoiceResult('❌ Fonction non disponible');
+                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
             }
             break;
 
@@ -819,8 +826,10 @@ function handleVoiceCommand(command) {
         case 'set_credit_amount':
             if (typeof window.setCreditPaymentAmount === 'function') {
                 window.setCreditPaymentAmount(command.amount);
+            } else if (typeof setCreditPaymentAmount === 'function') {
+                setCreditPaymentAmount(command.amount);
             } else {
-                showVoiceResult('❌ Fonction non disponible');
+                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
             }
             break;
 
@@ -828,8 +837,10 @@ function handleVoiceCommand(command) {
         case 'validate_credit_payment':
             if (typeof window.validateCreditPayment === 'function') {
                 window.validateCreditPayment();
+            } else if (typeof validateCreditPayment === 'function') {
+                validateCreditPayment();
             } else {
-                showVoiceResult('❌ Fonction non disponible');
+                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
             }
             break;
 
@@ -837,8 +848,10 @@ function handleVoiceCommand(command) {
         case 'close_credit_list':
             if (typeof window.closeCreditSelection === 'function') {
                 window.closeCreditSelection();
+            } else if (typeof closeCreditSelection === 'function') {
+                closeCreditSelection();
             } else {
-                showVoiceResult('❌ Fonction non disponible');
+                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
             }
             break;
 
