@@ -1,4 +1,4 @@
-// ==================== ADMIN.JS - MIXMAX MINIMARKET (COMPLET AVEC VOCAL CRÉDITS) ====================
+// ==================== ADMIN.JS - MIXMAX MINIMARKET (COMPLET AVEC VOCAL CRÉDITS + DESCRIPTION CLIENT) ====================
 // ==================== VARIABLES GLOBALES ====================
 var editingId = null;
 var currentCollection = '';
@@ -750,7 +750,7 @@ function saveProduct() {
     if (f) fileToBase64(f, sf); else sf(null);
 }
 
-// ==================== CLIENTS ====================
+// ==================== CLIENTS (AVEC DESCRIPTION) ====================
 function loadClientsPage(c) {
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-users"></i> Clients</h3><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
         '<div class="input-group" style="width:300px;min-width:200px;margin-bottom:0;background:#fff;border:2px solid var(--border);border-radius:12px;"><i class="fas fa-search" style="color:#94a3b8;"></i><input type="text" id="clientSearchInput" placeholder="Rechercher..." onkeyup="clientSearch(this.value)" style="border:none;padding:12px;"></div>' +
@@ -775,6 +775,7 @@ function loadClientsPage(c) {
         makeSortableHeader('clients', 'aime', 'Aime', 'loadClients') +
         makeSortableHeader('clients', 'deteste', 'Déteste', 'loadClients') +
         makeSortableHeader('clients', 'createdAt', 'Date créé', 'loadClients') +
+        makeSortableHeader('clients', 'description', 'Description', 'loadClients') +
         '<th>Actions</th>' +
         '</thead><tbody></tbody>' +
         '</div><div id="clientsPagination"></div>' +
@@ -807,14 +808,15 @@ function renderClientsTable() {
                 (d.prenom || '').toLowerCase().indexOf(clientSearchQuery) !== -1 ||
                 (d.username || '').toLowerCase().indexOf(clientSearchQuery) !== -1 ||
                 (d.email || '').toLowerCase().indexOf(clientSearchQuery) !== -1 ||
-                (d.telephone || '').toLowerCase().indexOf(clientSearchQuery) !== -1;
+                (d.telephone || '').toLowerCase().indexOf(clientSearchQuery) !== -1 ||
+                (d.description || '').toLowerCase().indexOf(clientSearchQuery) !== -1;
         });
     }
     data = applySort('clients', data, 'nom');
     var pageData = getPageData('clients', data);
     tb.innerHTML = '';
     if (pageData.length === 0) {
-        tb.innerHTML = '<tr><td colspan="19" style="text-align:center;padding:30px;">Aucun client</td></tr>';
+        tb.innerHTML = '<tr><td colspan="20" style="text-align:center;padding:30px;">Aucun client</td></tr>';
         document.getElementById('clientsPagination').innerHTML = '';
         return;
     }
@@ -840,6 +842,7 @@ function renderClientsTable() {
         row += '<td><small>' + (d.aime ? d.aime.join(', ') : '-') + '</small></td>';
         row += '<td><small>' + (d.deteste ? d.deteste.join(', ') : '-') + '</small></td>';
         row += '<td><small>' + dateCreated + '</small></td>';
+        row += '<td><small>' + escapeHtml(d.description || '-') + '</small></td>';
         row += '<td><button class="btn-edit" onclick="editClient(\'' + d.id + '\')"><i class="fas fa-edit"></i></button> <button class="btn-delete" onclick="deleteClient(\'' + d.id + '\')"><i class="fas fa-trash"></i></button></td>';
         row += '</tr>';
         tb.innerHTML += row;
@@ -2005,4 +2008,4 @@ window.loadCredits = loadCredits;
 window.applyCreditsFilters = applyCreditsFilters;
 window.toggleCreditCheckbox = toggleCreditCheckbox;
 
-console.log('🛒 Mixmax Minimarket - Admin JS complet avec VOCAL CRÉDITS');
+console.log('🛒 Mixmax Minimarket - Admin JS complet avec VOCAL CRÉDITS et DESCRIPTION CLIENT');
