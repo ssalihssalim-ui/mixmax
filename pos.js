@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS (CORRIGÉE) ====================
+// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -438,7 +438,7 @@ function parseVoiceCommand(transcript) {
 
     // ========== RECHERCHE DE CLIENT DANS LES LISTES ==========
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
-
+    
     // Si on est sur la page Ventes
     if (currentPage === 'Ventes') {
         var clientMatch = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
@@ -463,7 +463,7 @@ function parseVoiceCommand(transcript) {
             return { type: 'search_client_in_ventes', clientName: clientName };
         }
     }
-
+    
     // Si on est sur la page Crédits
     if (currentPage === 'Crédits') {
         var clientMatch2 = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
@@ -496,14 +496,12 @@ function parseVoiceCommand(transcript) {
             return { type: 'activate_credit_selection' };
         }
 
-        // 2. Sélectionner une ligne : gère "ligne 3", "numéro 3", "trois", ou simplement "3" si mode sélection actif
-        // On cherche d'abord "ligne X" ou "numéro X"
+        // 2. Sélectionner une ligne : gère "ligne 3", "numéro 3", "trois", ou simplement "3"
         let lineMatch = transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if (lineMatch) {
             let numStr = lineMatch[1];
             let num = parseInt(numStr);
             if (isNaN(num)) {
-                // Convertir les mots en nombres (ex: "deux" -> 2)
                 for (var word in numberMap) {
                     if (numStr.toLowerCase() === word) {
                         num = numberMap[word];
@@ -516,15 +514,12 @@ function parseVoiceCommand(transcript) {
             }
         }
 
-        // Si on est en mode sélection, on capture n'importe quel nombre (chiffre ou lettre)
         if (window.creditSelectionMode) {
-            // Chercher un nombre dans la phrase (ex: "le 2" ou "deux")
             let anyNumber = transcript.match(/\b(\d+)\b/);
             let num = null;
             if (anyNumber) {
                 num = parseInt(anyNumber[1]);
             } else {
-                // Chercher un mot correspondant à un nombre (ex: "deux", "trois")
                 for (var word in numberMap) {
                     if (transcript.includes(word)) {
                         num = numberMap[word];
@@ -542,22 +537,19 @@ function parseVoiceCommand(transcript) {
             return { type: 'mark_credit_paid' };
         }
 
-        // 4. Saisir un montant : "montant 100" ou "cent"
+        // 4. Saisir un montant
         let amountMatch = transcript.match(/montant\s+(\d+[.,]?\d*)/i);
         if (amountMatch) {
             let amount = parseFloat(amountMatch[1].replace(',', '.'));
             if (!isNaN(amount) && amount > 0) {
                 return { type: 'set_credit_amount', amount: amount };
             }
-        } else {
-            // Si on est en mode paiement, on peut capturer un nombre seul comme montant
-            if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
-                let amountNumber = transcript.match(/\b(\d+[.,]?\d*)\b/);
-                if (amountNumber) {
-                    let amount = parseFloat(amountNumber[1].replace(',', '.'));
-                    if (!isNaN(amount) && amount > 0) {
-                        return { type: 'set_credit_amount', amount: amount };
-                    }
+        } else if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
+            let amountNumber = transcript.match(/\b(\d+[.,]?\d*)\b/);
+            if (amountNumber) {
+                let amount = parseFloat(amountNumber[1].replace(',', '.'));
+                if (!isNaN(amount) && amount > 0) {
+                    return { type: 'set_credit_amount', amount: amount };
                 }
             }
         }
@@ -575,7 +567,7 @@ function parseVoiceCommand(transcript) {
 
     // ========== NAVIGATION VOCALE ==========
     
-    // ⭐ POINT DE VENTE (POS) - CORRIGÉ
+    // ⭐ POINT DE VENTE (POS)
     if (transcript.includes('point de vente') || 
         transcript.includes('point de vente') ||
         transcript.includes('point vente') ||
@@ -786,187 +778,12 @@ function searchClientInCredits(clientName) {
     }
 }
 
-// ==================== FONCTIONS VOCALES CRÉDITS (appelées par handleVoiceCommand) ====================
-function activateCreditSelection() {
-    creditSelectionMode = true;
-    window.creditSelectionMode = true;
-    creditSelectedIndex = -1;
-    creditPaymentStep = 'idle';
-    if (typeof renderCreditsTable === 'function') {
-        renderCreditsTable();
-    }
-    showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne');
-}
-
-function selectCreditLine(lineNumber) {
-    var data = window.filteredCredits || allCreditsData || [];
-    var index = lineNumber - 1;
-    if (index < 0 || index >= data.length) {
-        showVoiceResult('❌ Ligne ' + lineNumber + ' inexistante. ' + data.length + ' ligne(s) disponible(s)');
-        return;
-    }
-    if (!creditSelectionMode) {
-        showVoiceResult('⚠️ Activez d\'abord le mode sélection avec "sélectionner"');
-        return;
-    }
-    creditSelectedIndex = index;
-    creditPaymentStep = 'selection';
-    creditPaymentAmount = 0;
-    if (typeof renderCreditsTable === 'function') {
-        renderCreditsTable();
-    }
-    var credit = data[index];
-    var reste = credit.remainingAmount || credit.total || 0;
-    showVoiceResult('✅ Ligne ' + lineNumber + ' sélectionnée - ' + (credit.clientName || credit.table || '') + ' - Restant: ' + reste.toFixed(2) + ' MAD');
-}
-
-function markCreditForPayment() {
-    if (creditSelectedIndex < 0) {
-        showVoiceResult('⚠️ Aucune ligne sélectionnée. Dites d\'abord un numéro de ligne');
-        return;
-    }
-    var data = window.filteredCredits || allCreditsData || [];
-    var credit = data[creditSelectedIndex];
-    if (!credit) {
-        showVoiceResult('❌ Crédit introuvable');
-        return;
-    }
-    if (credit.paid) {
-        showVoiceResult('⚠️ Ce crédit est déjà payé');
-        return;
-    }
-    creditPaymentStep = 'payment';
-    var reste = credit.remainingAmount || credit.total || 0;
-    showVoiceResult('💳 Paiement du crédit - Restant: ' + reste.toFixed(2) + ' MAD. Dites "montant [prix]" ou tapez le montant');
-    // Afficher la zone de paiement
-    var zone = document.getElementById('creditPaymentZone');
-    var info = document.getElementById('creditPaymentInfo');
-    if (zone) {
-        zone.style.display = 'block';
-        if (info) {
-            info.textContent = 'Client: ' + (credit.clientName || credit.table || 'Inconnu') + ' | Restant: ' + reste.toFixed(2) + ' MAD';
-        }
-        var input = document.getElementById('creditPaymentAmountInput');
-        if (input) {
-            input.value = '';
-            input.focus();
-            input.select();
-        }
-    }
-}
-
-function setCreditPaymentAmount(amount) {
-    if (creditSelectedIndex < 0) {
-        showVoiceResult('⚠️ Aucun crédit sélectionné');
-        return;
-    }
-    if (amount <= 0) {
-        showVoiceResult('❌ Montant invalide');
-        return;
-    }
-    creditPaymentAmount = amount;
-    creditPaymentStep = 'amount';
-    var input = document.getElementById('creditPaymentAmountInput');
-    if (input) input.value = amount;
-    showVoiceResult('💰 Montant saisi: ' + amount.toFixed(2) + ' MAD. Dites "valide" pour confirmer');
-}
-
-function validateCreditPayment() {
-    if (creditSelectedIndex < 0) {
-        showVoiceResult('⚠️ Aucun crédit sélectionné');
-        return;
-    }
-    
-    var input = document.getElementById('creditPaymentAmountInput');
-    var amount = parseFloat(input ? input.value : creditPaymentAmount);
-    if (isNaN(amount) || amount <= 0) {
-        showVoiceResult('❌ Montant invalide');
-        return;
-    }
-    
-    var data = window.filteredCredits || allCreditsData || [];
-    var credit = data[creditSelectedIndex];
-    if (!credit) {
-        showVoiceResult('❌ Crédit introuvable');
-        return;
-    }
-    
-    var reste = credit.remainingAmount || credit.total || 0;
-    if (amount > reste) {
-        showVoiceResult('⚠️ Montant supérieur au reste dû (' + reste.toFixed(2) + ' MAD)');
-        return;
-    }
-    
-    var newReste = reste - amount;
-    var paid = newReste <= 0.01;
-    var updateData = {
-        paid: paid,
-        remainingAmount: Math.max(0, newReste),
-        amountGiven: (credit.amountGiven || 0) + amount,
-        paidAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    
-    CacheDB.write('credits', credit.id, updateData, 'update')
-        .then(function() {
-            if (paid) {
-                showVoiceResult('✅ Crédit soldé !');
-            } else {
-                showVoiceResult('✅ Paiement enregistré. Reste : ' + newReste.toFixed(2) + ' MAD');
-            }
-            // Réinitialiser
-            creditPaymentStep = 'idle';
-            creditSelectedIndex = -1;
-            creditPaymentAmount = 0;
-            creditSelectionMode = false;
-            window.creditSelectionMode = false;
-            // Masquer la zone de paiement
-            var zone = document.getElementById('creditPaymentZone');
-            if (zone) zone.style.display = 'none';
-            // Recharger
-            if (typeof loadCredits === 'function') {
-                loadCredits();
-            }
-            CacheDB.sync();
-        })
-        .catch(function(e) {
-            showVoiceResult('❌ Erreur : ' + e.message);
-        });
-}
-
-function closeCreditSelection() {
-    creditSelectionMode = false;
-    window.creditSelectionMode = false;
-    creditSelectedIndex = -1;
-    creditPaymentAmount = 0;
-    creditPaymentStep = 'idle';
-    // Masquer la zone de paiement
-    var zone = document.getElementById('creditPaymentZone');
-    if (zone) zone.style.display = 'none';
-    creditsSearch = '';
-    currentPages.credits = 1;
-    window.filteredCredits = null;
-    if (typeof applyCreditsFilters === 'function') {
-        applyCreditsFilters();
-    }
-    showVoiceResult('📋 Liste complète des crédits');
-}
-
-// Exposer les fonctions pour admin.js
-window.activateCreditSelection = activateCreditSelection;
-window.selectCreditLine = selectCreditLine;
-window.markCreditForPayment = markCreditForPayment;
-window.setCreditPaymentAmount = setCreditPaymentAmount;
-window.validateCreditPayment = validateCreditPayment;
-window.closeCreditSelection = closeCreditSelection;
-window.creditSelectionMode = creditSelectionMode;
-
 // ==================== HANDLER DES COMMANDES VOCALES ====================
 function handleVoiceCommand(command) {
     console.log('🎤 Commande vocale:', command);
 
     switch (command.type) {
         
-        // ⭐ RECHERCHE CLIENT DANS VENTES
         case 'search_client_in_ventes':
             var clientName = command.clientName;
             if (typeof searchClientInVentes === 'function') {
@@ -988,7 +805,6 @@ function handleVoiceCommand(command) {
             }
             break;
         
-        // ⭐ RECHERCHE CLIENT DANS CRÉDITS
         case 'search_client_in_credits':
             var clientName2 = command.clientName;
             if (typeof searchClientInCredits === 'function') {
@@ -1010,37 +826,54 @@ function handleVoiceCommand(command) {
             }
             break;
 
-        // ⭐ ACTIVATION DE LA SÉLECTION (Crédits)
         case 'activate_credit_selection':
-            activateCreditSelection();
+            if (typeof window.activateCreditSelection === 'function') {
+                window.activateCreditSelection();
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
             break;
 
-        // ⭐ SÉLECTION D'UNE LIGNE (Crédits)
         case 'select_credit_line':
-            selectCreditLine(command.lineNumber);
+            if (typeof window.selectCreditLine === 'function') {
+                window.selectCreditLine(command.lineNumber);
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
             break;
 
-        // ⭐ MARQUER COMME PAYÉ (Crédits)
         case 'mark_credit_paid':
-            markCreditForPayment();
+            if (typeof window.markCreditForPayment === 'function') {
+                window.markCreditForPayment();
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
             break;
 
-        // ⭐ SAISIR UN MONTANT (Crédits)
         case 'set_credit_amount':
-            setCreditPaymentAmount(command.amount);
+            if (typeof window.setCreditPaymentAmount === 'function') {
+                window.setCreditPaymentAmount(command.amount);
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
             break;
 
-        // ⭐ VALIDER LE PAIEMENT (Crédits)
         case 'validate_credit_payment':
-            validateCreditPayment();
+            if (typeof window.validateCreditPayment === 'function') {
+                window.validateCreditPayment();
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
             break;
 
-        // ⭐ FERMER / RÉINITIALISER (Crédits)
         case 'close_credit_list':
-            closeCreditSelection();
+            if (typeof window.closeCreditSelection === 'function') {
+                window.closeCreditSelection();
+            } else {
+                showVoiceResult('❌ Fonction non disponible');
+            }
             break;
 
-        // ⭐ NAVIGATION VOCALE
         case 'navigate':
             var page = command.page;
             var currentPage = document.getElementById('pageTitle')?.textContent || '';
@@ -1376,9 +1209,14 @@ function posStartVoiceRecording() {
             }
         }
 
-        if (searchInput) {
+        // ⭐ DÉTERMINER LE CHAMP DE RECHERCHE SELON LA PAGE
+        var currentPage = document.getElementById('pageTitle')?.textContent || '';
+        var searchInputId = (currentPage === 'Crédits') ? 'creditsSearchInput' : 'posSearchInput';
+        var searchInputElem = document.getElementById(searchInputId);
+
+        if (searchInputElem) {
             if (finalTranscriptTemp) {
-                searchInput.value = finalTranscriptTemp;
+                searchInputElem.value = finalTranscriptTemp;
                 finalTranscript = finalTranscriptTemp;
                 if (!processing) {
                     processing = true;
@@ -1389,7 +1227,7 @@ function posStartVoiceRecording() {
                     processing = false;
                 }
             } else if (interimTranscript && interimTranscript !== lastInterim) {
-                searchInput.value = interimTranscript + ' ✍️';
+                searchInputElem.value = interimTranscript + ' ✍️';
                 lastInterim = interimTranscript;
             }
         }
@@ -2382,14 +2220,12 @@ function goBackToPOS() {
 
 // ⚡ RACCOURCIS CLAVIER
 document.addEventListener('keydown', function(event) {
-    // Échap pour retourner au POS
     if (event.key === 'Escape') {
         var currentPage = document.getElementById('pageTitle')?.textContent || '';
         if (currentPage !== 'POS' && currentPage !== 'Dashboard' && currentPage !== '') {
             goBackToPOS();
         }
     }
-    // Ctrl + P pour aller au POS
     if (event.ctrlKey && (event.key === 'p' || event.key === 'P')) {
         event.preventDefault();
         var currentPage = document.getElementById('pageTitle')?.textContent || '';
