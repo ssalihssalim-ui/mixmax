@@ -1,21 +1,19 @@
-// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS ====================
-var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
-var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
-var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
+// ==================== POS.JS - LOGIQUE MÉTIER ====================
+// Variables globales du POS
+var posCart = [];
+var posStep = 1;
+var posCategoriesList = [];
+var posProductsList = [];
+var posSelectedCategory = 'all';
+var posCurrentClient = null;
+var posCurrentTable = '';
+var posPaymentMethod = 'espece';
+var posAmountGiven = 0;
+var posDiscountMAD = 0;
+var posAllClients = [];
+var posFilteredClients = [];
+var posCurrentProductId = null;
 var posSearchQuery = '';
-var voiceRecognition = null;
-var isRecording = false;
-var voiceTimeout = null;
-var searchTimeout = null;
-
-// ========== MODE VOCAL ==========
-var voiceMode = 'search';
-var lastAddedProductId = null;
-var voiceModeMessage = '🎤 Recherche vocale active';
-var lastVoiceCommandTime = 0;
-
-// Cache pour la fidélité
-var fideliteSettingsCache = null;
 
 // Cache pour la recherche (index des produits)
 var productNameIndex = {};
@@ -24,20 +22,8 @@ var productIndexBuilt = false;
 // Compteur de facture local
 var factureCounter = parseInt(localStorage.getItem('factureCounter')) || 0;
 
-// ========== COMMANDES VOCALES DE PAIEMENT ==========
-var paymentKeywords = {
-    'espece': ['espèces', 'espece', 'argent', 'cash', 'comptant', 'liquide', 'espèce'],
-    'credit': ['crédit', 'credit', 'à crédit', 'acredit', 'dette', 'avance', 'crédit'],
-    'partiel': ['partiel', 'partielle', 'acompte', 'moitié', 'partial', 'part', 'partiel']
-};
-
-// ========== FONCTION POUR CHANGER LE MODE ==========
-function setVoiceMode(newMode, message, productId) {
-    voiceMode = newMode;
-    if (message) voiceModeMessage = message;
-    if (productId !== undefined) lastAddedProductId = productId;
-    showVoiceModeIndicator();
-}
+// Cache pour la fidélité
+var fideliteSettingsCache = null;
 
 // ========== COMMANDES TABLES ==========
 var posCommandesTables = [];
@@ -47,9 +33,9 @@ var posCommandesFilterText = '';
 var posCommandesSortField = 'createdAt';
 var posCommandesSortOrder = 'desc';
 
-var posEpicesList = ['Normal','Moins épicé','Très épicé','Sans épice'];
-var posSelList = ['Normal','Moins de sel','Sans sel'];
-
+// ========== INGRÉDIENTS ==========
+var posEpicesList = ['Normal', 'Moins épicé', 'Très épicé', 'Sans épice'];
+var posSelList = ['Normal', 'Moins de sel', 'Sans sel'];
 var posCurrentProductIngredients = [];
 var allStockData = [];
 
@@ -64,71 +50,16 @@ function escapeHtml(str) {
     });
 }
 
-// ==================== SUPPORT VOCAL ====================
-function isIOSStandalone() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-           !window.MSStream &&
-           (window.navigator.standalone === true ||
-            window.matchMedia('(display-mode: standalone)').matches);
+function toDate(val) {
+    if (!val) return null;
+    if (val.toDate && typeof val.toDate === 'function') return val.toDate();
+    if (val.seconds) return new Date(val.seconds * 1000);
+    if (typeof val === 'string') return new Date(val);
+    if (val instanceof Date) return val;
+    return null;
 }
 
-function checkVoiceSupport() {
-    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    var isStandalone = isIOSStandalone();
-    if (isIOS && isStandalone) {
-        return { supported: false, reason: 'Ouvrez dans Safari pour le micro' };
-    }
-    var hasSpeechRecognition = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
-    if (!hasSpeechRecognition) {
-        return { supported: false, reason: 'Navigateur non supporté' };
-    }
-    return { supported: true };
-}
-
-async function requestMicrophonePermission() {
-    try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-        return true;
-    } catch(e) {
-        console.error('Permission microphone refusée:', e);
-        return false;
-    }
-}
-
-function showSafariBanner() {
-    if (!isIOSStandalone()) return;
-    if (document.getElementById('iosPwaBanner')) return;
-    var container = document.getElementById('dynamicContent');
-    if (!container) return;
-    var banner = document.createElement('div');
-    banner.id = 'iosPwaBanner';
-    banner.style.cssText = 'background:#fef3c7; border:2px solid #f59e0b; border-radius:12px; padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;';
-    banner.innerHTML = `
-        <div style="display:flex; align-items:center; gap:8px;">
-            <i class="fas fa-exclamation-triangle" style="color:#d97706; font-size:1.1rem;"></i>
-            <span style="font-size:0.8rem; color:#92400e;">
-                <strong>📱 Microphone</strong><br>
-                <span style="font-size:0.7rem;">Ouvrez dans Safari pour le micro.</span>
-            </span>
-        </div>
-        <button onclick="window.open(window.location.href.split('?')[0], '_blank')" style="background:#f59e0b; border:none; padding:6px 14px; border-radius:6px; color:#fff; font-weight:600; cursor:pointer; font-size:0.75rem; white-space:nowrap;">
-            🌐 Ouvrir
-        </button>
-    `;
-    container.insertBefore(banner, container.firstChild);
-}
-
-function posEnrichirItemsAvecPrixAchat(items) {
-    return items.map(function(item) {
-        var produit = posProductsList.find(function(p) { return p.id === item.id; });
-        var prixAchat = (produit && produit.prixAchat != null) ? produit.prixAchat : (item.prixAchat || 0);
-        return Object.assign({}, item, { prixAchat: prixAchat });
-    });
-}
-
-// ==================== CONSTRUCTION DE L'INDEX DE RECHERCHE ====================
+// ==================== INDEX DE RECHERCHE ====================
 function buildProductIndex() {
     if (productIndexBuilt) return;
     productNameIndex = {};
@@ -144,15 +75,12 @@ function buildProductIndex() {
     productIndexBuilt = true;
 }
 
-// ==================== RECHERCHE RAPIDE AVEC INDEX ====================
 function fastSearch(query) {
     if (!query) return posProductsList;
     buildProductIndex();
-
     var words = query.toLowerCase().split(' ');
     var results = [];
     var seen = {};
-
     words.forEach(function(w) {
         if (w.length < 2) return;
         var matches = productNameIndex[w] || [];
@@ -163,7 +91,6 @@ function fastSearch(query) {
             }
         });
     });
-
     if (results.length === 0) {
         return posProductsList.filter(function(p) {
             return (p.nom || '').toLowerCase().indexOf(query) !== -1 ||
@@ -171,18 +98,25 @@ function fastSearch(query) {
                    (p.description || '').toLowerCase().indexOf(query) !== -1;
         });
     }
-
     return results;
 }
 
-// ==================== CHARGEMENT OPTIMISÉ ====================
+function posEnrichirItemsAvecPrixAchat(items) {
+    return items.map(function(item) {
+        var produit = posProductsList.find(function(p) { return p.id === item.id; });
+        var prixAchat = (produit && produit.prixAchat != null) ? produit.prixAchat : (item.prixAchat || 0);
+        return Object.assign({}, item, { prixAchat: prixAchat });
+    });
+}
+
+// ==================== CHARGEMENT DU POS ====================
 async function loadPosPage(c) {
-    posResetCart(); posStep = 1;
+    posResetCart();
+    posStep = 1;
     posCommandesFilterText = '';
     posCommandesSortField = 'createdAt';
     posCommandesSortOrder = 'desc';
     posSearchQuery = '';
-    setVoiceMode('search', '🎤 Recherche vocale active', null);
     productIndexBuilt = false;
 
     posCategoriesList = [];
@@ -190,7 +124,7 @@ async function loadPosPage(c) {
     posAllClients = [];
     posFilteredClients = [];
 
-    // ⚡ AFFICHAGE RAPIDE - CHARGER LE CACHE D'ABORD
+    // Chargement rapide depuis le cache
     try {
         let cachedCategories = await CacheDB.getAll('categories');
         let cachedProducts = await CacheDB.getAll('products');
@@ -214,11 +148,11 @@ async function loadPosPage(c) {
         }
 
         renderPOS();
-    } catch(e) {
+    } catch (e) {
         console.error('Erreur cache:', e);
     }
 
-    // ⚡ CHARGEMENT FIRESTORE EN ARRIÈRE-PLAN
+    // Chargement Firestore en arrière-plan
     setTimeout(async function() {
         try {
             const [cs, ps, cl] = await Promise.all([
@@ -242,12 +176,12 @@ async function loadPosPage(c) {
                         id: d.id,
                         nom: dd.nom || '',
                         description: dd.description || '',
-                        prixVente: dd.prixVente||0,
-                        prixPromo: dd.prixPromo||0,
-                        prixAchat: dd.prixAchat||0,
+                        prixVente: dd.prixVente || 0,
+                        prixPromo: dd.prixPromo || 0,
+                        prixAchat: dd.prixAchat || 0,
                         stock: dd.stock,
-                        categorie: dd.categorie||'',
-                        imageBase64: dd.imageBase64||''
+                        categorie: dd.categorie || '',
+                        imageBase64: dd.imageBase64 || ''
                     };
                     posProductsList.push(prod);
                     CacheDB.set('products', d.id, prod);
@@ -264,8 +198,7 @@ async function loadPosPage(c) {
             posFilteredClients = [...posAllClients];
 
             renderPOS();
-
-        } catch(e) {
+        } catch (e) {
             console.error('Erreur chargement Firestore:', e);
         }
     }, 300);
@@ -273,6 +206,7 @@ async function loadPosPage(c) {
     await posChargerCommandesTables();
     await posChargerCommandesEnLigneCount();
 
+    // Restaurer une commande depuis localStorage
     var commandeData = localStorage.getItem('posCommandeData');
     var payerVenteData = localStorage.getItem('posPayerVente');
     if (commandeData) {
@@ -295,9 +229,11 @@ async function loadPosPage(c) {
                 });
             });
         }
-        if (cmd.clientId && cmd.clientName) { posCurrentClient = {id: cmd.clientId, name: cmd.clientName}; }
+        if (cmd.clientId && cmd.clientName) { posCurrentClient = { id: cmd.clientId, name: cmd.clientName }; }
         posCurrentTable = cmd.table || '';
-        posStep = 2; posDiscountMAD = 0; posPaymentMethod = 'espece';
+        posStep = 2;
+        posDiscountMAD = 0;
+        posPaymentMethod = 'espece';
         window.posCommandeId = cmd.commandeId;
         renderPOS();
         return;
@@ -322,30 +258,28 @@ async function loadPosPage(c) {
                 });
             });
         }
-        if (v.clientId && v.clientName) { posCurrentClient = {id: v.clientId, name: v.clientName}; }
+        if (v.clientId && v.clientName) { posCurrentClient = { id: v.clientId, name: v.clientName }; }
         posCurrentTable = v.table || '';
-        posStep = 2; posDiscountMAD = 0; posPaymentMethod = 'espece';
+        posStep = 2;
+        posDiscountMAD = 0;
+        posPaymentMethod = 'espece';
         window.posVenteId = v.venteId;
         renderPOS();
         return;
     }
 
     renderPOS();
-    if (isIOSStandalone()) {
-        showSafariBanner();
-    }
 }
 
-// ==================== RECHERCHE DE PRODUITS AVEC DÉBOUNCE ====================
+// ==================== RECHERCHE DE PRODUITS ====================
 function posSearchProducts(query) {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(function() {
+    clearTimeout(window._searchTimeout);
+    window._searchTimeout = setTimeout(function() {
         posSearchQuery = query.toLowerCase().trim();
         filterProductGrid();
     }, 150);
 }
 
-// ==================== FILTRER LA GRILLE ====================
 function filterProductGrid() {
     var grid = document.getElementById('posProductGrid');
     if (!grid) {
@@ -354,17 +288,14 @@ function filterProductGrid() {
     if (!grid) return;
 
     var f = fastSearch(posSearchQuery);
-
     if (posSelectedCategory !== 'all') {
         f = f.filter(function(p) { return p.categorie === posSelectedCategory; });
     }
-
     f.sort(function(a, b) {
         return (a.nom || '').localeCompare(b.nom || '');
     });
 
     var html = '';
-
     if (f.length === 0) {
         var message = posSearchQuery ? 'Aucun produit trouvé pour "' + escapeHtml(posSearchQuery) + '"' : 'Aucun produit disponible';
         html += '<div style="grid-column:1/-1;text-align:center;padding:40px 10px;">';
@@ -380,7 +311,6 @@ function filterProductGrid() {
             html += f.length + ' résultat' + (f.length > 1 ? 's' : '') + ' trouvé' + (f.length > 1 ? 's' : '');
             html += '</div>';
         }
-
         for (var j = 0; j < f.length; j++) {
             var p = f[j];
             var pr = p.prixPromo && p.prixPromo > 0 ? p.prixPromo : p.prixVente;
@@ -390,13 +320,11 @@ function filterProductGrid() {
                 if (p.stock <= 0) { sc = 'pos-out-of-stock'; stt = ' (Rupture)'; }
                 else if (p.stock <= 5) { stt = ' (' + p.stock + ' rest.)'; }
             }
-
             var displayName = escapeHtml(p.nom);
             if (posSearchQuery) {
                 var regex = new RegExp('(' + posSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
                 displayName = displayName.replace(regex, '<mark style="background:#fef3c7; border-radius:3px; padding:0 2px;">$1</mark>');
             }
-
             html += '<div class="pos-product-card ' + sc + '" onclick="posAddToCartOrOpenOptions(\'' + p.id + '\')">';
             if (p.imageBase64) html += '<div class="pos-product-img"><img src="' + escapeHtml(p.imageBase64) + '" alt=""></div>';
             else html += '<div class="pos-product-img pos-product-placeholder"><i class="fas fa-box"></i></div>';
@@ -409,916 +337,7 @@ function filterProductGrid() {
     grid.innerHTML = html;
 }
 
-// ==================== DÉTECTION DU MODE DE PAIEMENT ====================
-function detectPaymentMode(text) {
-    text = text.toLowerCase().trim();
-
-    for (var mode in paymentKeywords) {
-        for (var i = 0; i < paymentKeywords[mode].length; i++) {
-            if (text.indexOf(paymentKeywords[mode][i]) !== -1) {
-                return mode;
-            }
-        }
-    }
-    if (text === 'espece' || text === 'especes' || text === 'cash') return 'espece';
-    if (text === 'credit' || text === 'credit') return 'credit';
-    if (text === 'partiel' || text === 'partial') return 'partiel';
-
-    return null;
-}
-
-// ==================== COMMANDES VOCALES COMPLÈTES ====================
-function parseVoiceCommand(transcript) {
-    transcript = transcript.toLowerCase().trim();
-    var now = Date.now();
-    if (now - lastVoiceCommandTime < 500) {
-        return { type: 'ignore' };
-    }
-    lastVoiceCommandTime = now;
-
-    // ========== RECHERCHE DE CLIENT DANS LES LISTES ==========
-    var currentPage = document.getElementById('pageTitle')?.textContent || '';
-    
-    // Si on est sur la page Ventes
-    if (currentPage === 'Ventes') {
-        var clientMatch = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
-        var searchMatch = transcript.match(/rechercher\s+([a-z]+(?:\s+[a-z]+)*)/i);
-        var directMatch = transcript.match(/^([a-z]+(?:\s+[a-z]+)*)$/);
-        
-        var clientName = null;
-        if (clientMatch) clientName = clientMatch[1];
-        else if (searchMatch) clientName = searchMatch[1];
-        else if (directMatch && directMatch[1].length > 2) {
-            var name = directMatch[1].toLowerCase();
-            var found = posAllClients.some(function(c) {
-                var fullName = (c.nom + ' ' + c.prenom).toLowerCase();
-                return fullName.indexOf(name) !== -1 || 
-                       c.nom.toLowerCase().indexOf(name) !== -1 || 
-                       c.prenom.toLowerCase().indexOf(name) !== -1;
-            });
-            if (found) clientName = directMatch[1];
-        }
-        
-        if (clientName) {
-            return { type: 'search_client_in_ventes', clientName: clientName };
-        }
-    }
-    
-    // Si on est sur la page Crédits
-    if (currentPage === 'Crédits') {
-        var clientMatch2 = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
-        var searchMatch2 = transcript.match(/rechercher\s+([a-z]+(?:\s+[a-z]+)*)/i);
-        var directMatch2 = transcript.match(/^([a-z]+(?:\s+[a-z]+)*)$/);
-        
-        var clientName2 = null;
-        if (clientMatch2) clientName2 = clientMatch2[1];
-        else if (searchMatch2) clientName2 = searchMatch2[1];
-        else if (directMatch2 && directMatch2[1].length > 2) {
-            var name2 = directMatch2[1].toLowerCase();
-            var found2 = posAllClients.some(function(c) {
-                var fullName = (c.nom + ' ' + c.prenom).toLowerCase();
-                return fullName.indexOf(name2) !== -1 || 
-                       c.nom.toLowerCase().indexOf(name2) !== -1 || 
-                       c.prenom.toLowerCase().indexOf(name2) !== -1;
-            });
-            if (found2) clientName2 = directMatch2[1];
-        }
-        
-        if (clientName2) {
-            return { type: 'search_client_in_credits', clientName: clientName2 };
-        }
-
-        // ---------- COMMANDES VOCALES POUR CRÉDITS ----------
-        
-        // 1. Activer le mode sélection
-        if (transcript.includes('sélectionner') || transcript.includes('select') || 
-            transcript.includes('choisir') || transcript.includes('cocher')) {
-            return { type: 'activate_credit_selection' };
-        }
-
-        // 2. Sélectionner une ligne : gère "ligne 3", "numéro 3", "trois", ou simplement "3"
-        let lineMatch = transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
-        if (lineMatch) {
-            let numStr = lineMatch[1];
-            let num = parseInt(numStr);
-            if (isNaN(num)) {
-                for (var word in numberMap) {
-                    if (numStr.toLowerCase() === word) {
-                        num = numberMap[word];
-                        break;
-                    }
-                }
-            }
-            if (!isNaN(num) && num > 0) {
-                return { type: 'select_credit_line', lineNumber: num };
-            }
-        }
-
-        if (window.creditSelectionMode) {
-            let anyNumber = transcript.match(/\b(\d+)\b/);
-            let num = null;
-            if (anyNumber) {
-                num = parseInt(anyNumber[1]);
-            } else {
-                for (var word in numberMap) {
-                    if (transcript.includes(word)) {
-                        num = numberMap[word];
-                        break;
-                    }
-                }
-            }
-            if (num !== null && !isNaN(num) && num > 0) {
-                return { type: 'select_credit_line', lineNumber: num };
-            }
-        }
-
-        // 3. Marquer comme payé
-        if (transcript.includes('marquer payé') || transcript.includes('payer') || transcript.includes('régler')) {
-            return { type: 'mark_credit_paid' };
-        }
-
-        // 4. Saisir un montant
-        let amountMatch = transcript.match(/montant\s+(\d+[.,]?\d*)/i);
-        if (amountMatch) {
-            let amount = parseFloat(amountMatch[1].replace(',', '.'));
-            if (!isNaN(amount) && amount > 0) {
-                return { type: 'set_credit_amount', amount: amount };
-            }
-        } else if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
-            let amountNumber = transcript.match(/\b(\d+[.,]?\d*)\b/);
-            if (amountNumber) {
-                let amount = parseFloat(amountNumber[1].replace(',', '.'));
-                if (!isNaN(amount) && amount > 0) {
-                    return { type: 'set_credit_amount', amount: amount };
-                }
-            }
-        }
-
-        // 5. Valider le paiement
-        if (transcript.includes('valide') || transcript.includes('confirmer') || transcript.includes('ok')) {
-            return { type: 'validate_credit_payment' };
-        }
-
-        // 6. Fermer / réinitialiser
-        if (transcript.includes('fermer') || transcript.includes('retour')) {
-            return { type: 'close_credit_list' };
-        }
-    }
-
-    // ========== NAVIGATION VOCALE ==========
-    
-    // ⭐ POINT DE VENTE (POS)
-    if (transcript.includes('point de vente') || 
-        transcript.includes('point de vente') ||
-        transcript.includes('point vente') ||
-        transcript.includes('pos') || 
-        transcript.includes('caisse') || 
-        transcript.includes('retour pos') || 
-        transcript.includes('aller au pos') ||
-        transcript.includes('retour à la caisse') ||
-        transcript.includes('point de vente pos')) {
-        
-        if (currentPage === 'POS') {
-            showVoiceResult('✅ Vous êtes déjà sur le Point de Vente');
-            return { type: 'ignore' };
-        }
-        if (posCart.length > 0 && posStep === 1) {
-            if (!confirm('⚠️ Vous avez ' + posCart.length + ' article(s) dans le panier. Voulez-vous les garder ?')) {
-                posResetCart();
-            }
-        }
-        showVoiceResult('📋 Retour au Point de Vente...');
-        setTimeout(function() {
-            navigateTo('pos');
-        }, 300);
-        return { type: 'ignore' };
-    }
-
-    // ⭐ CRÉDITS
-    if (transcript.includes('liste des crédits') || transcript.includes('crédits') || 
-        transcript.includes('credit') || transcript.includes('liste crédit') ||
-        transcript.includes('crédit client') || transcript.includes('impayés')) {
-        return { type: 'navigate', page: 'credits' };
-    }
-    
-    // ⭐ VENTES
-    if (transcript.includes('liste des ventes') || transcript.includes('ventes') || 
-        transcript.includes('vente') || transcript.includes('liste vente') ||
-        transcript.includes('historique des ventes')) {
-        return { type: 'navigate', page: 'ventes' };
-    }
-    
-    // ⭐ DASHBOARD
-    if (transcript.includes('dashboard') || transcript.includes('tableau de bord') || 
-        transcript.includes('accueil') || transcript.includes('retour') ||
-        transcript.includes('home')) {
-        return { type: 'navigate', page: 'dashboard' };
-    }
-    
-    // ⭐ PRODUITS
-    if (transcript.includes('produits') || transcript.includes('liste des produits') || 
-        transcript.includes('catalogue') || transcript.includes('article')) {
-        return { type: 'navigate', page: 'products' };
-    }
-    
-    // ⭐ CLIENTS
-    if (transcript.includes('clients') || transcript.includes('liste des clients') ||
-        transcript.includes('clientèle')) {
-        return { type: 'navigate', page: 'clients' };
-    }
-    
-    // ⭐ COMMANDES
-    if (transcript.includes('commandes') || transcript.includes('liste des commandes') ||
-        transcript.includes('commande en ligne')) {
-        return { type: 'navigate', page: 'commandes' };
-    }
-    
-    // ⭐ CATÉGORIES
-    if (transcript.includes('catégories') || transcript.includes('liste des catégories')) {
-        return { type: 'navigate', page: 'categories' };
-    }
-
-    // Si on est en mode paiement
-    if (posStep === 2) {
-        var paymentMode = detectPaymentMode(transcript);
-        if (paymentMode) {
-            return { type: 'payment_mode', mode: paymentMode };
-        }
-    }
-    
-    // ========== DÉTECTION DES NOMBRES ==========
-    var numberMap = {
-        'un': 1, 'une': 1, 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
-        'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
-        'onze': 11, 'douze': 12, 'douz': 12, 'treize': 13, 'quatorze': 14,
-        'quinze': 15, 'seize': 16, 'vingt': 20, 'trente': 30, 'quarante': 40,
-        'cinquante': 50, 'soixante': 60, 'cent': 100
-    };
-
-    var numberMatch = transcript.match(/\b(\d+)\b/);
-    if (numberMatch) {
-        return { type: 'number', value: parseInt(numberMatch[1]) };
-    }
-    for (var word in numberMap) {
-        if (transcript.indexOf(word) !== -1) {
-            return { type: 'number', value: numberMap[word] };
-        }
-    }
-
-    // ========== COMMANDES DE NAVIGATION ==========
-    if (transcript.includes('passe') || transcript.includes('passer') || transcript.includes('suivant')) {
-        return { type: 'next' };
-    }
-    if (transcript.includes('valide') || transcript.includes('valider') || transcript.includes('confirmer') || transcript.includes('ok')) {
-        return { type: 'validate' };
-    }
-    if (transcript.includes('annule') || transcript.includes('annuler') || transcript.includes('retour')) {
-        return { type: 'cancel' };
-    }
-    if (transcript.includes('efface') || transcript.includes('vider') || transcript.includes('clear')) {
-        return { type: 'clear' };
-    }
-    if (transcript.includes('termine') || transcript.includes('terminer') || transcript.includes('fin') || transcript.includes('finaliser')) {
-        return { type: 'finalize' };
-    }
-
-    // ========== RECHERCHE DE PRODUIT ==========
-    var foundProduct = null;
-    var bestMatchLength = 0;
-    for (var i = 0; i < posProductsList.length; i++) {
-        var prod = posProductsList[i];
-        var prodName = prod.nom.toLowerCase();
-        if (transcript.includes(prodName) && prodName.length > bestMatchLength) {
-            foundProduct = prod;
-            bestMatchLength = prodName.length;
-        }
-    }
-    if (foundProduct) {
-        return { type: 'product', product: foundProduct };
-    }
-
-    // ========== RECHERCHE DE CLIENT ==========
-    for (var j = 0; j < posAllClients.length; j++) {
-        var client = posAllClients[j];
-        var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
-        if (transcript.includes(fullName) || transcript.includes(client.nom.toLowerCase()) || transcript.includes(client.prenom.toLowerCase())) {
-            return { type: 'client', client: client };
-        }
-    }
-
-    // ========== MONTANT ==========
-    var amountMatch = transcript.match(/\d+[.,]?\d*/);
-    if (amountMatch) {
-        var amount = parseFloat(amountMatch[0].replace(',', '.'));
-        if (amount > 0) {
-            return { type: 'amount', value: amount };
-        }
-    }
-
-    return { type: 'unknown', text: transcript };
-}
-
-// ==================== RECHERCHE CLIENT DANS VENTES ====================
-function searchClientInVentes(clientName) {
-    if (!clientName) return;
-    
-    var searchInput = document.getElementById('ventesSearchInput');
-    if (searchInput) {
-        searchInput.value = clientName;
-        ventesSearch = clientName;
-        currentPages.ventes = 1;
-        if (typeof applyVentesFilters === 'function') {
-            applyVentesFilters();
-        }
-        showVoiceResult('🔍 Client trouvé: ' + clientName);
-    } else {
-        navigateTo('ventes');
-        setTimeout(function() {
-            var searchInput2 = document.getElementById('ventesSearchInput');
-            if (searchInput2) {
-                searchInput2.value = clientName;
-                ventesSearch = clientName;
-                currentPages.ventes = 1;
-                if (typeof applyVentesFilters === 'function') {
-                    applyVentesFilters();
-                }
-                showVoiceResult('🔍 Client trouvé: ' + clientName);
-            }
-        }, 500);
-    }
-}
-
-// ==================== RECHERCHE CLIENT DANS CRÉDITS ====================
-function searchClientInCredits(clientName) {
-    if (!clientName) return;
-    
-    var searchInput = document.getElementById('creditsSearchInput');
-    if (searchInput) {
-        searchInput.value = clientName;
-        creditsSearch = clientName;
-        currentPages.credits = 1;
-        if (typeof applyCreditsFilters === 'function') {
-            applyCreditsFilters();
-        }
-        showVoiceResult('🔍 Client trouvé: ' + clientName);
-    } else {
-        navigateTo('credits');
-        setTimeout(function() {
-            var searchInput2 = document.getElementById('creditsSearchInput');
-            if (searchInput2) {
-                searchInput2.value = clientName;
-                creditsSearch = clientName;
-                currentPages.credits = 1;
-                if (typeof applyCreditsFilters === 'function') {
-                    applyCreditsFilters();
-                }
-                showVoiceResult('🔍 Client trouvé: ' + clientName);
-            }
-        }, 500);
-    }
-}
-
-// ==================== HANDLER DES COMMANDES VOCALES ====================
-function handleVoiceCommand(command) {
-    console.log('🎤 Commande vocale:', command);
-
-    switch (command.type) {
-        
-        case 'search_client_in_ventes':
-            var clientName = command.clientName;
-            if (typeof searchClientInVentes === 'function') {
-                searchClientInVentes(clientName);
-            } else {
-                showVoiceResult('📋 Recherche du client ' + clientName + ' dans les ventes...');
-                navigateTo('ventes');
-                setTimeout(function() {
-                    var searchInput = document.getElementById('ventesSearchInput');
-                    if (searchInput) {
-                        searchInput.value = clientName;
-                        ventesSearch = clientName;
-                        currentPages.ventes = 1;
-                        if (typeof applyVentesFilters === 'function') {
-                            applyVentesFilters();
-                        }
-                    }
-                }, 500);
-            }
-            break;
-        
-        case 'search_client_in_credits':
-            var clientName2 = command.clientName;
-            if (typeof searchClientInCredits === 'function') {
-                searchClientInCredits(clientName2);
-            } else {
-                showVoiceResult('📋 Recherche du client ' + clientName2 + ' dans les crédits...');
-                navigateTo('credits');
-                setTimeout(function() {
-                    var searchInput = document.getElementById('creditsSearchInput');
-                    if (searchInput) {
-                        searchInput.value = clientName2;
-                        creditsSearch = clientName2;
-                        currentPages.credits = 1;
-                        if (typeof applyCreditsFilters === 'function') {
-                            applyCreditsFilters();
-                        }
-                    }
-                }, 500);
-            }
-            break;
-
-        case 'activate_credit_selection':
-            if (typeof window.activateCreditSelection === 'function') {
-                window.activateCreditSelection();
-            } else {
-                showVoiceResult('❌ Fonction non disponible');
-            }
-            break;
-
-        case 'select_credit_line':
-            if (typeof window.selectCreditLine === 'function') {
-                window.selectCreditLine(command.lineNumber);
-            } else {
-                showVoiceResult('❌ Fonction non disponible');
-            }
-            break;
-
-        case 'mark_credit_paid':
-            if (typeof window.markCreditForPayment === 'function') {
-                window.markCreditForPayment();
-            } else {
-                showVoiceResult('❌ Fonction non disponible');
-            }
-            break;
-
-        case 'set_credit_amount':
-            if (typeof window.setCreditPaymentAmount === 'function') {
-                window.setCreditPaymentAmount(command.amount);
-            } else {
-                showVoiceResult('❌ Fonction non disponible');
-            }
-            break;
-
-        case 'validate_credit_payment':
-            if (typeof window.validateCreditPayment === 'function') {
-                window.validateCreditPayment();
-            } else {
-                showVoiceResult('❌ Fonction non disponible');
-            }
-            break;
-
-        case 'close_credit_list':
-            if (typeof window.closeCreditSelection === 'function') {
-                window.closeCreditSelection();
-            } else {
-                showVoiceResult('❌ Fonction non disponible');
-            }
-            break;
-
-        case 'navigate':
-            var page = command.page;
-            var currentPage = document.getElementById('pageTitle')?.textContent || '';
-            
-            var pageTitles = {
-                'credits': 'Crédits',
-                'ventes': 'Ventes',
-                'dashboard': 'Dashboard',
-                'products': 'Produits',
-                'clients': 'Clients',
-                'commandes': 'Commandes en ligne',
-                'categories': 'Catégories',
-                'pos': 'POS'
-            };
-            
-            if (currentPage === pageTitles[page]) {
-                showVoiceResult('✅ Vous êtes déjà sur ' + pageTitles[page]);
-                return;
-            }
-            
-            if (posCart.length > 0 && posStep === 1 && page !== 'pos') {
-                if (!confirm('⚠️ Vous avez ' + posCart.length + ' article(s) dans le panier. Voulez-vous les garder ?')) {
-                    posResetCart();
-                }
-            }
-            
-            showVoiceResult('📋 Navigation vers ' + pageTitles[page] + '...');
-            setTimeout(function() {
-                navigateTo(page);
-            }, 500);
-            break;
-
-        case 'payment_mode':
-            var mode = command.mode;
-            if ((mode === 'credit' || mode === 'partiel') && (!posCurrentClient || !posCurrentClient.id)) {
-                alert('Client requis pour ' + mode);
-                showVoiceResult('⚠️ Client requis pour ' + mode);
-                return;
-            }
-            posSetPaymentMethod(mode);
-            showVoiceResult('✅ Paiement en ' + mode + ' sélectionné');
-            renderPOS();
-            if (mode === 'espece') {
-                setTimeout(function() {
-                    var amountInput = document.getElementById('posAmountGiven');
-                    if (amountInput) amountInput.focus();
-                }, 300);
-            }
-            break;
-
-        case 'product':
-            var p = command.product;
-            if (p.stock !== undefined && p.stock <= 0) {
-                showVoiceResult('⚠️ Rupture de stock: ' + p.nom);
-                return;
-            }
-            var existing = posCart.find(function(x) { return x.id === p.id; });
-            if (existing) {
-                existing.quantite += 1;
-            } else {
-                var pr = p.prixPromo && p.prixPromo > 0 ? p.prixPromo : p.prixVente;
-                posCart.push({
-                    id: p.id, nom: p.nom, prixUnitaire: pr,
-                    prixAchat: p.prixAchat || 0, prixPromo: p.prixPromo || 0,
-                    prixVente: p.prixVente || 0, quantite: 1,
-                    categorie: p.categorie || '', imageBase64: p.imageBase64 || '',
-                    sauces: [], interdits: [], epice: 'Normal', sel: 'Normal'
-                });
-                lastAddedProductId = p.id;
-            }
-            setVoiceMode('quantity', '🎤 Dites un nombre, "passe" ou "valide"', lastAddedProductId);
-            showVoiceResult('✅ ' + p.nom + ' ajouté');
-            updateCartOnly();
-            showVoiceModeIndicator();
-            break;
-
-        case 'number':
-            if (voiceMode === 'quantity' && lastAddedProductId) {
-                var qty = command.value;
-                if (qty < 1) qty = 1;
-                var item = posCart.find(function(x) { return x.id === lastAddedProductId; });
-                if (item) {
-                    var prod = posProductsList.find(function(p) { return p.id === lastAddedProductId; });
-                    if (prod && prod.stock !== undefined && qty > prod.stock) {
-                        showVoiceResult('⚠️ Stock max: ' + prod.stock);
-                        return;
-                    }
-                    item.quantite = qty;
-                    lastAddedProductId = null;
-                    setVoiceMode('search', '🎤 Recherche vocale active', null);
-                    showVoiceResult('✅ Quantité: ' + qty);
-                    updateCartOnly();
-                    showVoiceModeIndicator();
-                }
-            } else if (voiceMode === 'payment' || posStep === 2) {
-                posAmountGiven = command.value;
-                var changeEl = document.getElementById('posChangeDisplay');
-                if (changeEl) {
-                    var st = posCalculateTotal();
-                    var t = st - posDiscountMAD;
-                    var c = posAmountGiven - t;
-                    changeEl.innerHTML = c >= 0 ?
-                        '<div class="pos-change-positive"><span>Rendu</span><span>' + c.toFixed(2) + ' MAD</span></div>' :
-                        '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c).toFixed(2) + ' MAD</span></div>';
-                }
-                var amountInput = document.getElementById('posAmountGiven');
-                if (amountInput) amountInput.value = posAmountGiven;
-                showVoiceResult('💰 Montant: ' + posAmountGiven.toFixed(2) + ' MAD');
-            }
-            break;
-
-        case 'client':
-            posCurrentClient = { id: command.client.id, name: command.client.nom + ' ' + command.client.prenom };
-            posCurrentTable = '';
-            var clientInput = document.getElementById('posClientSearchInput');
-            if (clientInput) clientInput.value = posCurrentClient.name;
-            updatePaymentButtons();
-            setVoiceMode('payment', '🎤 Dites le montant, "valide" ou mode paiement', null);
-            showVoiceResult('👤 Client: ' + posCurrentClient.name);
-            renderPOS();
-            break;
-
-        case 'amount':
-            if (posStep === 2) {
-                posAmountGiven = command.value;
-                var changeEl2 = document.getElementById('posChangeDisplay');
-                if (changeEl2) {
-                    var st2 = posCalculateTotal();
-                    var t2 = st2 - posDiscountMAD;
-                    var c2 = posAmountGiven - t2;
-                    changeEl2.innerHTML = c2 >= 0 ?
-                        '<div class="pos-change-positive"><span>Rendu</span><span>' + c2.toFixed(2) + ' MAD</span></div>' :
-                        '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c2).toFixed(2) + ' MAD</span></div>';
-                }
-                var amountInput2 = document.getElementById('posAmountGiven');
-                if (amountInput2) amountInput2.value = posAmountGiven;
-                showVoiceResult('💰 Montant: ' + posAmountGiven.toFixed(2) + ' MAD');
-            }
-            break;
-
-        case 'next':
-            if (voiceMode === 'quantity') {
-                setVoiceMode('search', '🎤 Recherche vocale active', null);
-                updateCartOnly();
-                showVoiceModeIndicator();
-            } else if (posStep === 2) {
-                posFinalizeSale();
-            } else if (posCart.length > 0 && posStep === 1) {
-                posGoToStep2();
-            }
-            break;
-
-        case 'validate':
-            if (voiceMode === 'quantity') {
-                setVoiceMode('search', '🎤 Recherche vocale active', null);
-                updateCartOnly();
-                showVoiceModeIndicator();
-            } else if (posStep === 2) {
-                posFinalizeSale();
-            } else if (posStep === 1 && posCart.length > 0) {
-                posGoToStep2();
-            }
-            break;
-
-        case 'finalize':
-            if (posStep === 2) {
-                posFinalizeSale();
-            }
-            break;
-
-        case 'clear':
-            posResetCart();
-            showVoiceResult('🗑️ Panier vidé');
-            renderPOS();
-            break;
-
-        case 'cancel':
-            if (voiceMode !== 'search') {
-                setVoiceMode('search', '🎤 Recherche vocale active', null);
-                showVoiceResult('↩️ Retour à la recherche');
-                renderPOS();
-            }
-            break;
-
-        default:
-            if (voiceMode === 'search' && command.text) {
-                posSearchQuery = command.text;
-                filterProductGrid();
-            }
-            break;
-    }
-}
-
-// ==================== INDICATEUR DE MODE VOCAL ====================
-function showVoiceModeIndicator() {
-    var indicator = document.getElementById('voiceModeIndicator');
-    if (!indicator) {
-        var container = document.querySelector('.pos-products-panel');
-        if (!container) return;
-        indicator = document.createElement('div');
-        indicator.id = 'voiceModeIndicator';
-        indicator.style.cssText = 'background:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:6px 12px; margin-bottom:8px; font-size:0.8rem; display:flex; align-items:center; gap:8px; color:#14532d;';
-        container.insertBefore(indicator, container.firstChild);
-    }
-    var icon = voiceMode === 'search' ? 'fa-microphone' : (voiceMode === 'quantity' ? 'fa-hashtag' : (voiceMode === 'client' ? 'fa-user' : 'fa-money-bill-wave'));
-    var color = voiceMode === 'search' ? '#16a34a' : (voiceMode === 'quantity' ? '#f59e0b' : (voiceMode === 'client' ? '#4f46e5' : '#dc2626'));
-    indicator.innerHTML = '<i class="fas ' + icon + '" style="color:' + color + ';"></i> ' +
-                          (voiceModeMessage || '🎤 Recherche vocale active') +
-                          ' <span style="font-size:0.6rem; color:#94a3b8; margin-left:auto;">' + voiceMode + '</span>';
-    indicator.style.borderColor = color;
-    indicator.style.background = voiceMode === 'search' ? '#f0fdf4' : '#fefce8';
-}
-
-// ==================== AFFICHER RÉSULTAT VOCAL ====================
-function showVoiceResult(message) {
-    var resultDiv = document.getElementById('voiceResultDisplay');
-    if (!resultDiv) {
-        resultDiv = document.createElement('div');
-        resultDiv.id = 'voiceResultDisplay';
-        resultDiv.style.cssText = 'position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#2E7D32; color:#fff; padding:12px 24px; border-radius:12px; font-weight:600; font-size:1rem; z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.3); transition:all 0.3s ease; display:none; max-width:90%; text-align:center;';
-        document.body.appendChild(resultDiv);
-    }
-
-    var isError = message.indexOf('⚠️') !== -1 || message.indexOf('❌') !== -1;
-    resultDiv.style.background = isError ? '#ef4444' : '#2E7D32';
-    resultDiv.textContent = message;
-    resultDiv.style.display = 'block';
-
-    clearTimeout(window._voiceResultTimeout);
-    window._voiceResultTimeout = setTimeout(function() {
-        resultDiv.style.display = 'none';
-    }, 2000);
-}
-
-// ==================== RECHERCHE VOCALE CONTINUE ====================
-function posToggleVoiceSearch() {
-    var support = checkVoiceSupport();
-    if (!support.supported) {
-        alert('⚠️ ' + support.reason);
-        return;
-    }
-    if (!navigator.onLine) {
-        alert('⚠️ La recherche vocale nécessite une connexion internet.');
-        return;
-    }
-    var micBtn = document.getElementById('posMicBtn');
-    if (isRecording) {
-        posStopVoiceSearch();
-        return;
-    }
-    requestMicrophonePermission().then(hasPermission => {
-        if (!hasPermission) {
-            alert('❌ Accès au microphone refusé.');
-            return;
-        }
-        posStartVoiceRecording();
-    });
-}
-
-function posStartVoiceRecording() {
-    var micBtn = document.getElementById('posMicBtn');
-    var searchInput = document.getElementById('posSearchInput');
-
-    if (voiceRecognition) {
-        try { voiceRecognition.abort(); } catch(e) {}
-        voiceRecognition = null;
-    }
-
-    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        alert('❌ Reconnaissance vocale non disponible.');
-        return;
-    }
-
-    voiceRecognition = new SpeechRecognition();
-    voiceRecognition.lang = 'fr-FR';
-    voiceRecognition.continuous = true;
-    voiceRecognition.interimResults = true;
-    voiceRecognition.maxAlternatives = 5;
-
-    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    if (isIOS) {
-        voiceRecognition.continuous = true;
-        voiceRecognition.interimResults = true;
-    }
-
-    if (micBtn) {
-        micBtn.classList.add('recording');
-        micBtn.innerHTML = '<i class="fas fa-circle" style="color:#ef4444; animation: pulse 0.5s ease-in-out infinite;"></i>';
-        micBtn.style.background = '#fee2e2';
-        micBtn.style.borderColor = '#ef4444';
-        micBtn.style.boxShadow = '0 0 0 4px rgba(239, 68, 68, 0.3)';
-        micBtn.style.transform = 'scale(0.95)';
-        micBtn.style.border = '3px solid #ef4444';
-    }
-
-    if (searchInput) {
-        searchInput.placeholder = '🎤 Écoute continue...';
-        searchInput.style.background = '#fef2f2';
-        searchInput.style.borderColor = '#ef4444';
-        searchInput.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.2)';
-        searchInput.style.border = '2px solid #ef4444';
-    }
-
-    var style = document.getElementById('voiceStyle');
-    if (!style) {
-        style = document.createElement('style');
-        style.id = 'voiceStyle';
-        document.head.appendChild(style);
-    }
-    style.textContent = `
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.2; transform: scale(1.3); }
-        }
-        .recording .fa-circle { animation: pulse 0.5s ease-in-out infinite !important; }
-    `;
-
-    var finalTranscript = '';
-    var lastInterim = '';
-    var processing = false;
-
-    voiceRecognition.onresult = function(event) {
-        var interimTranscript = '';
-        var finalTranscriptTemp = '';
-
-        for (var i = event.resultIndex; i < event.results.length; i++) {
-            var transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-                finalTranscriptTemp += transcript;
-            } else {
-                interimTranscript += transcript;
-            }
-        }
-
-        // ⭐ DÉTERMINER LE CHAMP DE RECHERCHE SELON LA PAGE
-        var currentPage = document.getElementById('pageTitle')?.textContent || '';
-        var searchInputId = (currentPage === 'Crédits') ? 'creditsSearchInput' : 'posSearchInput';
-        var searchInputElem = document.getElementById(searchInputId);
-
-        if (searchInputElem) {
-            if (finalTranscriptTemp) {
-                searchInputElem.value = finalTranscriptTemp;
-                finalTranscript = finalTranscriptTemp;
-                if (!processing) {
-                    processing = true;
-                    var command = parseVoiceCommand(finalTranscript);
-                    if (command.type !== 'ignore') {
-                        handleVoiceCommand(command);
-                    }
-                    processing = false;
-                }
-            } else if (interimTranscript && interimTranscript !== lastInterim) {
-                searchInputElem.value = interimTranscript + ' ✍️';
-                lastInterim = interimTranscript;
-            }
-        }
-    };
-
-    voiceRecognition.onend = function() {
-        if (isRecording) {
-            console.log('🔄 Redémarrage du micro...');
-            try {
-                voiceRecognition.start();
-            } catch(e) {
-                console.error('❌ Erreur redémarrage:', e);
-                posStopVoiceSearch();
-            }
-        }
-    };
-
-    voiceRecognition.onerror = function(event) {
-        console.error('🎤 Erreur :', event.error);
-        if (event.error === 'aborted' || event.error === 'no-speech') {
-            return;
-        }
-        if (event.error !== 'aborted') {
-            alert('Erreur de reconnaissance: ' + event.error + '. Le micro va redémarrer.');
-        }
-        posStopVoiceSearch();
-    };
-
-    try {
-        voiceRecognition.start();
-        isRecording = true;
-        showVoiceModeIndicator();
-        console.log('🎤 Micro activé (écoute continue)');
-    } catch(e) {
-        console.error('Erreur démarrage:', e);
-        isRecording = false;
-        if (micBtn) {
-            micBtn.classList.remove('recording');
-            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-            micBtn.style.background = '#dcfce7';
-            micBtn.style.borderColor = '#16a34a';
-            micBtn.style.boxShadow = 'none';
-            micBtn.style.transform = 'scale(1)';
-            micBtn.style.border = '3px solid #16a34a';
-        }
-        if (searchInput) {
-            searchInput.placeholder = '🔍 Rechercher...';
-            searchInput.style.background = '#fff';
-            searchInput.style.borderColor = '#e2e8f0';
-            searchInput.style.boxShadow = 'none';
-            searchInput.style.border = '2px solid #e2e8f0';
-        }
-    }
-}
-
-function posStopVoiceSearch() {
-    if (voiceRecognition) {
-        try {
-            voiceRecognition.abort();
-        } catch(e) {}
-        voiceRecognition = null;
-    }
-    isRecording = false;
-
-    var micBtn = document.getElementById('posMicBtn');
-    var searchInput = document.getElementById('posSearchInput');
-
-    if (micBtn) {
-        micBtn.classList.remove('recording');
-        micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-        micBtn.style.background = '#dcfce7';
-        micBtn.style.borderColor = '#16a34a';
-        micBtn.style.boxShadow = 'none';
-        micBtn.style.transform = 'scale(1)';
-        micBtn.style.border = '3px solid #16a34a';
-    }
-    if (searchInput) {
-        searchInput.placeholder = '🔍 Rechercher...';
-        searchInput.style.background = '#fff';
-        searchInput.style.borderColor = '#e2e8f0';
-        searchInput.style.boxShadow = 'none';
-        searchInput.style.border = '2px solid #e2e8f0';
-    }
-
-    var styleEl = document.getElementById('voiceStyle');
-    if (styleEl) styleEl.remove();
-    var indicator = document.getElementById('voiceModeIndicator');
-    if (indicator) indicator.remove();
-}
-
-// ========== CHARGEMENT DES COMMANDES TABLES ==========
+// ==================== GESTION DES COMMANDES TABLES ====================
 async function posChargerCommandesTables() {
     try {
         var snap = await db.collection('commandes')
@@ -1337,13 +356,12 @@ async function posChargerCommandesTables() {
             return db - da;
         });
         posCommandesTablesCount = posCommandesTables.length;
-    } catch(e) {
+    } catch (e) {
         console.error('Erreur chargement commandes tables', e);
         posCommandesTablesCount = 0;
     }
 }
 
-// ========== CHARGEMENT DES COMMANDES EN LIGNE ==========
 async function posChargerCommandesEnLigneCount() {
     try {
         var snap = await db.collection('commandes')
@@ -1352,7 +370,7 @@ async function posChargerCommandesEnLigneCount() {
             .get();
         posCommandesEnLigneCount = snap.size;
         console.log('🛒 Commandes en ligne :', posCommandesEnLigneCount);
-    } catch(e) {
+    } catch (e) {
         console.warn('Fallback chargement commandes en ligne', e);
         try {
             var allSnap = await db.collection('commandes').get();
@@ -1363,14 +381,13 @@ async function posChargerCommandesEnLigneCount() {
             });
             posCommandesEnLigneCount = count;
             console.log('🛒 Commandes en ligne (fallback) :', posCommandesEnLigneCount);
-        } catch(err) {
+        } catch (err) {
             console.error('Erreur fallback', err);
             posCommandesEnLigneCount = 0;
         }
     }
 }
 
-// ========== TRI ET FILTRE DES COMMANDES TABLES ==========
 function posTriCommandesTables(field) {
     if (posCommandesSortField === field) {
         posCommandesSortOrder = posCommandesSortOrder === 'asc' ? 'desc' : 'asc';
@@ -1536,10 +553,10 @@ async function posPayerCommandeTable(commandeId) {
         closeModal();
         renderPOS();
         CacheDB.sync();
-    } catch(e) { alert('❌ Erreur: ' + e.message); }
+    } catch (e) { alert('❌ Erreur: ' + e.message); }
 }
 
-// ==================== POS RESET CART ====================
+// ==================== RÉINITIALISATION DU PANIER ====================
 function posResetCart() {
     posCart = [];
     posStep = 1;
@@ -1551,50 +568,26 @@ function posResetCart() {
     posDiscountMAD = 0;
     posSearchQuery = '';
     posFilteredClients = posAllClients.slice();
-    
-    setVoiceMode('search', '🎤 Recherche vocale active', null);
-    
     delete window.posCommandeId;
     delete window.posVenteId;
-    
     var searchInput = document.getElementById('posSearchInput');
     if (searchInput) searchInput.value = '';
-    
-    if (voiceRecognition) {
-        try { voiceRecognition.abort(); } catch(e) {}
-        voiceRecognition = null;
-        isRecording = false;
-    }
-    if (voiceTimeout) {
-        clearTimeout(voiceTimeout);
-        voiceTimeout = null;
-    }
-    
-    var micBtn = document.getElementById('posMicBtn');
-    if (micBtn) {
-        micBtn.classList.remove('recording');
-        micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-        micBtn.style.background = '#dcfce7';
-        micBtn.style.borderColor = '#16a34a';
-        micBtn.style.boxShadow = 'none';
-        micBtn.style.transform = 'scale(1)';
-        micBtn.style.border = '3px solid #16a34a';
-    }
-    
-    var styleEl = document.getElementById('voiceStyle');
-    if (styleEl) styleEl.remove();
-    var indicator = document.getElementById('voiceModeIndicator');
-    if (indicator) indicator.remove();
+    renderPOS();
 }
 
+// ==================== GESTION DES CLIENTS ====================
 function posSearchClient(query) {
-    var q = query.toLowerCase().trim(); posCurrentClient = null;
+    var q = query.toLowerCase().trim();
+    posCurrentClient = null;
     if (!q) {
         posFilteredClients = posAllClients.slice();
-        var d = document.getElementById('posClientDropdown'); if(d) d.style.display='none';
+        var d = document.getElementById('posClientDropdown');
+        if (d) d.style.display = 'none';
     } else {
         posFilteredClients = posAllClients.filter(function(c) {
-            return (c.nom||'').toLowerCase().indexOf(q)!==-1 || (c.prenom||'').toLowerCase().indexOf(q)!==-1 || (c.telephone||'').toLowerCase().indexOf(q)!==-1;
+            return (c.nom || '').toLowerCase().indexOf(q) !== -1 ||
+                   (c.prenom || '').toLowerCase().indexOf(q) !== -1 ||
+                   (c.telephone || '').toLowerCase().indexOf(q) !== -1;
         });
         renderClientDropdown();
     }
@@ -1602,13 +595,13 @@ function posSearchClient(query) {
 
 function renderClientDropdown() {
     var d = document.getElementById('posClientDropdown');
-    if(!d) return;
+    if (!d) return;
     var h = '';
-    if(posFilteredClients.length === 0) {
+    if (posFilteredClients.length === 0) {
         h = '<div style="padding:8px;color:#94a3b8;text-align:center;">Aucun</div>';
     } else {
         posFilteredClients.forEach(function(c) {
-            h += '<div onclick="posSelectClientFromDropdown(\'' + c.id + '\',\'' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + '\')" style="padding:8px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:0.85rem;">' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + ' <span style="color:#94a3b8;font-size:0.65rem;">(' + (c.telephone||'') + ')</span></div>';
+            h += '<div onclick="posSelectClientFromDropdown(\'' + c.id + '\',\'' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + '\')" style="padding:8px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:0.85rem;">' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + ' <span style="color:#94a3b8;font-size:0.65rem;">(' + (c.telephone || '') + ')</span></div>';
         });
     }
     d.innerHTML = h;
@@ -1616,23 +609,22 @@ function renderClientDropdown() {
 }
 
 function posSelectClientFromDropdown(cid, cn) {
-    posCurrentClient = {id: cid, name: cn};
+    posCurrentClient = { id: cid, name: cn };
     posCurrentTable = '';
     var s = document.getElementById('posClientSearchInput'),
         t = document.getElementById('posTableNum'),
         d = document.getElementById('posClientDropdown');
-    if(s) s.value = cn;
-    if(t) t.value = '';
-    if(d) d.style.display = 'none';
+    if (s) s.value = cn;
+    if (t) t.value = '';
+    if (d) d.style.display = 'none';
     updatePaymentButtons();
-    setVoiceMode('payment', '🎤 Dites le montant, "valide" ou mode paiement', null);
     renderPOS();
 }
 
 document.addEventListener('click', function(e) {
     var d = document.getElementById('posClientDropdown'),
         s = document.getElementById('posClientSearchInput');
-    if(d && s && !s.contains(e.target) && !d.contains(e.target)) d.style.display = 'none';
+    if (d && s && !s.contains(e.target) && !d.contains(e.target)) d.style.display = 'none';
 });
 
 function updatePaymentButtons() {
@@ -1640,12 +632,12 @@ function updatePaymentButtons() {
         var cb = document.getElementById('posCreditBtn'),
             pb = document.getElementById('posPartielBtn'),
             cc = posCurrentClient && posCurrentClient.id;
-        if(cb) {
+        if (cb) {
             cb.disabled = !cc;
             cb.style.opacity = cc ? '1' : '0.4';
             cb.style.cursor = cc ? 'pointer' : 'not-allowed';
         }
-        if(pb) {
+        if (pb) {
             pb.disabled = !cc;
             pb.style.opacity = cc ? '1' : '0.4';
             pb.style.cursor = cc ? 'pointer' : 'not-allowed';
@@ -1655,11 +647,11 @@ function updatePaymentButtons() {
 
 function posSetTable(v) {
     posCurrentTable = v.trim();
-    if(posCurrentTable) {
+    if (posCurrentTable) {
         posCurrentClient = null;
         posPaymentMethod = 'espece';
         var s = document.getElementById('posClientSearchInput');
-        if(s) s.value = '';
+        if (s) s.value = '';
     }
 }
 
@@ -1694,11 +686,12 @@ function posAddToCartOrOpenOptions(pid) {
                 categorie: p.categorie || '', imageBase64: p.imageBase64 || '',
                 sauces: [], interdits: [], epice: 'Normal', sel: 'Normal'
             });
-            lastAddedProductId = p.id;
         }
-        setVoiceMode('quantity', '🎤 Dites un nombre, "passe" ou "valide"', lastAddedProductId);
+        // La gestion du mode vocal est déléguée à pos-audio.js via un événement ou une fonction exposée
+        if (typeof window.onProductAdded === 'function') {
+            window.onProductAdded(p.id);
+        }
         updateCartOnly();
-        showVoiceModeIndicator();
     }
 }
 
@@ -1712,7 +705,7 @@ async function posOpenOptionsModal(pid) {
             const snap = await db.collection('stock').orderBy('nom').get();
             allStockData = [];
             snap.forEach(d => { let dd = d.data(); dd.id = d.id; allStockData.push(dd); });
-        } catch(e) { console.error(e); }
+        } catch (e) { console.error(e); }
     }
 
     try {
@@ -1723,7 +716,7 @@ async function posOpenOptionsModal(pid) {
         } else {
             posCurrentProductIngredients = [];
         }
-    } catch(e) {
+    } catch (e) {
         posCurrentProductIngredients = [];
     }
 
@@ -1779,9 +772,12 @@ async function posOpenOptionsModal(pid) {
 }
 
 function posConfirmOptions() {
-    var interdits = []; document.querySelectorAll('.pos-interdit-check:checked').forEach(function(cb) { interdits.push(cb.value); });
-    var epice = document.querySelector('input[name="pos-epice"]:checked'); epice = epice ? epice.value : 'Normal';
-    var sel = document.querySelector('input[name="pos-sel"]:checked'); sel = sel ? sel.value : 'Normal';
+    var interdits = [];
+    document.querySelectorAll('.pos-interdit-check:checked').forEach(function(cb) { interdits.push(cb.value); });
+    var epice = document.querySelector('input[name="pos-epice"]:checked');
+    epice = epice ? epice.value : 'Normal';
+    var sel = document.querySelector('input[name="pos-sel"]:checked');
+    sel = sel ? sel.value : 'Normal';
     var p = posProductsList.find(function(x) { return x.id === posCurrentProductId; });
     if (!p) { closeModal(); return; }
     var ex = posCart.find(function(x) { return x.id === posCurrentProductId; });
@@ -1799,15 +795,16 @@ function posConfirmOptions() {
             interdits: interdits,
             epice: epice, sel: sel
         });
-        lastAddedProductId = p.id;
     }
-    setVoiceMode('quantity', '🎤 Dites un nombre, "passe" ou "valide"', lastAddedProductId);
+    // La gestion du mode vocal est déléguée à pos-audio.js
+    if (typeof window.onProductAdded === 'function') {
+        window.onProductAdded(p.id);
+    }
     closeModal();
     updateCartOnly();
-    showVoiceModeIndicator();
 }
 
-// ==================== MISE À JOUR CIBLÉE DU PANIER ====================
+// ==================== MISE À JOUR DU PANIER ====================
 function updateCartOnly() {
     var cartItems = document.querySelector('.pos-cart-items');
     if (!cartItems) return;
@@ -1839,7 +836,6 @@ function updateCartOnly() {
     }
 }
 
-// ==================== NUMÉRO DE FACTURE (LOCAL) ====================
 function getNextFactureNum() {
     factureCounter = parseInt(localStorage.getItem('factureCounter')) || 0;
     factureCounter++;
@@ -1847,14 +843,12 @@ function getNextFactureNum() {
     return 'FACT-' + new Date().getFullYear() + '-' + String(factureCounter).padStart(5, '0');
 }
 
-// ==================== RENDER POS OPTIMISÉ AVEC RESET ====================
+// ==================== RENDU DU POS ====================
 function renderPOS() {
-    var c = document.getElementById('dynamicContent'); 
+    var c = document.getElementById('dynamicContent');
     if (!c) return;
 
     if (posCart.length === 0 && posStep === 1) {
-        var indicator = document.getElementById('voiceModeIndicator');
-        if (indicator) indicator.remove();
         buildFullPOS(c);
         return;
     }
@@ -1868,16 +862,12 @@ function renderPOS() {
             var t = st - posDiscountMAD;
             totalRow.textContent = t.toFixed(2) + ' MAD';
         }
-        if (isRecording || voiceMode !== 'search') {
-            showVoiceModeIndicator();
-        }
         return;
     }
 
     buildFullPOS(c);
 }
 
-// ==================== CONSTRUCTION COMPLÈTE DU POS ====================
 function buildFullPOS(c) {
     if (posProductsList.length === 0 && posCategoriesList.length === 0) {
         c.innerHTML = '<div style="text-align:center;padding:40px;">' +
@@ -1887,11 +877,11 @@ function buildFullPOS(c) {
         return;
     }
 
-    var st = posCalculateTotal(); 
+    var st = posCalculateTotal();
     var t = st - posDiscountMAD;
     var h = '<div class="pos-container"><div class="pos-products-panel">';
 
-    // Barre de recherche + micro
+    // Barre de recherche
     h += '<div style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;">';
     h += '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">';
     h += '<div style="flex:1; min-width:160px; position:relative; display:flex; align-items:center; background:#fff; border:2px solid #e2e8f0; border-radius:40px; padding:2px 12px; transition:all 0.3s ease;">';
@@ -1904,14 +894,9 @@ function buildFullPOS(c) {
     }
     h += '</div>';
 
-    var support = checkVoiceSupport();
-    var isSupported = support.supported;
-    var isOnline = navigator.onLine;
-    var isActive = isSupported && isOnline && !isIOSStandalone();
-
-    h += '<button id="posMicBtn" title="' + (isActive ? 'Cliquez pour l\'écoute continue' : (isIOSStandalone() ? 'Ouvrir dans Safari' : 'Non disponible')) + '" style="background:' + (isActive ? '#dcfce7' : (isIOSStandalone() ? '#fef3c7' : '#e2e8f0')) + '; border:3px solid ' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#f59e0b' : '#94a3b8')) + '; border-radius:50%; width:46px; height:46px; cursor:' + (isActive ? 'pointer' : (isIOSStandalone() ? 'pointer' : 'not-allowed')) + '; font-size:1.2rem; color:' + (isActive ? '#16a34a' : (isIOSStandalone() ? '#d97706' : '#94a3b8')) + '; transition:all 0.3s; display:flex; align-items:center; justify-content:center; user-select:none; touch-action:manipulation; flex-shrink:0; box-shadow:0 2px 8px rgba(0,0,0,0.08);"';
-    h += ' onclick="' + (isActive ? 'posToggleVoiceSearch()' : (isIOSStandalone() ? 'window.open(window.location.href.split(\'?\')[0],\'_blank\')' : '')) + '"';
-    h += '><i class="fas fa-' + (isActive ? (isRecording ? 'circle' : 'microphone') : (isIOSStandalone() ? 'exclamation-triangle' : 'microphone-slash')) + '" style="' + (isRecording ? 'color:#ef4444; animation: pulse 0.5s ease-in-out infinite;' : '') + '"></i></button>';
+    // Bouton micro (seulement l'élément, la logique est dans pos-audio.js)
+    h += '<button id="posMicBtn" title="Activer le micro" style="background:#dcfce7; border:3px solid #16a34a; border-radius:50%; width:46px; height:46px; cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition:all 0.3s; box-shadow:0 2px 8px rgba(0,0,0,0.08);"';
+    h += ' onclick="posToggleVoiceSearch()"><i class="fas fa-microphone"></i></button>';
 
     // Boutons Tables et En ligne
     h += '<div style="display:flex; gap:4px; flex-wrap:wrap;">';
@@ -1946,8 +931,7 @@ function buildFullPOS(c) {
     h += '<div class="pos-cart-panel">';
     if (posStep === 1) {
         h += '<div class="pos-cart-header"><h3><i class="fas fa-shopping-cart"></i> Panier <span class="pos-cart-badge">' + posCart.length + '</span></h3><button class="pos-clear-btn" onclick="posResetCart()"><i class="fas fa-trash-alt"></i> Vider</button></div><div class="pos-cart-items">';
-        if (posCart.length === 0) { h += '<div class="pos-cart-empty"><i class="fas fa-shopping-basket"></i><p>Panier vide</p></div>'; }
-        else {
+        if (posCart.length === 0) { h += '<div class="pos-cart-empty"><i class="fas fa-shopping-basket"></i><p>Panier vide</p></div>'; } else {
             for (var k = 0; k < posCart.length; k++) {
                 var it = posCart[k];
                 var opts = '';
@@ -1985,13 +969,6 @@ function buildFullPOS(c) {
 
     filterProductGrid();
     if (posStep === 2) setTimeout(posCalculateChange, 200);
-    
-    if (isRecording || voiceMode !== 'search') {
-        showVoiceModeIndicator();
-    } else {
-        var indicator = document.getElementById('voiceModeIndicator');
-        if (indicator) indicator.remove();
-    }
 }
 
 // ==================== FONCTIONS MÉTIER ====================
@@ -2004,10 +981,15 @@ function posFilterCategory(ca) {
     filterProductGrid();
 }
 
-function posUpdateDiscountMAD(v) { posDiscountMAD = parseFloat(v) || 0; if (posDiscountMAD < 0) posDiscountMAD = 0; renderPOS(); }
+function posUpdateDiscountMAD(v) {
+    posDiscountMAD = parseFloat(v) || 0;
+    if (posDiscountMAD < 0) posDiscountMAD = 0;
+    renderPOS();
+}
 
 function posUpdateQty(i, ch) {
-    var it = posCart[i]; if (!it) return;
+    var it = posCart[i];
+    if (!it) return;
     var p = posProductsList.find(function(x) { return x.id === it.id; });
     var nq = it.quantite + ch;
     if (nq <= 0) posCart.splice(i, 1);
@@ -2018,7 +1000,10 @@ function posUpdateQty(i, ch) {
     updateCartOnly();
 }
 
-function posRemoveItem(i) { posCart.splice(i, 1); updateCartOnly(); }
+function posRemoveItem(i) {
+    posCart.splice(i, 1);
+    updateCartOnly();
+}
 
 function posCalculateTotal() {
     var t = 0;
@@ -2050,7 +1035,8 @@ function posSetPaymentMethod(m) {
 }
 
 function posCalculateChange() {
-    var ai = document.getElementById('posAmountGiven'), cd = document.getElementById('posChangeDisplay');
+    var ai = document.getElementById('posAmountGiven'),
+        cd = document.getElementById('posChangeDisplay');
     if (!ai || !cd) return;
     var st = posCalculateTotal();
     var t = st - posDiscountMAD;
@@ -2063,14 +1049,14 @@ function posCalculateChange() {
     }
 }
 
-// ==================== FIDÉLITÉ ASYNCHRONE ====================
+// ==================== FIDÉLITÉ ====================
 async function updateClientFidelityAsync(clientId, total, profitTotal) {
     try {
         if (!fideliteSettingsCache) {
             try {
                 var fDoc = await db.collection('settings').doc('fidelite').get();
                 fideliteSettingsCache = fDoc.exists ? fDoc.data() : { active: true, pointsParVente: 1 };
-            } catch(e) {
+            } catch (e) {
                 fideliteSettingsCache = { active: true, pointsParVente: 1 };
             }
         }
@@ -2086,46 +1072,81 @@ async function updateClientFidelityAsync(clientId, total, profitTotal) {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, 'update');
         console.log('⭐ Fidélité: +' + points + ' points');
-    } catch(e) { 
-        console.warn('Erreur fidélité:', e); 
+    } catch (e) {
+        console.warn('Erreur fidélité:', e);
     }
 }
 
-// ==================== FINALISATION AVEC RESET COMPLET ====================
+// ==================== FINALISATION DE LA VENTE ====================
 async function posFinalizeSale() {
-    var st = posCalculateTotal(); 
+    var st = posCalculateTotal();
     var t = st - posDiscountMAD;
-    
+
     if (!posCurrentClient && !posCurrentTable) { alert('Client ou table requis.'); return; }
     if (posCurrentTable && (posPaymentMethod === 'credit' || posPaymentMethod === 'partiel')) { alert('Table = espèces uniquement.'); return; }
     if ((posPaymentMethod === 'credit' || posPaymentMethod === 'partiel') && !posCurrentClient) { alert('Client requis pour crédit/partiel.'); return; }
-    if (posPaymentMethod === 'espece') { 
-        posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0; 
-        if (posAmountGiven < t) { alert('Montant insuffisant.'); return; } 
+    if (posPaymentMethod === 'espece') {
+        posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0;
+        if (posAmountGiven < t) { alert('Montant insuffisant.'); return; }
     }
-    
-    var vendeur = document.getElementById('posVendeur').value.trim() || 
-                  (window.currentUserData ? window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom : '');
+
+    var vendeur = document.getElementById('posVendeur').value.trim() ||
+        (window.currentUserData ? window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom : '');
 
     try {
         var fn = getNextFactureNum();
 
-        var remaining = 0, paid = true, statutPaiement = 'payé', change = 0;
-        if (posPaymentMethod === 'credit') { paid = false; remaining = t; statutPaiement = 'crédit'; }
-        else if (posPaymentMethod === 'partiel') { posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0; remaining = t - posAmountGiven; paid = false; statutPaiement = 'partiel'; change = Math.max(0, posAmountGiven - t); }
-        else { posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0; change = posAmountGiven - t; paid = true; statutPaiement = 'payé'; }
-        if (posCurrentTable && !posCurrentClient) { paid = false; statutPaiement = 'en_attente'; remaining = t; }
+        var remaining = 0,
+            paid = true,
+            statutPaiement = 'payé',
+            change = 0;
+        if (posPaymentMethod === 'credit') { paid = false;
+            remaining = t;
+            statutPaiement = 'crédit'; } else if (posPaymentMethod === 'partiel') {
+            posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0;
+            remaining = t - posAmountGiven;
+            paid = false;
+            statutPaiement = 'partiel';
+            change = Math.max(0, posAmountGiven - t);
+        } else {
+            posAmountGiven = parseFloat(document.getElementById('posAmountGiven').value) || 0;
+            change = posAmountGiven - t;
+            paid = true;
+            statutPaiement = 'payé';
+        }
+        if (posCurrentTable && !posCurrentClient) { paid = false;
+            statutPaiement = 'en_attente';
+            remaining = t; }
 
         var profitTotal = 0;
         var itemsDetail = posCart.map(function(it) {
-            var pa = it.prixAchat || 0, pvn = it.prixVente || 0, pp = it.prixPromo || 0, pvr = (pp > 0) ? pp : pvn;
+            var pa = it.prixAchat || 0,
+                pvn = it.prixVente || 0,
+                pp = it.prixPromo || 0,
+                pvr = (pp > 0) ? pp : pvn;
             var prof = (pvr - pa) * it.quantite;
             profitTotal += prof;
-            return { id: it.id, nom: it.nom, quantite: it.quantite, prixVente: pvr, prixAchat: pa, prixPromo: pp, profit: prof, sauces: [], interdits: it.interdits || [], epice: it.epice || 'Normal', sel: it.sel || 'Normal' };
+            return {
+                id: it.id,
+                nom: it.nom,
+                quantite: it.quantite,
+                prixVente: pvr,
+                prixAchat: pa,
+                prixPromo: pp,
+                profit: prof,
+                sauces: [],
+                interdits: it.interdits || [],
+                epice: it.epice || 'Normal',
+                sel: it.sel || 'Normal'
+            };
         });
 
         var sd = {
-            factureNum: fn, items: itemsDetail, subtotal: st, discountMAD: posDiscountMAD, total: t,
+            factureNum: fn,
+            items: itemsDetail,
+            subtotal: st,
+            discountMAD: posDiscountMAD,
+            total: t,
             clientId: posCurrentClient ? posCurrentClient.id : null,
             clientName: posCurrentClient ? posCurrentClient.name : null,
             table: posCurrentTable || null,
@@ -2143,10 +1164,16 @@ async function posFinalizeSale() {
         var batch = db.batch();
         var ventesRef = db.collection('ventes').doc();
         batch.set(ventesRef, sd);
-        if (!paid) { var creditsRef = db.collection('credits').doc(); batch.set(creditsRef, sd); }
-        if (window.posCommandeId) { var cmdRef = db.collection('commandes').doc(window.posCommandeId); batch.update(cmdRef, { statut: 'payé', paidAt: firebase.firestore.FieldValue.serverTimestamp(), factureNum: fn }); delete window.posCommandeId; }
-        if (window.posVenteId) { var ventRef = db.collection('ventes').doc(window.posVenteId); batch.update(ventRef, { paid: true, statutPaiement: 'payé', remainingAmount: 0, paidAt: firebase.firestore.FieldValue.serverTimestamp() }); delete window.posVenteId; }
-        for (var i = 0; i < posCart.length; i++) { var it = posCart[i]; var prodRef = db.collection('products').doc(it.id); batch.update(prodRef, { stock: firebase.firestore.FieldValue.increment(-it.quantite), vendues: firebase.firestore.FieldValue.increment(it.quantite), ca: firebase.firestore.FieldValue.increment(it.prixUnitaire * it.quantite) }); }
+        if (!paid) { var creditsRef = db.collection('credits').doc();
+            batch.set(creditsRef, sd); }
+        if (window.posCommandeId) { var cmdRef = db.collection('commandes').doc(window.posCommandeId);
+            batch.update(cmdRef, { statut: 'payé', paidAt: firebase.firestore.FieldValue.serverTimestamp(), factureNum: fn });
+            delete window.posCommandeId; }
+        if (window.posVenteId) { var ventRef = db.collection('ventes').doc(window.posVenteId);
+            batch.update(ventRef, { paid: true, statutPaiement: 'payé', remainingAmount: 0, paidAt: firebase.firestore.FieldValue.serverTimestamp() });
+            delete window.posVenteId; }
+        for (var i = 0; i < posCart.length; i++) { var it = posCart[i]; var prodRef = db.collection('products').doc(it.id);
+            batch.update(prodRef, { stock: firebase.firestore.FieldValue.increment(-it.quantite), vendues: firebase.firestore.FieldValue.increment(it.quantite), ca: firebase.firestore.FieldValue.increment(it.prixUnitaire * it.quantite) }); }
         await batch.commit();
 
         if (posCurrentClient && posCurrentClient.id && paid) {
@@ -2160,50 +1187,14 @@ async function posFinalizeSale() {
         if (statutPaiement === 'en_attente') msg += '\n⏳ En attente de paiement.';
         alert(msg);
 
-        // ⚡ RESET COMPLET
-        posCart = [];
-        posStep = 1;
-        posSelectedCategory = 'all';
-        posCurrentClient = null;
-        posCurrentTable = '';
-        posPaymentMethod = 'espece';
-        posAmountGiven = 0;
-        posDiscountMAD = 0;
-        posSearchQuery = '';
-        posFilteredClients = posAllClients.slice();
-        setVoiceMode('search', '🎤 Recherche vocale active', null);
-        delete window.posCommandeId;
-        delete window.posVenteId;
-        
-        var searchInput = document.getElementById('posSearchInput');
-        if (searchInput) searchInput.value = '';
-        
-        if (voiceRecognition) { try { voiceRecognition.abort(); } catch(e) {} voiceRecognition = null; isRecording = false; }
-        if (voiceTimeout) { clearTimeout(voiceTimeout); voiceTimeout = null; }
-        
-        var micBtn = document.getElementById('posMicBtn');
-        if (micBtn) {
-            micBtn.classList.remove('recording');
-            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-            micBtn.style.background = '#dcfce7';
-            micBtn.style.borderColor = '#16a34a';
-            micBtn.style.boxShadow = 'none';
-            micBtn.style.transform = 'scale(1)';
-            micBtn.style.border = '3px solid #16a34a';
-        }
-        
-        var styleEl = document.getElementById('voiceStyle');
-        if (styleEl) styleEl.remove();
-        var indicator = document.getElementById('voiceModeIndicator');
-        if (indicator) indicator.remove();
-
+        // Reset complet
+        posResetCart();
         renderPOS();
-
         if (navigator.onLine) {
             setTimeout(function() { CacheDB.sync().catch(function(e) {}); }, 500);
         }
 
-    } catch(e) { alert('Erreur: ' + e.message); }
+    } catch (e) { alert('Erreur: ' + e.message); }
 }
 
 // ==================== RETOUR VERS LE POS ====================
@@ -2231,9 +1222,8 @@ document.addEventListener('keydown', function(event) {
         var currentPage = document.getElementById('pageTitle')?.textContent || '';
         if (currentPage !== 'POS') {
             navigateTo('pos');
-            showVoiceResult('📋 Navigation vers le POS');
         }
     }
 });
 
-console.log('⚡ Mixmax Minimarket - POS COMPLET (point de vente → POS)');
+console.log('⚡ Mixmax Minimarket - POS (métier) chargé');
