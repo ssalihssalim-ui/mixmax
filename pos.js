@@ -1,4 +1,4 @@
-// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS (CORRIGÉE) ====================
+// ==================== POS.JS - VERSION COMPLÈTE AVEC VOCAL CRÉDITS ====================
 var posCart = [], posStep = 1, posCategoriesList = [], posProductsList = [], posSelectedCategory = 'all';
 var posCurrentClient = null, posCurrentTable = '', posPaymentMethod = 'espece', posAmountGiven = 0, posDiscountMAD = 0;
 var posAllClients = [], posFilteredClients = [], posCurrentProductId = null;
@@ -694,7 +694,9 @@ function searchClientInVentes(clientName) {
         searchInput.value = clientName;
         ventesSearch = clientName;
         currentPages.ventes = 1;
-        applyVentesFilters();
+        if (typeof applyVentesFilters === 'function') {
+            applyVentesFilters();
+        }
         showVoiceResult('🔍 Client trouvé: ' + clientName);
     } else {
         navigateTo('ventes');
@@ -704,7 +706,9 @@ function searchClientInVentes(clientName) {
                 searchInput2.value = clientName;
                 ventesSearch = clientName;
                 currentPages.ventes = 1;
-                applyVentesFilters();
+                if (typeof applyVentesFilters === 'function') {
+                    applyVentesFilters();
+                }
                 showVoiceResult('🔍 Client trouvé: ' + clientName);
             }
         }, 500);
@@ -720,7 +724,9 @@ function searchClientInCredits(clientName) {
         searchInput.value = clientName;
         creditsSearch = clientName;
         currentPages.credits = 1;
-        applyCreditsFilters();
+        if (typeof applyCreditsFilters === 'function') {
+            applyCreditsFilters();
+        }
         showVoiceResult('🔍 Client trouvé: ' + clientName);
     } else {
         navigateTo('credits');
@@ -730,12 +736,188 @@ function searchClientInCredits(clientName) {
                 searchInput2.value = clientName;
                 creditsSearch = clientName;
                 currentPages.credits = 1;
-                applyCreditsFilters();
+                if (typeof applyCreditsFilters === 'function') {
+                    applyCreditsFilters();
+                }
                 showVoiceResult('🔍 Client trouvé: ' + clientName);
             }
         }, 500);
     }
 }
+
+// ==================== FONCTIONS VOCALES CRÉDITS (appelées par handleVoiceCommand) ====================
+function activateCreditSelection() {
+    creditSelectionMode = true;
+    window.creditSelectionMode = true;
+    creditSelectedIndex = -1;
+    creditPaymentStep = 'idle';
+    if (typeof renderCreditsTable === 'function') {
+        renderCreditsTable();
+    }
+    showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne');
+}
+
+function selectCreditLine(lineNumber) {
+    var data = window.filteredCredits || allCreditsData || [];
+    var index = lineNumber - 1;
+    if (index < 0 || index >= data.length) {
+        showVoiceResult('❌ Ligne ' + lineNumber + ' inexistante. ' + data.length + ' ligne(s) disponible(s)');
+        return;
+    }
+    if (!creditSelectionMode) {
+        showVoiceResult('⚠️ Activez d\'abord le mode sélection avec "sélectionner"');
+        return;
+    }
+    creditSelectedIndex = index;
+    creditPaymentStep = 'selection';
+    creditPaymentAmount = 0;
+    if (typeof renderCreditsTable === 'function') {
+        renderCreditsTable();
+    }
+    var credit = data[index];
+    var reste = credit.remainingAmount || credit.total || 0;
+    showVoiceResult('✅ Ligne ' + lineNumber + ' sélectionnée - ' + (credit.clientName || credit.table || '') + ' - Restant: ' + reste.toFixed(2) + ' MAD');
+}
+
+function markCreditForPayment() {
+    if (creditSelectedIndex < 0) {
+        showVoiceResult('⚠️ Aucune ligne sélectionnée. Dites d\'abord un numéro de ligne');
+        return;
+    }
+    var data = window.filteredCredits || allCreditsData || [];
+    var credit = data[creditSelectedIndex];
+    if (!credit) {
+        showVoiceResult('❌ Crédit introuvable');
+        return;
+    }
+    if (credit.paid) {
+        showVoiceResult('⚠️ Ce crédit est déjà payé');
+        return;
+    }
+    creditPaymentStep = 'payment';
+    var reste = credit.remainingAmount || credit.total || 0;
+    showVoiceResult('💳 Paiement du crédit - Restant: ' + reste.toFixed(2) + ' MAD. Dites "montant [prix]" ou tapez le montant');
+    // Afficher la zone de paiement
+    var zone = document.getElementById('creditPaymentZone');
+    var info = document.getElementById('creditPaymentInfo');
+    if (zone) {
+        zone.style.display = 'block';
+        if (info) {
+            info.textContent = 'Client: ' + (credit.clientName || credit.table || 'Inconnu') + ' | Restant: ' + reste.toFixed(2) + ' MAD';
+        }
+        var input = document.getElementById('creditPaymentAmountInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+            input.select();
+        }
+    }
+}
+
+function setCreditPaymentAmount(amount) {
+    if (creditSelectedIndex < 0) {
+        showVoiceResult('⚠️ Aucun crédit sélectionné');
+        return;
+    }
+    if (amount <= 0) {
+        showVoiceResult('❌ Montant invalide');
+        return;
+    }
+    creditPaymentAmount = amount;
+    creditPaymentStep = 'amount';
+    var input = document.getElementById('creditPaymentAmountInput');
+    if (input) input.value = amount;
+    showVoiceResult('💰 Montant saisi: ' + amount.toFixed(2) + ' MAD. Dites "valide" pour confirmer');
+}
+
+function validateCreditPayment() {
+    if (creditSelectedIndex < 0) {
+        showVoiceResult('⚠️ Aucun crédit sélectionné');
+        return;
+    }
+    
+    var input = document.getElementById('creditPaymentAmountInput');
+    var amount = parseFloat(input ? input.value : creditPaymentAmount);
+    if (isNaN(amount) || amount <= 0) {
+        showVoiceResult('❌ Montant invalide');
+        return;
+    }
+    
+    var data = window.filteredCredits || allCreditsData || [];
+    var credit = data[creditSelectedIndex];
+    if (!credit) {
+        showVoiceResult('❌ Crédit introuvable');
+        return;
+    }
+    
+    var reste = credit.remainingAmount || credit.total || 0;
+    if (amount > reste) {
+        showVoiceResult('⚠️ Montant supérieur au reste dû (' + reste.toFixed(2) + ' MAD)');
+        return;
+    }
+    
+    var newReste = reste - amount;
+    var paid = newReste <= 0.01;
+    var updateData = {
+        paid: paid,
+        remainingAmount: Math.max(0, newReste),
+        amountGiven: (credit.amountGiven || 0) + amount,
+        paidAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    
+    CacheDB.write('credits', credit.id, updateData, 'update')
+        .then(function() {
+            if (paid) {
+                showVoiceResult('✅ Crédit soldé !');
+            } else {
+                showVoiceResult('✅ Paiement enregistré. Reste : ' + newReste.toFixed(2) + ' MAD');
+            }
+            // Réinitialiser
+            creditPaymentStep = 'idle';
+            creditSelectedIndex = -1;
+            creditPaymentAmount = 0;
+            creditSelectionMode = false;
+            window.creditSelectionMode = false;
+            // Masquer la zone de paiement
+            var zone = document.getElementById('creditPaymentZone');
+            if (zone) zone.style.display = 'none';
+            // Recharger
+            if (typeof loadCredits === 'function') {
+                loadCredits();
+            }
+            CacheDB.sync();
+        })
+        .catch(function(e) {
+            showVoiceResult('❌ Erreur : ' + e.message);
+        });
+}
+
+function closeCreditSelection() {
+    creditSelectionMode = false;
+    window.creditSelectionMode = false;
+    creditSelectedIndex = -1;
+    creditPaymentAmount = 0;
+    creditPaymentStep = 'idle';
+    // Masquer la zone de paiement
+    var zone = document.getElementById('creditPaymentZone');
+    if (zone) zone.style.display = 'none';
+    creditsSearch = '';
+    currentPages.credits = 1;
+    window.filteredCredits = null;
+    if (typeof applyCreditsFilters === 'function') {
+        applyCreditsFilters();
+    }
+    showVoiceResult('📋 Liste complète des crédits');
+}
+
+// Exposer les fonctions pour admin.js
+window.activateCreditSelection = activateCreditSelection;
+window.selectCreditLine = selectCreditLine;
+window.markCreditForPayment = markCreditForPayment;
+window.setCreditPaymentAmount = setCreditPaymentAmount;
+window.validateCreditPayment = validateCreditPayment;
+window.closeCreditSelection = closeCreditSelection;
+window.creditSelectionMode = creditSelectionMode;
 
 // ==================== HANDLER DES COMMANDES VOCALES ====================
 function handleVoiceCommand(command) {
@@ -789,70 +971,32 @@ function handleVoiceCommand(command) {
 
         // ⭐ ACTIVATION DE LA SÉLECTION (Crédits)
         case 'activate_credit_selection':
-            if (typeof window.activateCreditSelection === 'function') {
-                window.activateCreditSelection();
-                showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne');
-            } else if (typeof activateCreditSelection === 'function') {
-                activateCreditSelection();
-                showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne');
-            } else {
-                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
-            }
+            activateCreditSelection();
             break;
 
         // ⭐ SÉLECTION D'UNE LIGNE (Crédits)
         case 'select_credit_line':
-            if (typeof window.selectCreditLine === 'function') {
-                window.selectCreditLine(command.lineNumber);
-            } else if (typeof selectCreditLine === 'function') {
-                selectCreditLine(command.lineNumber);
-            } else {
-                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
-            }
+            selectCreditLine(command.lineNumber);
             break;
 
         // ⭐ MARQUER COMME PAYÉ (Crédits)
         case 'mark_credit_paid':
-            if (typeof window.markCreditForPayment === 'function') {
-                window.markCreditForPayment();
-            } else if (typeof markCreditForPayment === 'function') {
-                markCreditForPayment();
-            } else {
-                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
-            }
+            markCreditForPayment();
             break;
 
         // ⭐ SAISIR UN MONTANT (Crédits)
         case 'set_credit_amount':
-            if (typeof window.setCreditPaymentAmount === 'function') {
-                window.setCreditPaymentAmount(command.amount);
-            } else if (typeof setCreditPaymentAmount === 'function') {
-                setCreditPaymentAmount(command.amount);
-            } else {
-                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
-            }
+            setCreditPaymentAmount(command.amount);
             break;
 
         // ⭐ VALIDER LE PAIEMENT (Crédits)
         case 'validate_credit_payment':
-            if (typeof window.validateCreditPayment === 'function') {
-                window.validateCreditPayment();
-            } else if (typeof validateCreditPayment === 'function') {
-                validateCreditPayment();
-            } else {
-                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
-            }
+            validateCreditPayment();
             break;
 
         // ⭐ FERMER / RÉINITIALISER (Crédits)
         case 'close_credit_list':
-            if (typeof window.closeCreditSelection === 'function') {
-                window.closeCreditSelection();
-            } else if (typeof closeCreditSelection === 'function') {
-                closeCreditSelection();
-            } else {
-                showVoiceResult('❌ Fonction non disponible. Vérifiez que admin.js est chargé.');
-            }
+            closeCreditSelection();
             break;
 
         // ⭐ NAVIGATION VOCALE
