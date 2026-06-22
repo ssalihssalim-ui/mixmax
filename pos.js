@@ -143,7 +143,13 @@ async function loadPosPage(c) {
             productIndexBuilt = false;
         }
         if (cachedClients.length) {
-            posAllClients = cachedClients.map(c => ({ id: c.id, nom: c.nom, prenom: c.prenom, telephone: c.telephone }));
+            posAllClients = cachedClients.map(c => ({ 
+                id: c.id, 
+                nom: c.nom, 
+                prenom: c.prenom, 
+                telephone: c.telephone,
+                description: c.description || '' 
+            }));
             posFilteredClients = [...posAllClients];
         }
 
@@ -191,7 +197,13 @@ async function loadPosPage(c) {
 
             posAllClients = [];
             cl.forEach(d => {
-                let cli = { id: d.id, nom: d.data().nom, prenom: d.data().prenom, telephone: d.data().telephone };
+                let cli = { 
+                    id: d.id, 
+                    nom: d.data().nom, 
+                    prenom: d.data().prenom, 
+                    telephone: d.data().telephone,
+                    description: d.data().description || '' 
+                };
                 posAllClients.push(cli);
                 CacheDB.set('clients', d.id, cli);
             });
@@ -575,7 +587,7 @@ function posResetCart() {
     renderPOS();
 }
 
-// ==================== GESTION DES CLIENTS ====================
+// ==================== GESTION DES CLIENTS (avec recherche description) ====================
 function posSearchClient(query) {
     var q = query.toLowerCase().trim();
     posCurrentClient = null;
@@ -587,7 +599,8 @@ function posSearchClient(query) {
         posFilteredClients = posAllClients.filter(function(c) {
             return (c.nom || '').toLowerCase().indexOf(q) !== -1 ||
                    (c.prenom || '').toLowerCase().indexOf(q) !== -1 ||
-                   (c.telephone || '').toLowerCase().indexOf(q) !== -1;
+                   (c.telephone || '').toLowerCase().indexOf(q) !== -1 ||
+                   (c.description || '').toLowerCase().indexOf(q) !== -1;
         });
         renderClientDropdown();
     }
@@ -655,7 +668,7 @@ function posSetTable(v) {
     }
 }
 
-// ==================== AJOUT AU PANIER ====================
+// ==================== AJOUT AU PANIER (avec passage automatique à l'étape paiement) ====================
 function posAddToCartOrOpenOptions(pid) {
     var p = posProductsList.find(function(x) { return x.id === pid; });
     if (!p) return;
@@ -687,7 +700,9 @@ function posAddToCartOrOpenOptions(pid) {
                 sauces: [], interdits: [], epice: 'Normal', sel: 'Normal'
             });
         }
-        // La gestion du mode vocal est déléguée à pos-audio.js via un événement ou une fonction exposée
+        // ⬇️ Passage automatique à l'étape paiement ⬇️
+        posGoToStep2();
+        // La gestion du mode vocal est déléguée à pos-audio.js
         if (typeof window.onProductAdded === 'function') {
             window.onProductAdded(p.id);
         }
@@ -796,6 +811,8 @@ function posConfirmOptions() {
             epice: epice, sel: sel
         });
     }
+    // ⬇️ Passage automatique à l'étape paiement ⬇️
+    posGoToStep2();
     // La gestion du mode vocal est déléguée à pos-audio.js
     if (typeof window.onProductAdded === 'function') {
         window.onProductAdded(p.id);
