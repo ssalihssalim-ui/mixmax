@@ -1,5 +1,5 @@
 // ==================== ADMIN-CREDITS.JS - MIXMAX MINIMARKET ====================
-// Contient : Crédits (affichage + markCreditPaid + dropdown recherche)
+// Contient : Crédits (affichage + markCreditPaid + dropdown + sélection auto)
 // Dépend de : admin.js (variables globales, fonctions utilitaires)
 
 async function loadCreditsPage(c) {
@@ -52,7 +52,6 @@ async function loadCredits() {
 
 function applyCreditsFilters() {
     var filtered = filterByPeriod(allCreditsData, creditsPeriod);
-    
     if (creditsSearch && creditsSearch.trim() !== '') {
         var q = creditsSearch.toLowerCase().trim();
         var clientsByName = {};
@@ -65,7 +64,6 @@ function applyCreditsFilters() {
             return false;
         });
     }
-    
     if (!sortOrders.credits || !sortOrders.credits.createdAt) { filtered.sort(function(a, b) { var da = a.createdAt?.seconds || 0; var db = b.createdAt?.seconds || 0; return db - da; }); }
     else { filtered = applySort('credits', filtered, 'createdAt'); }
     window.filteredCredits = filtered; renderCreditsTable();
@@ -131,7 +129,7 @@ function markCreditPaid(creditId) {
     renderCreditsTable();
 }
 
-// ✅ Recherche avec dropdown + sélection automatique si 1 seul résultat
+// ✅ Sélection automatique du premier résultat
 function searchClientInCreditsInput(query) {
     var q = query.toLowerCase().trim();
     var dropdown = document.getElementById('creditsClientDropdown');
@@ -159,26 +157,9 @@ function searchClientInCreditsInput(query) {
         return;
     }
     
-    // ✅ Si UN SEUL résultat → sélection automatique
-    if (results.length === 1) {
-        var clientName = results[0].nom + ' ' + results[0].prenom;
-        selectCreditClient(clientName);
-        return;
-    }
-    
-    // Plusieurs résultats → afficher le dropdown
-    var h = '';
-    results.forEach(function(c) {
-        h += '<div onclick="selectCreditClient(\'' + (c.nom + ' ' + c.prenom).replace(/'/g, "\\'") + '\')" style="padding:8px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:0.85rem;">' +
-            '<strong>' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + '</strong>' +
-            '<span style="color:#94a3b8;font-size:0.65rem;display:block;">' + escapeHtml(c.description || c.telephone || '') + '</span>' +
-            '</div>';
-    });
-    
-    if (dropdown) {
-        dropdown.innerHTML = h;
-        dropdown.style.display = 'block';
-    }
+    // ✅ Sélection automatique du premier résultat
+    var clientName = results[0].nom + ' ' + results[0].prenom;
+    selectCreditClient(clientName);
 }
 
 // ✅ Sélectionner un client
