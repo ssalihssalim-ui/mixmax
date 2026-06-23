@@ -2,7 +2,6 @@
 // Contient : Crédits (affichage + markCreditPaid)
 // Dépend de : admin.js (variables globales, fonctions utilitaires)
 
-// ==================== CRÉDITS ====================
 async function loadCreditsPage(c) {
     creditsPeriod = 'all'; creditsSearch = '';
     window.creditSelectionMode = false; window.creditSelectedIndex = -1;
@@ -52,7 +51,6 @@ async function loadCredits() {
 
 function applyCreditsFilters() {
     var filtered = filterByPeriod(allCreditsData, creditsPeriod);
-    
     if (creditsSearch && creditsSearch.trim() !== '') {
         var q = creditsSearch.toLowerCase().trim();
         var clientsByName = {};
@@ -65,7 +63,6 @@ function applyCreditsFilters() {
             return false;
         });
     }
-    
     if (!sortOrders.credits || !sortOrders.credits.createdAt) { filtered.sort(function(a, b) { var da = a.createdAt?.seconds || 0; var db = b.createdAt?.seconds || 0; return db - da; }); }
     else { filtered = applySort('credits', filtered, 'createdAt'); }
     window.filteredCredits = filtered; renderCreditsTable();
@@ -121,7 +118,6 @@ function toggleCreditCheckbox(index) {
     renderCreditsTable(); showVoiceResult('✅ Ligne ' + (index + 1) + ' sélectionnée');
 }
 
-// ✅ Fonction pour le bouton "Payer" manuel
 function markCreditPaid(creditId) {
     var data = window.filteredCredits || allCreditsData || [];
     var index = data.findIndex(function(c) { return c.id === creditId; });
@@ -132,7 +128,6 @@ function markCreditPaid(creditId) {
     renderCreditsTable();
 }
 
-// Exposer les fonctions globalement
 window.renderCreditsTable = renderCreditsTable;
 window.loadCredits = loadCredits;
 window.applyCreditsFilters = applyCreditsFilters;
