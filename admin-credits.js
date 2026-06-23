@@ -1,13 +1,15 @@
 // ==================== ADMIN-CREDITS.JS - MIXMAX MINIMARKET ====================
-// Contient : Crédits (affichage + markCreditPaid + dropdown + 2 champs)
+// Contient : Crédits (affichage + markCreditPaid)
 // Dépend de : admin.js (variables globales, fonctions utilitaires)
 
+// ==================== CRÉDITS ====================
 async function loadCreditsPage(c) {
     creditsPeriod = 'all'; creditsSearch = '';
     window.creditSelectionMode = false; window.creditSelectedIndex = -1;
     creditPaymentAmount = 0; creditPaymentStep = 'idle';
     if (!sortOrders.credits) sortOrders.credits = {}; if (!sortOrders.credits.createdAt) { sortOrders.credits.createdAt = 'desc'; }
     
+    // ✅ Charger les clients AVANT d'afficher la page
     if (!window.posAllClients || window.posAllClients.length === 0) {
         try {
             const snap = await db.collection('clients').limit(500).get();
@@ -21,10 +23,7 @@ async function loadCreditsPage(c) {
     }
     
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-credit-card"></i> Crédits</h3><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
-        '<div style="position:relative;">' +
-        '<input type="text" id="creditsSearchInput" placeholder="🔍 Rechercher (client)..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:200px;" onkeyup="searchClientInCreditsInput(this.value)" onfocus="searchClientInCreditsInput(this.value)" autocomplete="off">' +
-        '<div id="creditsClientDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:2px solid #e2e8f0;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:50;box-shadow:0 5px 15px rgba(0,0,0,0.1);"></div>' +
-        '</div>' +
+        '<input type="text" id="creditsSearchInput" placeholder="🔍 Rechercher (client)..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:250px;" onkeyup="creditsSearch = this.value; currentPages.credits=1; applyCreditsFilters();">' +
         '<input type="text" id="creditsVoiceDisplay" placeholder="🎤 Audio..." style="padding:8px 12px; border:2px solid #16a34a; border-radius:8px; width:180px; background:#f0fdf4; color:#14532d; font-weight:600;" readonly>' +
         '<select id="creditsPeriodSelect" style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px;" onchange="creditsPeriod = this.value; currentPages.credits=1; applyCreditsFilters();">' + getPeriodOptions('all') + '</select>' +
         '<button class="btn-add" onclick="loadCredits()"><i class="fas fa-sync"></i> Actualiser</button></div></div>' +
@@ -53,6 +52,7 @@ async function loadCredits() {
 
 function applyCreditsFilters() {
     var filtered = filterByPeriod(allCreditsData, creditsPeriod);
+    
     if (creditsSearch && creditsSearch.trim() !== '') {
         var q = creditsSearch.toLowerCase().trim();
         var clientsByName = {};
@@ -65,6 +65,7 @@ function applyCreditsFilters() {
             return false;
         });
     }
+    
     if (!sortOrders.credits || !sortOrders.credits.createdAt) { filtered.sort(function(a, b) { var da = a.createdAt?.seconds || 0; var db = b.createdAt?.seconds || 0; return db - da; }); }
     else { filtered = applySort('credits', filtered, 'createdAt'); }
     window.filteredCredits = filtered; renderCreditsTable();
@@ -120,6 +121,7 @@ function toggleCreditCheckbox(index) {
     renderCreditsTable(); showVoiceResult('✅ Ligne ' + (index + 1) + ' sélectionnée');
 }
 
+// ✅ Fonction pour le bouton "Payer" manuel
 function markCreditPaid(creditId) {
     var data = window.filteredCredits || allCreditsData || [];
     var index = data.findIndex(function(c) { return c.id === creditId; });
@@ -130,63 +132,11 @@ function markCreditPaid(creditId) {
     renderCreditsTable();
 }
 
-// ✅ Sélection automatique du premier résultat
-function searchClientInCreditsInput(query) {
-    var q = query.toLowerCase().trim();
-    var dropdown = document.getElementById('creditsClientDropdown');
-    
-    if (!q || !window.posAllClients) {
-        if (dropdown) dropdown.style.display = 'none';
-        window.creditsSearch = q;
-        window.currentPages.credits = 1;
-        applyCreditsFilters();
-        return;
-    }
-    
-    var results = window.posAllClients.filter(function(c) {
-        return (c.nom || '').toLowerCase().indexOf(q) !== -1 ||
-               (c.prenom || '').toLowerCase().indexOf(q) !== -1 ||
-               (c.telephone || '').toLowerCase().indexOf(q) !== -1 ||
-               (c.description || '').toLowerCase().indexOf(q) !== -1;
-    });
-    
-    if (results.length === 0) {
-        if (dropdown) dropdown.style.display = 'none';
-        window.creditsSearch = q;
-        window.currentPages.credits = 1;
-        applyCreditsFilters();
-        return;
-    }
-    
-    // ✅ Sélection automatique du premier résultat
-    var clientName = results[0].nom + ' ' + results[0].prenom;
-    selectCreditClient(clientName);
-}
-
-// ✅ Sélectionner un client
-function selectCreditClient(clientName) {
-    var searchInput = document.getElementById('creditsSearchInput');
-    var dropdown = document.getElementById('creditsClientDropdown');
-    
-    if (searchInput) { searchInput.value = clientName; }
-    if (dropdown) { dropdown.style.display = 'none'; }
-    
-    window.creditsSearch = clientName;
-    window.currentPages.credits = 1;
-    applyCreditsFilters();
-}
-
-document.addEventListener('click', function(e) {
-    var d = document.getElementById('creditsClientDropdown');
-    var s = document.getElementById('creditsSearchInput');
-    if (d && s && !s.contains(e.target) && !d.contains(e.target)) { d.style.display = 'none'; }
-});
-
+// Exposer les fonctions globalement
 window.renderCreditsTable = renderCreditsTable;
 window.loadCredits = loadCredits;
 window.applyCreditsFilters = applyCreditsFilters;
 window.toggleCreditCheckbox = toggleCreditCheckbox;
 window.markCreditPaid = markCreditPaid;
-window.selectCreditClient = selectCreditClient;
 
 console.log('🛒 Mixmax Minimarket - Admin Credits chargé');
