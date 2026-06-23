@@ -197,10 +197,9 @@ function searchClientInVentes(clientName) {
 
 function searchClientInCredits(clientName) {
     if (!clientName) return;
-    if (typeof selectCreditClient === 'function') {
-        selectCreditClient(clientName);
-        showVoiceResult('👤 Client: ' + clientName);
-    }
+    var searchInput = document.getElementById('creditsSearchInput');
+    if (searchInput) { searchInput.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('👤 Client: ' + clientName); }
+    else { if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { var si = document.getElementById('creditsSearchInput'); if (si) { si.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('👤 Client: ' + clientName); } }, 500); } }
 }
 
 function handleVoiceCommand(command) {
@@ -278,7 +277,6 @@ function posStartVoiceRecording() {
         var interimTranscript = '', finalTranscriptTemp = '';
         for (var i = event.resultIndex; i < event.results.length; i++) { var t = event.results[i][0].transcript; if (event.results[i].isFinal) finalTranscriptTemp += t; else interimTranscript += t; }
         var currentPage = document.getElementById('pageTitle')?.textContent || '';
-        
         if (currentPage === 'Crédits') {
             var voiceDisplay = document.getElementById('creditsVoiceDisplay');
             if (voiceDisplay) {
