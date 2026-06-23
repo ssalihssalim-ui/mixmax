@@ -195,21 +195,12 @@ function searchClientInVentes(clientName) {
     else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
 }
 
+// ✅ Utilise selectCreditClient (comme le dropdown)
 function searchClientInCredits(clientName) {
     if (!clientName) return;
-    // ✅ ARRÊTER le micro pour qu'il n'écrive plus "Mental"
-    if (isRecording) { posStopVoiceSearch(); }
-    var searchInput = document.getElementById('creditsSearchInput');
-    if (searchInput) {
-        searchInput.value = clientName;
-        if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName;
-        if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1;
-        if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
+    if (typeof selectCreditClient === 'function') {
+        selectCreditClient(clientName);
         showVoiceResult('🔍 Client: ' + clientName);
-        // ✅ Redémarrer le micro après 500ms
-        setTimeout(function() { posToggleVoiceSearch(); }, 500);
-    } else {
-        if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { var si = document.getElementById('creditsSearchInput'); if (si) { si.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); }
     }
 }
 
