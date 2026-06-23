@@ -9,6 +9,9 @@ var lastAddedProductId = null;
 var voiceModeMessage = '🎤 Recherche vocale active';
 var lastVoiceCommandTime = 0;
 
+// ✅ Blocage temporaire des transcriptions après recherche client
+var ignoreUntil = 0;
+
 var paymentKeywords = {
     'espece': ['espèces', 'espece', 'argent', 'cash', 'comptant', 'liquide', 'espèce'],
     'credit': ['crédit', 'credit', 'à crédit', 'acredit', 'dette', 'avance', 'crédit'],
@@ -191,14 +194,14 @@ function parseVoiceCommand(transcript) {
 function searchClientInVentes(clientName) {
     if (!clientName) return;
     var searchInput = document.getElementById('ventesSearchInput');
-    if (searchInput) { searchInput.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); }
+    if (searchInput) { searchInput.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); ignoreUntil = Date.now() + 2000; }
     else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
 }
 
 function searchClientInCredits(clientName) {
     if (!clientName) return;
     var searchInput = document.getElementById('creditsSearchInput');
-    if (searchInput) { searchInput.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); }
+    if (searchInput) { searchInput.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); ignoreUntil = Date.now() + 2000; }
     else { if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { var si = document.getElementById('creditsSearchInput'); if (si) { si.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
 }
 
@@ -279,6 +282,8 @@ function posStartVoiceRecording() {
         var currentPage = document.getElementById('pageTitle')?.textContent || '', searchInputId = (currentPage === 'Crédits') ? 'creditsSearchInput' : 'posSearchInput', searchInputElem = document.getElementById(searchInputId);
         if (searchInputElem) {
             if (finalTranscriptTemp) {
+                // ✅ Ignorer les transcriptions pendant la période de blocage
+                if (Date.now() < ignoreUntil) return;
                 finalTranscript = finalTranscriptTemp;
                 if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
             } else if (interimTranscript && interimTranscript !== lastInterim) { searchInputElem.value = interimTranscript + ' ✍️'; lastInterim = interimTranscript; }
