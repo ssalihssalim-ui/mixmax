@@ -188,53 +188,20 @@ function parseVoiceCommand(transcript) {
     return { type: 'unknown', text: transcript };
 }
 
-// ==================== RECHERCHE CLIENT DANS VENTES ====================
 function searchClientInVentes(clientName) {
     if (!clientName) return;
     var searchInput = document.getElementById('ventesSearchInput');
-    if (searchInput) {
-        searchInput.value = clientName;
-        if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName;
-        if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1;
-        if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
-        showVoiceResult('🔍 Client: ' + clientName);
-        // Forcer le nom réel après 500ms
-        setTimeout(function() { if (searchInput) { searchInput.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; } }, 500);
-    } else {
-        if (typeof navigateTo === 'function') {
-            navigateTo('ventes');
-            setTimeout(function() {
-                var si = document.getElementById('ventesSearchInput');
-                if (si) { si.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); }
-            }, 500);
-        }
-    }
+    if (searchInput) { searchInput.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); }
+    else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
 }
 
-// ==================== RECHERCHE CLIENT DANS CRÉDITS ====================
 function searchClientInCredits(clientName) {
     if (!clientName) return;
     var searchInput = document.getElementById('creditsSearchInput');
-    if (searchInput) {
-        searchInput.value = clientName;
-        if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName;
-        if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1;
-        if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
-        showVoiceResult('🔍 Client: ' + clientName);
-        // ✅ Forcer le nom réel après 500ms pour contrer la reconnaissance continue
-        setTimeout(function() { if (searchInput) { searchInput.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; } }, 500);
-    } else {
-        if (typeof navigateTo === 'function') {
-            navigateTo('credits');
-            setTimeout(function() {
-                var si = document.getElementById('creditsSearchInput');
-                if (si) { si.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); }
-            }, 500);
-        }
-    }
+    if (searchInput) { searchInput.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); }
+    else { if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { var si = document.getElementById('creditsSearchInput'); if (si) { si.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
 }
 
-// ==================== HANDLER DES COMMANDES VOCALES ====================
 function handleVoiceCommand(command) {
     console.log('🎤 Commande vocale:', command); var currentPage = document.getElementById('pageTitle')?.textContent || '';
     switch (command.type) {
@@ -310,7 +277,12 @@ function posStartVoiceRecording() {
         var interimTranscript = '', finalTranscriptTemp = '';
         for (var i = event.resultIndex; i < event.results.length; i++) { var t = event.results[i][0].transcript; if (event.results[i].isFinal) finalTranscriptTemp += t; else interimTranscript += t; }
         var currentPage = document.getElementById('pageTitle')?.textContent || '', searchInputId = (currentPage === 'Crédits') ? 'creditsSearchInput' : 'posSearchInput', searchInputElem = document.getElementById(searchInputId);
-        if (searchInputElem) { if (finalTranscriptTemp) { searchInputElem.value = finalTranscriptTemp; finalTranscript = finalTranscriptTemp; if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; } } else if (interimTranscript && interimTranscript !== lastInterim) { searchInputElem.value = interimTranscript + ' ✍️'; lastInterim = interimTranscript; } }
+        if (searchInputElem) {
+            if (finalTranscriptTemp) {
+                finalTranscript = finalTranscriptTemp;
+                if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
+            } else if (interimTranscript && interimTranscript !== lastInterim) { searchInputElem.value = interimTranscript + ' ✍️'; lastInterim = interimTranscript; }
+        }
     };
     voiceRecognition.onend = function() { if (isRecording) { try { voiceRecognition.start(); } catch (e) { console.error('❌ Erreur redémarrage:', e); posStopVoiceSearch(); } } };
     voiceRecognition.onerror = function(event) { console.error('🎤 Erreur:', event.error); if (event.error === 'aborted' || event.error === 'no-speech') return; posStopVoiceSearch(); };
