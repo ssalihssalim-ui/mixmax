@@ -200,8 +200,22 @@ function searchClientInVentes(clientName) {
 function searchClientInCredits(clientName) {
     if (!clientName) return;
     var searchInput = document.getElementById('creditsSearchInput');
-    if (searchInput) { searchInput.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); ignoreUntil = Date.now() + 2000; }
-    else { if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { var si = document.getElementById('creditsSearchInput'); if (si) { si.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
+    if (searchInput) {
+        searchInput.value = clientName;
+        if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName;
+        if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1;
+        if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
+        showVoiceResult('🔍 Client: ' + clientName);
+        ignoreUntil = Date.now() + 2000;
+        // ✅ Forcer le nom réel toutes les 100ms pendant 2 secondes
+        var count = 0;
+        var interval = setInterval(function() {
+            if (searchInput) { searchInput.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; }
+            count++; if (count >= 20) clearInterval(interval);
+        }, 100);
+    } else {
+        if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { var si = document.getElementById('creditsSearchInput'); if (si) { si.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); }
+    }
 }
 
 function handleVoiceCommand(command) {
@@ -283,10 +297,8 @@ function posStartVoiceRecording() {
             if (finalTranscriptTemp) {
                 if (Date.now() < ignoreUntil) return;
                 finalTranscript = finalTranscriptTemp;
-                // ✅ Ne PAS écrire le transcript dans les Crédits (searchClientInCredits le fait)
-                if (currentPage !== 'Crédits') {
-                    searchInputElem.value = finalTranscriptTemp;
-                }
+                // ✅ Ne PAS écrire le transcript dans les Crédits
+                if (currentPage !== 'Crédits') { searchInputElem.value = finalTranscriptTemp; }
                 if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
             } else if (interimTranscript && interimTranscript !== lastInterim) { searchInputElem.value = interimTranscript + ' ✍️'; lastInterim = interimTranscript; }
         }
