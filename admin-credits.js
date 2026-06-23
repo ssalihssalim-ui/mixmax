@@ -49,9 +49,38 @@ async function loadCredits() {
 
 function applyCreditsFilters() {
     var filtered = filterByPeriod(allCreditsData, creditsPeriod);
-    filtered = filterBySearch(filtered, creditsSearch, ['clientName']);
-    if (!sortOrders.credits || !sortOrders.credits.createdAt) { filtered.sort(function(a, b) { var da = a.createdAt?.seconds || 0; var db = b.createdAt?.seconds || 0; return db - da; }); }
-    else { filtered = applySort('credits', filtered, 'createdAt'); }
+    
+    // ✅ Recherche aussi dans la description des clients
+    if (creditsSearch && creditsSearch.trim() !== '') {
+        var q = creditsSearch.toLowerCase().trim();
+        
+        // Créer un index des clients par nom pour retrouver leur description
+        var clientsByName = {};
+        if (window.posAllClients) {
+            window.posAllClients.forEach(function(c) {
+                var key = (c.nom + ' ' + c.prenom).toLowerCase().trim();
+                clientsByName[key] = c.description || '';
+            });
+        }
+        
+        filtered = filtered.filter(function(credit) {
+            // Chercher dans le nom du client
+            if ((credit.clientName || '').toLowerCase().indexOf(q) !== -1) return true;
+            
+            // Chercher dans la description du client associé
+            var creditName = (credit.clientName || '').toLowerCase().trim();
+            var desc = clientsByName[creditName] || '';
+            if (desc && desc.toLowerCase().indexOf(q) !== -1) return true;
+            
+            return false;
+        });
+    }
+    
+    if (!sortOrders.credits || !sortOrders.credits.createdAt) {
+        filtered.sort(function(a, b) { var da = a.createdAt?.seconds || 0; var db = b.createdAt?.seconds || 0; return db - da; });
+    } else {
+        filtered = applySort('credits', filtered, 'createdAt');
+    }
     window.filteredCredits = filtered; renderCreditsTable();
 }
 
