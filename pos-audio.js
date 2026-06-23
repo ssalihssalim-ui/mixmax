@@ -283,7 +283,11 @@ function posStartVoiceRecording() {
             if (finalTranscriptTemp) {
                 if (Date.now() < ignoreUntil) return;
                 finalTranscript = finalTranscriptTemp;
-                if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') { handleVoiceCommand(command); if (command.type === 'search_client_in_credits' || command.type === 'search_client_in_ventes') { } else { searchInputElem.value = finalTranscriptTemp; } } processing = false; }
+                // ✅ Ne PAS écrire le transcript dans les Crédits (searchClientInCredits le fait)
+                if (currentPage !== 'Crédits') {
+                    searchInputElem.value = finalTranscriptTemp;
+                }
+                if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
             } else if (interimTranscript && interimTranscript !== lastInterim) { searchInputElem.value = interimTranscript + ' ✍️'; lastInterim = interimTranscript; }
         }
     };
