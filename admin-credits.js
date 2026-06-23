@@ -131,7 +131,7 @@ function markCreditPaid(creditId) {
     renderCreditsTable();
 }
 
-// ✅ NOUVEAU : Recherche avec dropdown (comme le POS)
+// ✅ Recherche avec dropdown + sélection automatique si 1 seul résultat
 function searchClientInCreditsInput(query) {
     var q = query.toLowerCase().trim();
     var dropdown = document.getElementById('creditsClientDropdown');
@@ -159,6 +159,14 @@ function searchClientInCreditsInput(query) {
         return;
     }
     
+    // ✅ Si UN SEUL résultat → sélection automatique
+    if (results.length === 1) {
+        var clientName = results[0].nom + ' ' + results[0].prenom;
+        selectCreditClient(clientName);
+        return;
+    }
+    
+    // Plusieurs résultats → afficher le dropdown
     var h = '';
     results.forEach(function(c) {
         h += '<div onclick="selectCreditClient(\'' + (c.nom + ' ' + c.prenom).replace(/'/g, "\\'") + '\')" style="padding:8px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:0.85rem;">' +
@@ -173,7 +181,7 @@ function searchClientInCreditsInput(query) {
     }
 }
 
-// ✅ Sélectionner un client depuis le dropdown
+// ✅ Sélectionner un client
 function selectCreditClient(clientName) {
     var searchInput = document.getElementById('creditsSearchInput');
     var dropdown = document.getElementById('creditsClientDropdown');
@@ -186,7 +194,6 @@ function selectCreditClient(clientName) {
     applyCreditsFilters();
 }
 
-// Fermer le dropdown quand on clique ailleurs
 document.addEventListener('click', function(e) {
     var d = document.getElementById('creditsClientDropdown');
     var s = document.getElementById('creditsSearchInput');
