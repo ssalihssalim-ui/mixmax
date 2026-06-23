@@ -367,13 +367,11 @@ function parseVoiceCommand(transcript) {
         }
 
         // ---------- COMMANDES VOCALES POUR CRÉDITS ----------
-        // 1. Activer le mode sélection
         if (transcript.includes('sélectionner') || transcript.includes('select') ||
             transcript.includes('choisir') || transcript.includes('cocher')) {
             return { type: 'activate_credit_selection' };
         }
 
-        // 2. Sélectionner une ligne : gère "ligne 3", "numéro 3", "trois", ou simplement "3" (sauf si paiement)
         var lineMatch = transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if (lineMatch) {
             var numStr = lineMatch[1];
@@ -390,7 +388,6 @@ function parseVoiceCommand(transcript) {
                 return { type: 'select_credit_line', lineNumber: num };
             }
         }
-        // Si un nombre seul est prononcé et que le mode sélection est actif, mais PAS en mode paiement
         if (window.creditSelectionMode && (window.creditPaymentStep !== 'payment' && window.creditPaymentStep !== 'amount')) {
             var anyNumber = transcript.match(/\b(\d+)\b/);
             var num = null;
@@ -409,12 +406,10 @@ function parseVoiceCommand(transcript) {
             }
         }
 
-        // 3. Marquer comme payé
         if (transcript.includes('marquer payé') || transcript.includes('payer') || transcript.includes('régler')) {
             return { type: 'mark_credit_paid' };
         }
 
-        // 4. Saisir un montant
         var amountMatch = transcript.match(/montant\s+(\d+[.,]?\d*)/i);
         if (amountMatch) {
             var amount = parseFloat(amountMatch[1].replace(',', '.'));
@@ -431,12 +426,10 @@ function parseVoiceCommand(transcript) {
             }
         }
 
-        // 5. Valider le paiement
         if (transcript.includes('valide') || transcript.includes('confirmer') || transcript.includes('ok')) {
             return { type: 'validate_credit_payment' };
         }
 
-        // 6. Fermer / réinitialiser
         if (transcript.includes('fermer') || transcript.includes('retour')) {
             return { type: 'close_credit_list' };
         }
@@ -444,7 +437,6 @@ function parseVoiceCommand(transcript) {
 
     // ========== NAVIGATION VOCALE ==========
     if (transcript.includes('point de vente') ||
-        transcript.includes('point de vente') ||
         transcript.includes('point vente') ||
         transcript.includes('pos') ||
         transcript.includes('caisse') ||
@@ -535,8 +527,7 @@ function parseVoiceCommand(transcript) {
         return { type: 'finalize' };
     }
 
-    // ========== RECHERCHE DE CLIENT (POS) - INCLUANT LA DESCRIPTION ==========
-    // ✅ VÉRIFIER D'ABORD LES CLIENTS AVANT LES PRODUITS
+    // ========== RECHERCHE DE CLIENT (POS) ==========
     if (window.posAllClients) {
         for (var j = 0; j < window.posAllClients.length; j++) {
             var client = window.posAllClients[j];
@@ -646,6 +637,8 @@ function searchClientInCredits(clientName) {
 function handleVoiceCommand(command) {
     console.log('🎤 Commande vocale:', command);
 
+    var currentPage = document.getElementById('pageTitle')?.textContent || '';
+
     switch (command.type) {
         case 'search_client_in_ventes':
             searchClientInVentes(command.clientName);
@@ -681,7 +674,6 @@ function handleVoiceCommand(command) {
 
         case 'navigate':
             var page = command.page;
-            var currentPage = document.getElementById('pageTitle')?.textContent || '';
             var pageTitles = {
                 'credits': 'Crédits',
                 'ventes': 'Ventes',
@@ -749,9 +741,9 @@ function handleVoiceCommand(command) {
                 if (typeof window.posProductsList !== 'undefined') {
                     var item = window.posCart.find(function(x) { return x.id === lastAddedProductId; });
                     if (item) {
-                        var prod = window.posProductsList.find(function(p) { return p.id === lastAddedProductId; });
-                        if (prod && prod.stock !== undefined && qty > prod.stock) {
-                            showVoiceResult('⚠️ Stock max: ' + prod.stock);
+                        var prod2 = window.posProductsList.find(function(p2) { return p2.id === lastAddedProductId; });
+                        if (prod2 && prod2.stock !== undefined && qty > prod2.stock) {
+                            showVoiceResult('⚠️ Stock max: ' + prod2.stock);
                             return;
                         }
                         item.quantite = qty;
@@ -769,10 +761,10 @@ function handleVoiceCommand(command) {
                     if (changeEl) {
                         var st = typeof window.posCalculateTotal === 'function' ? window.posCalculateTotal() : 0;
                         var t = st - (window.posDiscountMAD || 0);
-                        var c = window.posAmountGiven - t;
-                        changeEl.innerHTML = c >= 0 ?
-                            '<div class="pos-change-positive"><span>Rendu</span><span>' + c.toFixed(2) + ' MAD</span></div>' :
-                            '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c).toFixed(2) + ' MAD</span></div>';
+                        var c2 = window.posAmountGiven - t;
+                        changeEl.innerHTML = c2 >= 0 ?
+                            '<div class="pos-change-positive"><span>Rendu</span><span>' + c2.toFixed(2) + ' MAD</span></div>' :
+                            '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c2).toFixed(2) + ' MAD</span></div>';
                     }
                     var amountInput = document.getElementById('posAmountGiven');
                     if (amountInput) amountInput.value = window.posAmountGiven;
@@ -815,7 +807,6 @@ function handleVoiceCommand(command) {
             break;
 
         case 'next':
-            // ✅ Ignorer la commande si une modale est ouverte (personnalisation produit, etc.)
             if (isModalOpen()) break;
 
             if (voiceMode === 'quantity') {
@@ -830,7 +821,6 @@ function handleVoiceCommand(command) {
             break;
 
         case 'validate':
-            // ✅ Ignorer la commande si une modale est ouverte
             if (isModalOpen()) break;
 
             if (voiceMode === 'quantity') {
@@ -867,36 +857,42 @@ function handleVoiceCommand(command) {
             break;
 
         default:
-            // ✅ Si on est sur le POS et que la recherche n'a rien trouvé, chercher dans les clients
-            if (currentPage === 'POS' || currentPage === '') {
+            // ✅ CORRECTION FINALE : Si on est en mode recherche, chercher d'abord dans les clients
+            if (voiceMode === 'search' && command.text) {
+                var q = command.text.toLowerCase().trim();
+                var found = false;
+
+                // Chercher dans les clients (nom, prénom, description)
                 if (window.posAllClients) {
-                    var q = command.text || '';
                     for (var j = 0; j < window.posAllClients.length; j++) {
-                        var client = window.posAllClients[j];
-                        var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
-                        var desc = (client.description || '').toLowerCase();
+                        var c = window.posAllClients[j];
+                        var nom = (c.nom || '').toLowerCase();
+                        var prenom = (c.prenom || '').toLowerCase();
+                        var desc = (c.description || '').toLowerCase();
+                        var fullName = nom + ' ' + prenom;
+
                         if (q && (fullName.indexOf(q) !== -1 ||
-                            client.nom.toLowerCase().indexOf(q) !== -1 ||
-                            client.prenom.toLowerCase().indexOf(q) !== -1 ||
-                            (desc && desc.indexOf(q) !== -1))) {
-                            // Client trouvé
-                            window.posCurrentClient = { id: client.id, name: client.nom + ' ' + client.prenom };
+                            nom.indexOf(q) !== -1 ||
+                            prenom.indexOf(q) !== -1 ||
+                            desc.indexOf(q) !== -1)) {
+                            // Client trouvé !
+                            window.posCurrentClient = { id: c.id, name: c.nom + ' ' + c.prenom };
                             window.posCurrentTable = '';
-                            var clientInput = document.getElementById('posClientSearchInput');
-                            if (clientInput) clientInput.value = window.posCurrentClient.name;
+                            var clientInput2 = document.getElementById('posClientSearchInput');
+                            if (clientInput2) clientInput2.value = window.posCurrentClient.name;
                             if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons();
+                            if (typeof window.renderPOS === 'function') window.renderPOS();
                             setVoiceMode('payment', '🎤 Dites le montant, "valide" ou mode paiement', null);
                             showVoiceResult('👤 Client: ' + window.posCurrentClient.name);
-                            if (typeof window.renderPOS === 'function') window.renderPOS();
-                            return;
+                            found = true;
+                            break;
                         }
                     }
                 }
-            }
 
-            if (voiceMode === 'search' && command.text) {
-                if (typeof window.posSearchProducts === 'function') {
-                    window.posSearchProducts(command.text);
+                // Si aucun client trouvé, chercher dans les produits
+                if (!found && typeof window.posSearchProducts === 'function') {
+                    window.posSearchProducts(q);
                 }
             }
             break;
