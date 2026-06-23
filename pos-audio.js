@@ -527,7 +527,7 @@ function parseVoiceCommand(transcript) {
         return { type: 'finalize' };
     }
 
-    // ========== RECHERCHE DE CLIENT (POS) ==========
+    // ========== RECHERCHE DE CLIENT (POS) - INCLUANT LA DESCRIPTION ==========
     if (window.posAllClients) {
         for (var j = 0; j < window.posAllClients.length; j++) {
             var client = window.posAllClients[j];
@@ -774,16 +774,15 @@ function handleVoiceCommand(command) {
             break;
 
         case 'client':
-            if (typeof window.posCurrentClient !== 'undefined') {
-                window.posCurrentClient = { id: command.client.id, name: command.client.nom + ' ' + command.client.prenom };
-                window.posCurrentTable = '';
-                var clientInput = document.getElementById('posClientSearchInput');
-                if (clientInput) clientInput.value = window.posCurrentClient.name;
-                if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons();
-                setVoiceMode('payment', '🎤 Dites le montant, "valide" ou mode paiement', null);
-                showVoiceResult('👤 Client: ' + window.posCurrentClient.name);
-                if (typeof window.renderPOS === 'function') window.renderPOS();
-            }
+            // ✅ CORRECTION 1 : Toujours remplacer le client, même si un autre est déjà sélectionné
+            window.posCurrentClient = { id: command.client.id, name: command.client.nom + ' ' + command.client.prenom };
+            window.posCurrentTable = '';
+            var clientInput = document.getElementById('posClientSearchInput');
+            if (clientInput) clientInput.value = window.posCurrentClient.name;
+            if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons();
+            setVoiceMode('payment', '🎤 Dites le montant, "valide" ou mode paiement', null);
+            showVoiceResult('👤 Client: ' + window.posCurrentClient.name);
+            if (typeof window.renderPOS === 'function') window.renderPOS();
             break;
 
         case 'amount':
@@ -857,8 +856,8 @@ function handleVoiceCommand(command) {
             break;
 
         default:
-            // ✅ CORRECTION FINALE : Si on est en mode recherche, chercher d'abord dans les clients
-            if (voiceMode === 'search' && command.text) {
+            // ✅ CORRECTION 2 : Toujours chercher dans les clients (même si un client est déjà sélectionné)
+            if (command.text) {
                 var q = command.text.toLowerCase().trim();
                 var found = false;
 
@@ -875,14 +874,13 @@ function handleVoiceCommand(command) {
                             nom.indexOf(q) !== -1 ||
                             prenom.indexOf(q) !== -1 ||
                             desc.indexOf(q) !== -1)) {
-                            // Client trouvé !
+                            // ✅ Client trouvé - REMPLACER même si un autre client est déjà sélectionné
                             window.posCurrentClient = { id: c.id, name: c.nom + ' ' + c.prenom };
                             window.posCurrentTable = '';
                             var clientInput2 = document.getElementById('posClientSearchInput');
                             if (clientInput2) clientInput2.value = window.posCurrentClient.name;
                             if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons();
                             if (typeof window.renderPOS === 'function') window.renderPOS();
-                            setVoiceMode('payment', '🎤 Dites le montant, "valide" ou mode paiement', null);
                             showVoiceResult('👤 Client: ' + window.posCurrentClient.name);
                             found = true;
                             break;
@@ -890,8 +888,8 @@ function handleVoiceCommand(command) {
                     }
                 }
 
-                // Si aucun client trouvé, chercher dans les produits
-                if (!found && typeof window.posSearchProducts === 'function') {
+                // Si aucun client trouvé, chercher dans les produits (seulement en mode recherche)
+                if (!found && voiceMode === 'search' && typeof window.posSearchProducts === 'function') {
                     window.posSearchProducts(q);
                 }
             }
