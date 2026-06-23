@@ -9,7 +9,6 @@ var lastAddedProductId = null;
 var voiceModeMessage = '🎤 Recherche vocale active';
 var lastVoiceCommandTime = 0;
 
-// ✅ Blocage temporaire des transcriptions après recherche client
 var ignoreUntil = 0;
 
 var paymentKeywords = {
@@ -282,10 +281,9 @@ function posStartVoiceRecording() {
         var currentPage = document.getElementById('pageTitle')?.textContent || '', searchInputId = (currentPage === 'Crédits') ? 'creditsSearchInput' : 'posSearchInput', searchInputElem = document.getElementById(searchInputId);
         if (searchInputElem) {
             if (finalTranscriptTemp) {
-                // ✅ Ignorer les transcriptions pendant la période de blocage
                 if (Date.now() < ignoreUntil) return;
                 finalTranscript = finalTranscriptTemp;
-                if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
+                if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') { handleVoiceCommand(command); if (command.type === 'search_client_in_credits' || command.type === 'search_client_in_ventes') { } else { searchInputElem.value = finalTranscriptTemp; } } processing = false; }
             } else if (interimTranscript && interimTranscript !== lastInterim) { searchInputElem.value = interimTranscript + ' ✍️'; lastInterim = interimTranscript; }
         }
     };
