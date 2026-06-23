@@ -195,7 +195,6 @@ function searchClientInVentes(clientName) {
     else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
 }
 
-// ✅ Appelle selectCreditClient et affiche le VRAI nom dans la barre verte
 function searchClientInCredits(clientName) {
     if (!clientName) return;
     if (typeof selectCreditClient === 'function') {
@@ -286,9 +285,7 @@ function posStartVoiceRecording() {
                 if (finalTranscriptTemp) {
                     voiceDisplay.value = finalTranscriptTemp;
                     if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscriptTemp); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
-                } else if (interimTranscript) {
-                    voiceDisplay.value = interimTranscript + ' ✍️';
-                }
+                } else if (interimTranscript) { voiceDisplay.value = interimTranscript + ' ✍️'; }
             }
         } else {
             var searchInputId = 'posSearchInput', searchInputElem = document.getElementById(searchInputId);
