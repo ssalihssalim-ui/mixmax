@@ -410,6 +410,7 @@ function parseVoiceCommand(transcript) {
             return { type: 'mark_credit_paid' };
         }
 
+        // ✅ Détection des petits nombres pour le paiement des crédits
         var amountMatch = transcript.match(/montant\s+(\d+[.,]?\d*)/i);
         if (amountMatch) {
             var amount = parseFloat(amountMatch[1].replace(',', '.'));
@@ -423,6 +424,17 @@ function parseVoiceCommand(transcript) {
                 if (!isNaN(amount) && amount > 0) {
                     return { type: 'set_credit_amount', amount: amount };
                 }
+            }
+            
+            var foundAmount = null;
+            for (var word in numberMap) {
+                if (transcript.includes(word)) {
+                    foundAmount = numberMap[word];
+                    break;
+                }
+            }
+            if (foundAmount !== null && foundAmount > 0) {
+                return { type: 'set_credit_amount', amount: foundAmount };
             }
         }
 
@@ -527,35 +539,73 @@ function parseVoiceCommand(transcript) {
         return { type: 'finalize' };
     }
 
-    // ========== RECHERCHE DE CLIENT (POS) - INCLUANT LA DESCRIPTION ==========
-    if (window.posAllClients) {
-        for (var j = 0; j < window.posAllClients.length; j++) {
-            var client = window.posAllClients[j];
-            var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
-            var desc = (client.description || '').toLowerCase();
-            if (transcript.includes(fullName) ||
-                transcript.includes(client.nom.toLowerCase()) ||
-                transcript.includes(client.prenom.toLowerCase()) ||
-                (desc && transcript.includes(desc))) {
-                return { type: 'client', client: client };
+    // ========== RECHERCHE SELON L'ÉTAPE DU POS ==========
+    // ✅ Étape 2 (paiement) : Priorité au CLIENT
+    // ✅ Étape 1 (ajout produits) : Priorité au PRODUIT
+    
+    if (window.posStep === 2) {
+        // Priorité au client
+        if (window.posAllClients) {
+            for (var j = 0; j < window.posAllClients.length; j++) {
+                var client = window.posAllClients[j];
+                var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
+                var desc = (client.description || '').toLowerCase();
+                if (transcript.includes(fullName) ||
+                    transcript.includes(client.nom.toLowerCase()) ||
+                    transcript.includes(client.prenom.toLowerCase()) ||
+                    (desc && transcript.includes(desc))) {
+                    return { type: 'client', client: client };
+                }
             }
         }
-    }
-
-    // ========== RECHERCHE DE PRODUIT ==========
-    if (window.posProductsList) {
-        var foundProduct = null;
-        var bestMatchLength = 0;
-        for (var i = 0; i < window.posProductsList.length; i++) {
-            var prod = window.posProductsList[i];
-            var prodName = prod.nom.toLowerCase();
-            if (transcript.includes(prodName) && prodName.length > bestMatchLength) {
-                foundProduct = prod;
-                bestMatchLength = prodName.length;
+        
+        // Ensuite produit
+        if (window.posProductsList) {
+            var foundProduct2 = null;
+            var bestMatchLength2 = 0;
+            for (var i2 = 0; i2 < window.posProductsList.length; i2++) {
+                var prod2 = window.posProductsList[i2];
+                var prodName2 = prod2.nom.toLowerCase();
+                if (transcript.includes(prodName2) && prodName2.length > bestMatchLength2) {
+                    foundProduct2 = prod2;
+                    bestMatchLength2 = prodName2.length;
+                }
+            }
+            if (foundProduct2) {
+                return { type: 'product', product: foundProduct2 };
             }
         }
-        if (foundProduct) {
-            return { type: 'product', product: foundProduct };
+    } else {
+        // Priorité au produit
+        if (window.posProductsList) {
+            var foundProduct = null;
+            var bestMatchLength = 0;
+            for (var i = 0; i < window.posProductsList.length; i++) {
+                var prod = window.posProductsList[i];
+                var prodName = prod.nom.toLowerCase();
+                if (transcript.includes(prodName) && prodName.length > bestMatchLength) {
+                    foundProduct = prod;
+                    bestMatchLength = prodName.length;
+                }
+            }
+            if (foundProduct) {
+                return { type: 'product', product: foundProduct };
+            }
+        }
+        
+        // Ensuite client
+        if (window.posAllClients) {
+            for (var j = 0; j < window.posAllClients.length; j++) {
+                var client = window.posAllClients[j];
+                var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
+                var desc = (client.description || '').toLowerCase();
+                if (transcript.includes(fullName) ||
+                    transcript.includes(client.nom.toLowerCase()) ||
+                    transcript.includes(client.prenom.toLowerCase()) ||
+                    (desc && transcript.includes(desc))) {
+                    return { type: 'client', client: client };
+                }
+            }
         }
     }
 
@@ -774,7 +824,7 @@ function handleVoiceCommand(command) {
             break;
 
         case 'client':
-            // ✅ CORRECTION 1 : Toujours remplacer le client, même si un autre est déjà sélectionné
+            // ✅ Toujours remplacer le client, même si un autre est déjà sélectionné
             window.posCurrentClient = { id: command.client.id, name: command.client.nom + ' ' + command.client.prenom };
             window.posCurrentTable = '';
             var clientInput = document.getElementById('posClientSearchInput');
@@ -856,41 +906,73 @@ function handleVoiceCommand(command) {
             break;
 
         default:
-            // ✅ CORRECTION 2 : Toujours chercher dans les clients (même si un client est déjà sélectionné)
             if (command.text) {
                 var q = command.text.toLowerCase().trim();
                 var found = false;
 
-                // Chercher dans les clients (nom, prénom, description)
-                if (window.posAllClients) {
-                    for (var j = 0; j < window.posAllClients.length; j++) {
-                        var c = window.posAllClients[j];
-                        var nom = (c.nom || '').toLowerCase();
-                        var prenom = (c.prenom || '').toLowerCase();
-                        var desc = (c.description || '').toLowerCase();
-                        var fullName = nom + ' ' + prenom;
+                // ✅ Étape 2 (paiement) : Priorité aux clients
+                // ✅ Étape 1 (ajout produits) : Priorité aux produits
+                
+                if (window.posStep === 2) {
+                    // Priorité aux clients
+                    if (window.posAllClients) {
+                        for (var j = 0; j < window.posAllClients.length; j++) {
+                            var c = window.posAllClients[j];
+                            var nom = (c.nom || '').toLowerCase();
+                            var prenom = (c.prenom || '').toLowerCase();
+                            var desc = (c.description || '').toLowerCase();
+                            var fullName = nom + ' ' + prenom;
 
-                        if (q && (fullName.indexOf(q) !== -1 ||
-                            nom.indexOf(q) !== -1 ||
-                            prenom.indexOf(q) !== -1 ||
-                            desc.indexOf(q) !== -1)) {
-                            // ✅ Client trouvé - REMPLACER même si un autre client est déjà sélectionné
-                            window.posCurrentClient = { id: c.id, name: c.nom + ' ' + c.prenom };
-                            window.posCurrentTable = '';
-                            var clientInput2 = document.getElementById('posClientSearchInput');
-                            if (clientInput2) clientInput2.value = window.posCurrentClient.name;
-                            if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons();
-                            if (typeof window.renderPOS === 'function') window.renderPOS();
-                            showVoiceResult('👤 Client: ' + window.posCurrentClient.name);
-                            found = true;
-                            break;
+                            if (q && (fullName.indexOf(q) !== -1 ||
+                                nom.indexOf(q) !== -1 ||
+                                prenom.indexOf(q) !== -1 ||
+                                desc.indexOf(q) !== -1)) {
+                                window.posCurrentClient = { id: c.id, name: c.nom + ' ' + c.prenom };
+                                window.posCurrentTable = '';
+                                var clientInput2 = document.getElementById('posClientSearchInput');
+                                if (clientInput2) clientInput2.value = window.posCurrentClient.name;
+                                if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons();
+                                if (typeof window.renderPOS === 'function') window.renderPOS();
+                                showVoiceResult('👤 Client: ' + window.posCurrentClient.name);
+                                found = true;
+                                break;
+                            }
                         }
                     }
-                }
+                    
+                    if (!found && typeof window.posSearchProducts === 'function') {
+                        window.posSearchProducts(q);
+                    }
+                } else {
+                    // Priorité aux produits
+                    if (typeof window.posSearchProducts === 'function') {
+                        window.posSearchProducts(q);
+                    }
+                    
+                    // Chercher aussi dans les clients (fallback)
+                    if (window.posAllClients) {
+                        for (var j = 0; j < window.posAllClients.length; j++) {
+                            var c = window.posAllClients[j];
+                            var nom = (c.nom || '').toLowerCase();
+                            var prenom = (c.prenom || '').toLowerCase();
+                            var desc = (c.description || '').toLowerCase();
+                            var fullName = nom + ' ' + prenom;
 
-                // Si aucun client trouvé, chercher dans les produits (seulement en mode recherche)
-                if (!found && voiceMode === 'search' && typeof window.posSearchProducts === 'function') {
-                    window.posSearchProducts(q);
+                            if (q && (fullName.indexOf(q) !== -1 ||
+                                nom.indexOf(q) !== -1 ||
+                                prenom.indexOf(q) !== -1 ||
+                                desc.indexOf(q) !== -1)) {
+                                window.posCurrentClient = { id: c.id, name: c.nom + ' ' + c.prenom };
+                                window.posCurrentTable = '';
+                                var clientInput3 = document.getElementById('posClientSearchInput');
+                                if (clientInput3) clientInput3.value = window.posCurrentClient.name;
+                                if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons();
+                                if (typeof window.renderPOS === 'function') window.renderPOS();
+                                showVoiceResult('👤 Client: ' + window.posCurrentClient.name);
+                                break;
+                            }
+                        }
+                    }
                 }
             }
             break;
