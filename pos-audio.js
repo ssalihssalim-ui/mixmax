@@ -179,7 +179,6 @@ function markCreditForPayment() {
     window.creditPaymentStep = 'payment';
     var reste = credit.remainingAmount || credit.total || 0;
     showVoiceResult('💳 Paiement du crédit - Restant: ' + reste.toFixed(2) + ' MAD. Dites "montant [prix]" ou le montant directement');
-    // Afficher la zone de paiement (gérée dans admin.js)
     var zone = document.getElementById('creditPaymentZone');
     var info = document.getElementById('creditPaymentInfo');
     if (zone) {
@@ -301,6 +300,12 @@ function detectPaymentMode(text) {
     return null;
 }
 
+// ==================== FONCTION UTILITAIRE : VÉRIFIER SI UNE MODALE EST OUVERTE ====================
+function isModalOpen() {
+    var modal = document.getElementById('modalOverlay');
+    return modal && !modal.classList.contains('hidden');
+}
+
 // ==================== COMMANDES VOCALES COMPLÈTES ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
@@ -324,9 +329,11 @@ function parseVoiceCommand(transcript) {
             var name = directMatch[1].toLowerCase();
             var found = window.posAllClients && window.posAllClients.some(function(c) {
                 var fullName = (c.nom + ' ' + c.prenom).toLowerCase();
+                var desc = (c.description || '').toLowerCase();
                 return fullName.indexOf(name) !== -1 ||
                     c.nom.toLowerCase().indexOf(name) !== -1 ||
-                    c.prenom.toLowerCase().indexOf(name) !== -1;
+                    c.prenom.toLowerCase().indexOf(name) !== -1 ||
+                    (desc && desc.indexOf(name) !== -1);
             });
             if (found) clientName = directMatch[1];
         }
@@ -347,9 +354,11 @@ function parseVoiceCommand(transcript) {
             var name2 = directMatch2[1].toLowerCase();
             var found2 = window.posAllClients && window.posAllClients.some(function(c) {
                 var fullName = (c.nom + ' ' + c.prenom).toLowerCase();
+                var desc = (c.description || '').toLowerCase();
                 return fullName.indexOf(name2) !== -1 ||
                     c.nom.toLowerCase().indexOf(name2) !== -1 ||
-                    c.prenom.toLowerCase().indexOf(name2) !== -1;
+                    c.prenom.toLowerCase().indexOf(name2) !== -1 ||
+                    (desc && desc.indexOf(name2) !== -1);
             });
             if (found2) clientName2 = directMatch2[1];
         }
@@ -526,6 +535,22 @@ function parseVoiceCommand(transcript) {
         return { type: 'finalize' };
     }
 
+    // ========== RECHERCHE DE CLIENT (POS) - INCLUANT LA DESCRIPTION ==========
+    // ✅ VÉRIFIER D'ABORD LES CLIENTS AVANT LES PRODUITS
+    if (window.posAllClients) {
+        for (var j = 0; j < window.posAllClients.length; j++) {
+            var client = window.posAllClients[j];
+            var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
+            var desc = (client.description || '').toLowerCase();
+            if (transcript.includes(fullName) ||
+                transcript.includes(client.nom.toLowerCase()) ||
+                transcript.includes(client.prenom.toLowerCase()) ||
+                (desc && transcript.includes(desc))) {
+                return { type: 'client', client: client };
+            }
+        }
+    }
+
     // ========== RECHERCHE DE PRODUIT ==========
     if (window.posProductsList) {
         var foundProduct = null;
@@ -540,17 +565,6 @@ function parseVoiceCommand(transcript) {
         }
         if (foundProduct) {
             return { type: 'product', product: foundProduct };
-        }
-    }
-
-    // ========== RECHERCHE DE CLIENT (POS) ==========
-    if (window.posAllClients) {
-        for (var j = 0; j < window.posAllClients.length; j++) {
-            var client = window.posAllClients[j];
-            var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
-            if (transcript.includes(fullName) || transcript.includes(client.nom.toLowerCase()) || transcript.includes(client.prenom.toLowerCase())) {
-                return { type: 'client', client: client };
-            }
         }
     }
 
@@ -801,6 +815,9 @@ function handleVoiceCommand(command) {
             break;
 
         case 'next':
+            // ✅ Ignorer la commande si une modale est ouverte (personnalisation produit, etc.)
+            if (isModalOpen()) break;
+
             if (voiceMode === 'quantity') {
                 setVoiceMode('search', '🎤 Recherche vocale active', null);
                 if (typeof window.updateCartOnly === 'function') window.updateCartOnly();
@@ -813,6 +830,9 @@ function handleVoiceCommand(command) {
             break;
 
         case 'validate':
+            // ✅ Ignorer la commande si une modale est ouverte
+            if (isModalOpen()) break;
+
             if (voiceMode === 'quantity') {
                 setVoiceMode('search', '🎤 Recherche vocale active', null);
                 if (typeof window.updateCartOnly === 'function') window.updateCartOnly();
@@ -847,6 +867,33 @@ function handleVoiceCommand(command) {
             break;
 
         default:
+            // ✅ Si on est sur le POS et que la recherche n'a rien trouvé, chercher dans les clients
+            if (currentPage === 'POS' || currentPage === '') {
+                if (window.posAllClients) {
+                    var q = command.text || '';
+                    for (var j = 0; j < window.posAllClients.length; j++) {
+                        var client = window.posAllClients[j];
+                        var fullName = (client.nom + ' ' + client.prenom).toLowerCase();
+                        var desc = (client.description || '').toLowerCase();
+                        if (q && (fullName.indexOf(q) !== -1 ||
+                            client.nom.toLowerCase().indexOf(q) !== -1 ||
+                            client.prenom.toLowerCase().indexOf(q) !== -1 ||
+                            (desc && desc.indexOf(q) !== -1))) {
+                            // Client trouvé
+                            window.posCurrentClient = { id: client.id, name: client.nom + ' ' + client.prenom };
+                            window.posCurrentTable = '';
+                            var clientInput = document.getElementById('posClientSearchInput');
+                            if (clientInput) clientInput.value = window.posCurrentClient.name;
+                            if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons();
+                            setVoiceMode('payment', '🎤 Dites le montant, "valide" ou mode paiement', null);
+                            showVoiceResult('👤 Client: ' + window.posCurrentClient.name);
+                            if (typeof window.renderPOS === 'function') window.renderPOS();
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (voiceMode === 'search' && command.text) {
                 if (typeof window.posSearchProducts === 'function') {
                     window.posSearchProducts(command.text);
