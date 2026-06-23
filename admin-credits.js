@@ -3,21 +3,25 @@
 // Dépend de : admin.js (variables globales, fonctions utilitaires)
 
 // ==================== CRÉDITS ====================
-function loadCreditsPage(c) {
+async function loadCreditsPage(c) {
     creditsPeriod = 'all'; creditsSearch = '';
     window.creditSelectionMode = false; window.creditSelectedIndex = -1;
     creditPaymentAmount = 0; creditPaymentStep = 'idle';
     if (!sortOrders.credits) sortOrders.credits = {}; if (!sortOrders.credits.createdAt) { sortOrders.credits.createdAt = 'desc'; }
     
-    // ✅ Charger les clients pour la recherche vocale (avec description)
+    // ✅ Charger les clients AVANT d'afficher la page (synchrone)
     if (!window.posAllClients || window.posAllClients.length === 0) {
-        db.collection('clients').limit(500).get().then(function(snap) {
+        try {
+            const snap = await db.collection('clients').limit(500).get();
             window.posAllClients = [];
             snap.forEach(function(d) {
                 var data = d.data();
                 window.posAllClients.push({ id: d.id, nom: data.nom || '', prenom: data.prenom || '', telephone: data.telephone || '', description: data.description || '' });
             });
-        }).catch(function(e) { console.error('Erreur chargement clients:', e); });
+            console.log('✅ Clients chargés pour recherche:', window.posAllClients.length);
+        } catch(e) {
+            console.error('Erreur chargement clients:', e);
+        }
     }
     
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-credit-card"></i> Crédits</h3><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
@@ -50,11 +54,9 @@ async function loadCredits() {
 function applyCreditsFilters() {
     var filtered = filterByPeriod(allCreditsData, creditsPeriod);
     
-    // ✅ Recherche aussi dans la description des clients
     if (creditsSearch && creditsSearch.trim() !== '') {
         var q = creditsSearch.toLowerCase().trim();
         
-        // Créer un index des clients par nom pour retrouver leur description
         var clientsByName = {};
         if (window.posAllClients) {
             window.posAllClients.forEach(function(c) {
@@ -64,14 +66,10 @@ function applyCreditsFilters() {
         }
         
         filtered = filtered.filter(function(credit) {
-            // Chercher dans le nom du client
             if ((credit.clientName || '').toLowerCase().indexOf(q) !== -1) return true;
-            
-            // Chercher dans la description du client associé
             var creditName = (credit.clientName || '').toLowerCase().trim();
             var desc = clientsByName[creditName] || '';
             if (desc && desc.toLowerCase().indexOf(q) !== -1) return true;
-            
             return false;
         });
     }
@@ -134,7 +132,6 @@ function toggleCreditCheckbox(index) {
     renderCreditsTable(); showVoiceResult('✅ Ligne ' + (index + 1) + ' sélectionnée');
 }
 
-// ✅ Fonction pour le bouton "Payer" manuel
 function markCreditPaid(creditId) {
     var data = window.filteredCredits || allCreditsData || [];
     var index = data.findIndex(function(c) { return c.id === creditId; });
@@ -145,7 +142,6 @@ function markCreditPaid(creditId) {
     renderCreditsTable();
 }
 
-// Exposer les fonctions globalement
 window.renderCreditsTable = renderCreditsTable;
 window.loadCredits = loadCredits;
 window.applyCreditsFilters = applyCreditsFilters;
