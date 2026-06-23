@@ -317,7 +317,7 @@ function parseVoiceCommand(transcript) {
 
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
 
-    // ========== RECHERCHE CLIENT DANS VENTES ==========
+    // ========== RECHERCHE CLIENT DANS VENTES (AVEC DESCRIPTION) ==========
     if (currentPage === 'Ventes') {
         var clientMatch = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
         var searchMatch = transcript.match(/rechercher\s+([a-z]+(?:\s+[a-z]+)*)/i);
@@ -337,12 +337,34 @@ function parseVoiceCommand(transcript) {
             });
             if (found) clientName = directMatch[1];
         }
+        
+        // ✅ Si pas trouvé, chercher directement dans tous les clients (incluant description)
+        if (!clientName) {
+            var q = transcript.toLowerCase().trim();
+            if (window.posAllClients) {
+                for (var j = 0; j < window.posAllClients.length; j++) {
+                    var c = window.posAllClients[j];
+                    var nom = (c.nom || '').toLowerCase();
+                    var prenom = (c.prenom || '').toLowerCase();
+                    var desc = (c.description || '').toLowerCase();
+                    var fullName = nom + ' ' + prenom;
+                    if (q && (fullName.indexOf(q) !== -1 ||
+                        nom.indexOf(q) !== -1 ||
+                        prenom.indexOf(q) !== -1 ||
+                        (desc && desc.indexOf(q) !== -1))) {
+                        clientName = c.nom + ' ' + c.prenom;
+                        break;
+                    }
+                }
+            }
+        }
+        
         if (clientName) {
             return { type: 'search_client_in_ventes', clientName: clientName };
         }
     }
 
-    // ========== RECHERCHE CLIENT DANS CRÉDITS ==========
+    // ========== RECHERCHE CLIENT DANS CRÉDITS (AVEC DESCRIPTION) ==========
     if (currentPage === 'Crédits') {
         var clientMatch2 = transcript.match(/client\s+([a-z]+(?:\s+[a-z]+)*)/i);
         var searchMatch2 = transcript.match(/rechercher\s+([a-z]+(?:\s+[a-z]+)*)/i);
@@ -362,6 +384,28 @@ function parseVoiceCommand(transcript) {
             });
             if (found2) clientName2 = directMatch2[1];
         }
+        
+        // ✅ Si pas trouvé, chercher directement dans tous les clients (incluant description)
+        if (!clientName2) {
+            var q2 = transcript.toLowerCase().trim();
+            if (window.posAllClients) {
+                for (var j2 = 0; j2 < window.posAllClients.length; j2++) {
+                    var c2 = window.posAllClients[j2];
+                    var nom2 = (c2.nom || '').toLowerCase();
+                    var prenom2 = (c2.prenom || '').toLowerCase();
+                    var desc2 = (c2.description || '').toLowerCase();
+                    var fullName2 = nom2 + ' ' + prenom2;
+                    if (q2 && (fullName2.indexOf(q2) !== -1 ||
+                        nom2.indexOf(q2) !== -1 ||
+                        prenom2.indexOf(q2) !== -1 ||
+                        (desc2 && desc2.indexOf(q2) !== -1))) {
+                        clientName2 = c2.nom + ' ' + c2.prenom;
+                        break;
+                    }
+                }
+            }
+        }
+        
         if (clientName2) {
             return { type: 'search_client_in_credits', clientName: clientName2 };
         }
@@ -910,9 +954,6 @@ function handleVoiceCommand(command) {
                 var q = command.text.toLowerCase().trim();
                 var found = false;
 
-                // ✅ Étape 2 (paiement) : Priorité aux clients
-                // ✅ Étape 1 (ajout produits) : Priorité aux produits
-                
                 if (window.posStep === 2) {
                     // Priorité aux clients
                     if (window.posAllClients) {
