@@ -279,27 +279,24 @@ function posStartVoiceRecording() {
         for (var i = event.resultIndex; i < event.results.length; i++) { var t = event.results[i][0].transcript; if (event.results[i].isFinal) finalTranscriptTemp += t; else interimTranscript += t; }
         var currentPage = document.getElementById('pageTitle')?.textContent || '';
         
-        // ✅ Dans les Crédits, écrire dans le champ vocal dédié
+        // ✅ Crédits : écrire dans le champ audio, PAS dans le champ client
         if (currentPage === 'Crédits') {
             var voiceDisplay = document.getElementById('creditsVoiceDisplay');
             if (voiceDisplay) {
                 if (finalTranscriptTemp) {
                     voiceDisplay.value = finalTranscriptTemp;
-                    finalTranscript = finalTranscriptTemp;
-                    if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
+                    if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscriptTemp); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
                 } else if (interimTranscript) {
                     voiceDisplay.value = interimTranscript + ' ✍️';
                 }
             }
         } else {
             // POS normal
-            var searchInputId = 'posSearchInput';
-            var searchInputElem = document.getElementById(searchInputId);
+            var searchInputId = 'posSearchInput', searchInputElem = document.getElementById(searchInputId);
             if (searchInputElem) {
                 if (finalTranscriptTemp) {
-                    finalTranscript = finalTranscriptTemp;
                     searchInputElem.value = finalTranscriptTemp;
-                    if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
+                    if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscriptTemp); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
                 } else if (interimTranscript && interimTranscript !== lastInterim) { searchInputElem.value = interimTranscript + ' ✍️'; lastInterim = interimTranscript; }
             }
         }
