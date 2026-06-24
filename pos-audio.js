@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS - RECONNAISSANCE VOCALE (v5 FINAL) ====================
-// Mixmax Minimarket - Module vocal complet - Navigation corrigée depuis toutes les pages
+// ==================== POS-AUDIO.JS v5.1 - RECONNAISSANCE VOCALE OPTIMISÉE ====================
+// Mixmax Minimarket - Module vocal complet optimisé (basé sur v5 stable)
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -30,6 +30,53 @@ window.creditSelectedIndex = -1;
 window.creditPaymentAmount = 0;
 window.creditPaymentStep = 'idle';
 
+// ========== INDEX DE RECHERCHE CLIENT (OPTIMISATION RAPIDITÉ) ==========
+var clientSearchIndex = {};
+var clientIndexBuilt = false;
+
+function buildClientIndex() {
+    if (clientIndexBuilt || !window.posAllClients || !window.posAllClients.length) return;
+    clientSearchIndex = {};
+    window.posAllClients.forEach(function(c) {
+        if (!c || !c.id) return;
+        var mots = ((c.nom || '') + ' ' + (c.prenom || '') + ' ' + (c.description || '') + ' ' + (c.telephone || '')).toLowerCase().split(/[\s,;.]+/);
+        mots.forEach(function(mot) {
+            mot = mot.trim();
+            if (mot.length >= 2) {
+                if (!clientSearchIndex[mot]) clientSearchIndex[mot] = [];
+                if (clientSearchIndex[mot].indexOf(c) === -1) clientSearchIndex[mot].push(c);
+            }
+        });
+    });
+    clientIndexBuilt = true;
+}
+
+function fastFindClient(query) {
+    buildClientIndex();
+    var q = query.toLowerCase().trim();
+    if (!q || q.length < 2) return window.posAllClients ? window.posAllClients.slice() : [];
+    var mots = q.split(/[\s,;.]+/);
+    var seen = {}, results = [];
+    mots.forEach(function(mot) {
+        mot = mot.trim();
+        if (mot.length < 2) return;
+        (clientSearchIndex[mot] || []).forEach(function(c) {
+            if (!seen[c.id]) { seen[c.id] = true; results.push(c); }
+        });
+    });
+    if (results.length === 0 && window.posAllClients) {
+        results = window.posAllClients.filter(function(c) {
+            return (c.nom || '').toLowerCase().indexOf(q) !== -1 ||
+                   (c.prenom || '').toLowerCase().indexOf(q) !== -1 ||
+                   (c.description || '').toLowerCase().indexOf(q) !== -1 ||
+                   (c.telephone || '').toLowerCase().indexOf(q) !== -1;
+        });
+    }
+    return results;
+}
+
+function invalidateClientIndex() { clientIndexBuilt = false; clientSearchIndex = {}; }
+
 // ==================== UTILITAIRES ====================
 function isIOSStandalone(){ return /iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream&&(window.navigator.standalone===true||window.matchMedia('(display-mode: standalone)').matches); }
 function checkVoiceSupport(){ var i=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream; if(i&&isIOSStandalone()) return{supported:false,reason:'Ouvrez dans Safari pour le micro'}; if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)) return{supported:false,reason:'Navigateur non supporté'}; return{supported:true}; }
@@ -50,11 +97,12 @@ function closeCreditSelection(){ window.creditSelectionMode=false; window.credit
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } if(t==='espece'||t==='especes'||t==='cash') return'espece'; if(t==='credit') return'credit'; if(t==='partiel'||t==='partial') return'partiel'; return null; }
 
-// ==================== PARSER VOCAL (v5 FINAL - Navigation depuis toutes les pages) ====================
+// ==================== PARSER VOCAL (v5.1 OPTIMISÉ) ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
-    if (now - lastVoiceCommandTime < 500) return { type: 'ignore' };
+    // ✅ OPTIMISÉ : anti-doublon 300ms au lieu de 500ms
+    if (now - lastVoiceCommandTime < 300) return { type: 'ignore' };
     lastVoiceCommandTime = now;
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
 
@@ -89,20 +137,22 @@ function parseVoiceCommand(transcript) {
             return { type: 'ignore' };
         }
 
-        // Recherche client dans ventes
-        var clientMatch = transcript.match(/client\s+([a-zéèêëàâîïôûùç]+(?:\s+[a-zéèêëàâîïôûùç]+)*)/i);
-        var searchMatch = transcript.match(/rechercher\s+([a-zéèêëàâîïôûùç]+(?:\s+[a-zéèêëàâîïôûùç]+)*)/i);
+        // ✅ OPTIMISÉ : Recherche client avec l'index
         var clientName = null;
-        if (clientMatch) clientName = clientMatch[1];
-        else if (searchMatch) clientName = searchMatch[1];
-        if (!clientName) {
-            var q = transcript.toLowerCase().trim();
-            if (window.posAllClients) {
-                for (var j = 0; j < window.posAllClients.length; j++) {
-                    var c = window.posAllClients[j], nom = (c.nom || '').toLowerCase(), prenom = (c.prenom || '').toLowerCase(), desc = (c.description || '').toLowerCase(), fullName = nom + ' ' + prenom;
-                    if (q && (fullName.indexOf(q) !== -1 || nom.indexOf(q) !== -1 || prenom.indexOf(q) !== -1 || (desc && desc.indexOf(q) !== -1))) { clientName = c.nom + ' ' + c.prenom; break; }
+        var foundClients = fastFindClient(transcript);
+        if (foundClients.length === 1) {
+            clientName = foundClients[0].nom + ' ' + foundClients[0].prenom;
+        } else if (foundClients.length > 1) {
+            // Prendre le meilleur match (nom complet)
+            for (var j = 0; j < foundClients.length; j++) {
+                var c = foundClients[j];
+                var fullName = (c.nom + ' ' + c.prenom).toLowerCase();
+                if (fullName.indexOf(transcript) !== -1) {
+                    clientName = c.nom + ' ' + c.prenom;
+                    break;
                 }
             }
+            if (!clientName) clientName = foundClients[0].nom + ' ' + foundClients[0].prenom;
         }
         if (clientName) return { type: 'search_client_in_ventes', clientName: clientName };
     }
@@ -138,20 +188,21 @@ function parseVoiceCommand(transcript) {
             return { type: 'ignore' };
         }
 
-        // Recherche client dans crédits
-        var clientMatch2 = transcript.match(/client\s+([a-zéèêëàâîïôûùç]+(?:\s+[a-zéèêëàâîïôûùç]+)*)/i);
-        var searchMatch2 = transcript.match(/rechercher\s+([a-zéèêëàâîïôûùç]+(?:\s+[a-zéèêëàâîïôûùç]+)*)/i);
+        // ✅ OPTIMISÉ : Recherche client avec l'index
         var clientName2 = null;
-        if (clientMatch2) clientName2 = clientMatch2[1];
-        else if (searchMatch2) clientName2 = searchMatch2[1];
-        if (!clientName2) {
-            var q2 = transcript.toLowerCase().trim();
-            if (window.posAllClients) {
-                for (var j2 = 0; j2 < window.posAllClients.length; j2++) {
-                    var c2 = window.posAllClients[j2], nom2 = (c2.nom || '').toLowerCase(), prenom2 = (c2.prenom || '').toLowerCase(), desc2 = (c2.description || '').toLowerCase(), fullName2 = nom2 + ' ' + prenom2;
-                    if (q2 && (fullName2.indexOf(q2) !== -1 || nom2.indexOf(q2) !== -1 || prenom2.indexOf(q2) !== -1 || (desc2 && desc2.indexOf(q2) !== -1))) { clientName2 = c2.nom + ' ' + c2.prenom; break; }
+        var foundClients2 = fastFindClient(transcript);
+        if (foundClients2.length === 1) {
+            clientName2 = foundClients2[0].nom + ' ' + foundClients2[0].prenom;
+        } else if (foundClients2.length > 1) {
+            for (var j2 = 0; j2 < foundClients2.length; j2++) {
+                var c2 = foundClients2[j2];
+                var fullName2 = (c2.nom + ' ' + c2.prenom).toLowerCase();
+                if (fullName2.indexOf(transcript) !== -1) {
+                    clientName2 = c2.nom + ' ' + c2.prenom;
+                    break;
                 }
             }
+            if (!clientName2) clientName2 = foundClients2[0].nom + ' ' + foundClients2[0].prenom;
         }
         if (clientName2) return { type: 'search_client_in_credits', clientName: clientName2 };
 
@@ -195,13 +246,33 @@ function parseVoiceCommand(transcript) {
     if (transcript.includes('efface') || transcript.includes('vider')) return { type: 'clear' };
     if (transcript.includes('termine') || transcript.includes('terminer') || transcript.includes('fin')) return { type: 'finalize' };
 
-    // === RECHERCHE PRODUIT/CLIENT ===
+    // === RECHERCHE PRODUIT/CLIENT (OPTIMISÉ) ===
     if (window.posStep === 2) {
-        if (window.posAllClients) { for (var j = 0; j < window.posAllClients.length; j++) { var client = window.posAllClients[j], fullName = (client.nom + ' ' + client.prenom).toLowerCase(), desc = (client.description || '').toLowerCase(); if (transcript.includes(fullName) || transcript.includes(client.nom.toLowerCase()) || transcript.includes(client.prenom.toLowerCase()) || (desc && transcript.includes(desc))) return { type: 'client', client: client }; } }
+        // ✅ OPTIMISÉ : Recherche client avec l'index
+        if (window.posAllClients) {
+            var fc = fastFindClient(transcript);
+            if (fc.length > 0) {
+                var best = fc[0];
+                for (var j = 0; j < fc.length; j++) {
+                    if ((fc[j].nom + ' ' + fc[j].prenom).toLowerCase().indexOf(transcript) !== -1) { best = fc[j]; break; }
+                }
+                return { type: 'client', client: best };
+            }
+        }
         if (window.posProductsList) { var fp2 = null, bml2 = 0; for (var i2 = 0; i2 < window.posProductsList.length; i2++) { var p2 = window.posProductsList[i2], pn2 = p2.nom.toLowerCase(); if (transcript.includes(pn2) && pn2.length > bml2) { fp2 = p2; bml2 = pn2.length; } } if (fp2) return { type: 'product', product: fp2 }; }
     } else {
         if (window.posProductsList) { var fp = null, bml = 0; for (var i = 0; i < window.posProductsList.length; i++) { var p = window.posProductsList[i], pn = p.nom.toLowerCase(); if (transcript.includes(pn) && pn.length > bml) { fp = p; bml = pn.length; } } if (fp) return { type: 'product', product: fp }; }
-        if (window.posAllClients) { for (var j = 0; j < window.posAllClients.length; j++) { var client = window.posAllClients[j], fullName = (client.nom + ' ' + client.prenom).toLowerCase(), desc = (client.description || '').toLowerCase(); if (transcript.includes(fullName) || transcript.includes(client.nom.toLowerCase()) || transcript.includes(client.prenom.toLowerCase()) || (desc && transcript.includes(desc))) return { type: 'client', client: client }; } }
+        // ✅ OPTIMISÉ : Recherche client avec l'index
+        if (window.posAllClients) {
+            var fc2 = fastFindClient(transcript);
+            if (fc2.length > 0) {
+                var best2 = fc2[0];
+                for (var j = 0; j < fc2.length; j++) {
+                    if ((fc2[j].nom + ' ' + fc2[j].prenom).toLowerCase().indexOf(transcript) !== -1) { best2 = fc2[j]; break; }
+                }
+                return { type: 'client', client: best2 };
+            }
+        }
     }
 
     // === MONTANT ===
@@ -211,8 +282,8 @@ function parseVoiceCommand(transcript) {
 }
 
 // ==================== RECHERCHE CLIENTS ====================
-function searchClientInVentes(n){ if(!n) return; var s=document.getElementById('ventesSearchInput'); if(s){ s.value=n; if(typeof window.ventesSearch!=='undefined') window.ventesSearch=n; if(typeof window.currentPages!=='undefined') window.currentPages.ventes=1; if(typeof window.applyVentesFilters==='function') window.applyVentesFilters(); showVoiceResult('🔍 Client: '+n); }else{ if(typeof navigateTo==='function'){ navigateTo('ventes'); setTimeout(function(){ var si=document.getElementById('ventesSearchInput'); if(si){ si.value=n; if(typeof window.ventesSearch!=='undefined') window.ventesSearch=n; if(typeof window.currentPages!=='undefined') window.currentPages.ventes=1; if(typeof window.applyVentesFilters==='function') window.applyVentesFilters(); showVoiceResult('🔍 Client: '+n); } },600); } } }
-function searchClientInCredits(n){ if(!n) return; if(typeof navigateTo==='function'){ navigateTo('credits'); setTimeout(function(){ if(typeof selectCreditClient==='function') selectCreditClient(n); },600); } }
+function searchClientInVentes(n){ if(!n) return; var s=document.getElementById('ventesSearchInput'); if(s){ s.value=n; if(typeof window.ventesSearch!=='undefined') window.ventesSearch=n; if(typeof window.currentPages!=='undefined') window.currentPages.ventes=1; if(typeof window.applyVentesFilters==='function') window.applyVentesFilters(); showVoiceResult('🔍 Client: '+n); }else{ if(typeof navigateTo==='function'){ navigateTo('ventes'); setTimeout(function(){ var si=document.getElementById('ventesSearchInput'); if(si){ si.value=n; if(typeof window.ventesSearch!=='undefined') window.ventesSearch=n; if(typeof window.currentPages!=='undefined') window.currentPages.ventes=1; if(typeof window.applyVentesFilters==='function') window.applyVentesFilters(); showVoiceResult('🔍 Client: '+n); } },400); } } }
+function searchClientInCredits(n){ if(!n) return; if(typeof navigateTo==='function'){ navigateTo('credits'); setTimeout(function(){ if(typeof selectCreditClient==='function') selectCreditClient(n); },400); } }
 
 // ==================== GESTIONNAIRE DE COMMANDES ====================
 function handleVoiceCommand(cmd){
@@ -253,8 +324,13 @@ function handleVoiceCommand(cmd){
         case'cancel': if(voiceMode!=='search'){ setVoiceMode('search','🎤 Recherche vocale active',null); showVoiceResult('↩️ Retour à la recherche'); if(typeof window.renderPOS==='function') window.renderPOS(); } break;
         default:
             if(cmd.text){ var q=cmd.text.toLowerCase().trim(),found=false;
-                if(window.posStep===2){ if(window.posAllClients){ for(var j=0;j<window.posAllClients.length;j++){ var c=window.posAllClients[j],nom=(c.nom||'').toLowerCase(),prenom=(c.prenom||'').toLowerCase(),desc=(c.description||'').toLowerCase(),fullName=nom+' '+prenom; if(q&&(fullName.indexOf(q)!==-1||nom.indexOf(q)!==-1||prenom.indexOf(q)!==-1||desc.indexOf(q)!==-1)){ window.posCurrentClient={id:c.id,name:c.nom+' '+c.prenom}; window.posCurrentTable=''; var ci2=document.getElementById('posClientSearchInput'); if(ci2) ci2.value=window.posCurrentClient.name; if(typeof window.updatePaymentButtons==='function') window.updatePaymentButtons(); if(typeof window.renderPOS==='function') window.renderPOS(); showVoiceResult('👤 Client: '+window.posCurrentClient.name); found=true; break; } } } if(!found&&typeof window.posSearchProducts==='function') window.posSearchProducts(q); }
-                else{ if(typeof window.posSearchProducts==='function') window.posSearchProducts(q); if(window.posAllClients){ for(var j=0;j<window.posAllClients.length;j++){ var c=window.posAllClients[j],nom=(c.nom||'').toLowerCase(),prenom=(c.prenom||'').toLowerCase(),desc=(c.description||'').toLowerCase(),fullName=nom+' '+prenom; if(q&&(fullName.indexOf(q)!==-1||nom.indexOf(q)!==-1||prenom.indexOf(q)!==-1||desc.indexOf(q)!==-1)){ window.posCurrentClient={id:c.id,name:c.nom+' '+c.prenom}; window.posCurrentTable=''; var ci3=document.getElementById('posClientSearchInput'); if(ci3) ci3.value=window.posCurrentClient.name; if(typeof window.updatePaymentButtons==='function') window.updatePaymentButtons(); if(typeof window.renderPOS==='function') window.renderPOS(); showVoiceResult('👤 Client: '+window.posCurrentClient.name); break; } } } }
+                if(window.posStep===2){
+                    // ✅ OPTIMISÉ : Recherche client avec l'index
+                    if(window.posAllClients){ var fc3=fastFindClient(q); if(fc3.length>0){ var best3=fc3[0]; for(var j=0;j<fc3.length;j++){ if((fc3[j].nom+' '+fc3[j].prenom).toLowerCase().indexOf(q)!==-1){ best3=fc3[j]; break; } } window.posCurrentClient={id:best3.id,name:best3.nom+' '+best3.prenom}; window.posCurrentTable=''; var ci2=document.getElementById('posClientSearchInput'); if(ci2) ci2.value=window.posCurrentClient.name; if(typeof window.updatePaymentButtons==='function') window.updatePaymentButtons(); if(typeof window.renderPOS==='function') window.renderPOS(); showVoiceResult('👤 Client: '+window.posCurrentClient.name); found=true; } }
+                    if(!found&&typeof window.posSearchProducts==='function') window.posSearchProducts(q); }
+                else{ if(typeof window.posSearchProducts==='function') window.posSearchProducts(q);
+                    // ✅ OPTIMISÉ : Recherche client avec l'index
+                    if(window.posAllClients){ var fc4=fastFindClient(q); if(fc4.length>0){ var best4=fc4[0]; for(var j=0;j<fc4.length;j++){ if((fc4[j].nom+' '+fc4[j].prenom).toLowerCase().indexOf(q)!==-1){ best4=fc4[j]; break; } } window.posCurrentClient={id:best4.id,name:best4.nom+' '+best4.prenom}; window.posCurrentTable=''; var ci3=document.getElementById('posClientSearchInput'); if(ci3) ci3.value=window.posCurrentClient.name; if(typeof window.updatePaymentButtons==='function') window.updatePaymentButtons(); if(typeof window.renderPOS==='function') window.renderPOS(); showVoiceResult('👤 Client: '+window.posCurrentClient.name); } } }
             } break;
     }
 }
@@ -262,20 +338,25 @@ function handleVoiceCommand(cmd){
 // ==================== MODE VOCAL ====================
 function setVoiceMode(m,msg,pid){ voiceMode=m; if(msg) voiceModeMessage=msg; if(pid!==undefined) lastAddedProductId=pid; showVoiceModeIndicator(); }
 
-// ==================== TOGGLE MICRO ====================
+// ==================== TOGGLE MICRO (OPTIMISÉ) ====================
 function posToggleVoiceSearch(){ var s=checkVoiceSupport(); if(!s.supported){ alert('⚠️ '+s.reason); return; } if(!navigator.onLine){ alert('⚠️ Connexion internet requise.'); return; } var mb=document.getElementById('posMicBtn'); if(isRecording){ posStopVoiceSearch(); return; } requestMicrophonePermission().then(function(p){ if(!p){ alert('❌ Micro refusé.'); return; } posStartVoiceRecording(); }); }
 function posStartVoiceRecording(){
     var mb=document.getElementById('posMicBtn'); if(voiceRecognition){ try{ voiceRecognition.abort(); }catch(e){} voiceRecognition=null; }
     var SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR){ alert('❌ Reconnaissance vocale non disponible.'); return; }
-    voiceRecognition=new SR(); voiceRecognition.lang='fr-FR'; voiceRecognition.continuous=true; voiceRecognition.interimResults=true; voiceRecognition.maxAlternatives=3;
+    // ✅ OPTIMISÉ : maxAlternatives=1 pour plus de rapidité
+    voiceRecognition=new SR(); voiceRecognition.lang='fr-FR'; voiceRecognition.continuous=true; voiceRecognition.interimResults=true; voiceRecognition.maxAlternatives=1;
     if(mb){ mb.classList.add('recording'); mb.innerHTML='<i class="fas fa-circle" style="color:#ef4444;animation:pulse 0.5s ease-in-out infinite;"></i>'; mb.style.background='#fee2e2'; mb.style.borderColor='#ef4444'; mb.style.boxShadow='0 0 0 4px rgba(239,68,68,0.3)'; mb.style.transform='scale(0.95)'; mb.style.border='3px solid #ef4444'; }
     var style=document.getElementById('voiceStyle'); if(!style){ style=document.createElement('style'); style.id='voiceStyle'; document.head.appendChild(style); } style.textContent='@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.2;transform:scale(1.3)}}.recording .fa-circle{animation:pulse 0.5s ease-in-out infinite !important}';
     var ft='',li='',proc=false,vdt=null;
     voiceRecognition.onresult=function(e){
         var it='',ftt=''; for(var i=e.resultIndex;i<e.results.length;i++){ var t=e.results[i][0].transcript; if(e.results[i].isFinal) ftt+=t; else it+=t; }
         var cp=document.getElementById('pageTitle')?.textContent||'';
-        if(cp==='Crédits'){ var vd=document.getElementById('creditsVoiceDisplay'); if(vd){ if(ftt){ vd.value=ftt; clearTimeout(vdt); vdt=setTimeout(function(){ if(!proc){ proc=true; var cmd=parseVoiceCommand(ftt); if(cmd.type!=='ignore') handleVoiceCommand(cmd); proc=false; } },300); }else if(it){ vd.value=it+' ✍️'; } } }
-        else{ var si=document.getElementById('posSearchInput'); if(si){ if(ftt){ si.value=ftt; clearTimeout(vdt); vdt=setTimeout(function(){ if(!proc){ proc=true; var cmd=parseVoiceCommand(ftt); if(cmd.type!=='ignore') handleVoiceCommand(cmd); proc=false; } },300); }else if(it&&it!==li){ si.value=it+' ✍️'; li=it; } } }
+        if(cp==='Crédits'){ var vd=document.getElementById('creditsVoiceDisplay'); if(vd){ if(ftt){ vd.value=ftt; clearTimeout(vdt);
+            // ✅ OPTIMISÉ : debounce 150ms au lieu de 300ms
+            vdt=setTimeout(function(){ if(!proc){ proc=true; var cmd=parseVoiceCommand(ftt); if(cmd.type!=='ignore') handleVoiceCommand(cmd); proc=false; } },150); }else if(it){ vd.value=it+' ✍️'; } } }
+        else{ var si=document.getElementById('posSearchInput'); if(si){ if(ftt){ si.value=ftt; clearTimeout(vdt);
+            // ✅ OPTIMISÉ : debounce 150ms au lieu de 300ms
+            vdt=setTimeout(function(){ if(!proc){ proc=true; var cmd=parseVoiceCommand(ftt); if(cmd.type!=='ignore') handleVoiceCommand(cmd); proc=false; } },150); }else if(it&&it!==li){ si.value=it+' ✍️'; li=it; } } }
     };
     voiceRecognition.onend=function(){ if(isRecording){ try{ voiceRecognition.start(); }catch(e){ posStopVoiceSearch(); } } };
     voiceRecognition.onerror=function(e){ if(e.error==='aborted'||e.error==='no-speech') return; if(e.error==='network') showVoiceResult('❌ Erreur réseau'); posStopVoiceSearch(); };
@@ -290,13 +371,22 @@ function posStopVoiceSearch(){
     showVoiceResult('🎤 Micro désactivé');
 }
 
+// ==================== RECONSTRUCTION INDEX APRÈS CHARGEMENT ====================
+var originalLoadPosPage = window.loadPosPage;
+if (typeof originalLoadPosPage === 'function') {
+    window.loadPosPage = async function(c) {
+        await originalLoadPosPage(c);
+        setTimeout(function() { invalidateClientIndex(); }, 500);
+    };
+}
+
 // ==================== EXPORTS ====================
 window.posToggleVoiceSearch=posToggleVoiceSearch; window.showVoiceResult=showVoiceResult; window.setVoiceMode=setVoiceMode;
 window.showVoiceModeIndicator=showVoiceModeIndicator; window.activateCreditSelection=activateCreditSelection;
 window.selectCreditLine=selectCreditLine; window.markCreditForPayment=markCreditForPayment;
 window.setCreditPaymentAmount=setCreditPaymentAmount; window.validateCreditPayment=validateCreditPayment;
 window.closeCreditSelection=closeCreditSelection; window.parseVoiceCommand=parseVoiceCommand;
-window.handleVoiceCommand=handleVoiceCommand;
+window.handleVoiceCommand=handleVoiceCommand; window.invalidateClientIndex=invalidateClientIndex;
 window.onProductAdded=function(pid){ lastAddedProductId=pid; setVoiceMode('quantity','🎤 Dites un nombre, "passe" ou "valide"',pid); showVoiceModeIndicator(); };
 
-console.log('🎤 Mixmax Minimarket - Module vocal v5 FINAL (navigation toutes pages corrigée)');
+console.log('🎤 Mixmax Minimarket - Module vocal v5.1 OPTIMISÉ (index+rapide)');
