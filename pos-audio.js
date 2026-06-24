@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v5.2 - RECONNAISSANCE VOCALE ULTRA-RAPIDE ====================
-// Mixmax Minimarket - Module vocal avec délais optimisés
+// ==================== POS-AUDIO.JS v5.3 FINAL - RECONNAISSANCE VOCALE ULTRA-RAPIDE ====================
+// Mixmax Minimarket - Module vocal avec débounce adaptatif (50ms quantité/paiement, 80ms normal)
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -18,7 +18,7 @@ var paymentKeywords = {
 };
 
 var numberMap = {
-    'un': 1, 'une': 1, 'de': 2 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
+    'un': 1, 'une': 1, 'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
     'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
     'onze': 11, 'douze': 12, 'douz': 12, 'treize': 13, 'quatorze': 14,
     'quinze': 15, 'seize': 16, 'vingt': 20, 'trente': 30, 'quarante': 40,
@@ -97,12 +97,12 @@ function closeCreditSelection(){ window.creditSelectionMode=false; window.credit
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL v5.2 (200ms/100ms) ====================
+// ==================== PARSER VOCAL v5.3 (150ms/80ms) ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
-    // ✅ 200ms anti-doublon (plus rapide)
-    if (now - lastVoiceCommandTime < 200) return { type: 'ignore' };
+    // ✅ 150ms anti-doublon
+    if (now - lastVoiceCommandTime < 150) return { type: 'ignore' };
     lastVoiceCommandTime = now;
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
 
@@ -221,7 +221,7 @@ function handleVoiceCommand(cmd){
 // ==================== MODE VOCAL ====================
 function setVoiceMode(m,msg,pid){voiceMode=m;if(msg)voiceModeMessage=msg;if(pid!==undefined)lastAddedProductId=pid;showVoiceModeIndicator();}
 
-// ==================== TOGGLE MICRO (100ms DEBOUNCE) ====================
+// ==================== TOGGLE MICRO (DÉBOUNCE ADAPTATIF) ====================
 function posToggleVoiceSearch(){var s=checkVoiceSupport();if(!s.supported){alert('⚠️ '+s.reason);return;}if(!navigator.onLine){alert('⚠️ Connexion internet requise.');return;}var mb=document.getElementById('posMicBtn');if(isRecording){posStopVoiceSearch();return;}requestMicrophonePermission().then(function(p){if(!p){alert('❌ Micro refusé.');return;}posStartVoiceRecording();});}
 function posStartVoiceRecording(){
     var mb=document.getElementById('posMicBtn');if(voiceRecognition){try{voiceRecognition.abort();}catch(e){}voiceRecognition=null;}
@@ -233,14 +233,16 @@ function posStartVoiceRecording(){
     voiceRecognition.onresult=function(e){
         var it='',ftt='';for(var i=e.resultIndex;i<e.results.length;i++){var t=e.results[i][0].transcript;if(e.results[i].isFinal)ftt+=t;else it+=t;}
         var cp=document.getElementById('pageTitle')?.textContent||'';
+        
+        // ✅ DÉBOUNCE ADAPTATIF : 50ms pour quantité/paiement, 80ms pour le reste
+        var debounceDelay = (voiceMode === 'quantity' || voiceMode === 'payment' || window.posStep === 2) ? 50 : 80;
+        
         if(cp==='Crédits'){var vd=document.getElementById('creditsVoiceDisplay');if(vd){if(ftt){vd.value=ftt;clearTimeout(vdt);
-            // ✅ 100ms debounce
-            vdt=setTimeout(function(){if(!proc){proc=true;var cmd=parseVoiceCommand(ftt);if(cmd.type!=='ignore')handleVoiceCommand(cmd);proc=false;}},100);}else if(it){vd.value=it+' ✍️';}}}
+            vdt=setTimeout(function(){if(!proc){proc=true;var cmd=parseVoiceCommand(ftt);if(cmd.type!=='ignore')handleVoiceCommand(cmd);proc=false;}},debounceDelay);}else if(it){vd.value=it+' ✍️';}}}
         else{var si=document.getElementById('posSearchInput');if(si){if(ftt){si.value=ftt;clearTimeout(vdt);
-            // ✅ 100ms debounce
-            vdt=setTimeout(function(){if(!proc){proc=true;var cmd=parseVoiceCommand(ftt);if(cmd.type!=='ignore')handleVoiceCommand(cmd);proc=false;}},100);}else if(it&&it!==li){si.value=it+' ✍️';li=it;}}}
+            vdt=setTimeout(function(){if(!proc){proc=true;var cmd=parseVoiceCommand(ftt);if(cmd.type!=='ignore')handleVoiceCommand(cmd);proc=false;}},debounceDelay);}else if(it&&it!==li){si.value=it+' ✍️';li=it;}}}
     };
-    voiceRecognition.onend=function(){if(isRecording){try{voiceRecognition.start();}catch(e){posStopVoiceSearch();}}};
+    voiceRecognition.onend=function(){if(isRecording){setTimeout(function(){try{voiceRecognition.start();}catch(e){posStopVoiceSearch();}},50);}};
     voiceRecognition.onerror=function(e){if(e.error==='aborted'||e.error==='no-speech')return;if(e.error==='network')showVoiceResult('❌ Erreur réseau');posStopVoiceSearch();};
     try{voiceRecognition.start();isRecording=true;showVoiceModeIndicator();showVoiceResult('🎤 Écoute...');}catch(e){isRecording=false;if(mb){mb.classList.remove('recording');mb.innerHTML='<i class="fas fa-microphone"></i>';mb.style.background='#dcfce7';mb.style.borderColor='#16a34a';mb.style.boxShadow='none';mb.style.transform='scale(1)';mb.style.border='3px solid #16a34a';}}
 }
@@ -266,4 +268,4 @@ window.closeCreditSelection=closeCreditSelection;window.parseVoiceCommand=parseV
 window.handleVoiceCommand=handleVoiceCommand;window.invalidateClientIndex=invalidateClientIndex;
 window.onProductAdded=function(pid){lastAddedProductId=pid;setVoiceMode('quantity','🎤 Dites un nombre, "passe" ou "valide"',pid);showVoiceModeIndicator();};
 
-console.log('🎤 Mixmax Minimarket - Module vocal v5.2 ULTRA-RAPIDE (200ms/100ms)');
+console.log('🎤 Mixmax Minimarket - Module vocal v5.3 FINAL (débounce adaptatif 50ms/80ms)');
