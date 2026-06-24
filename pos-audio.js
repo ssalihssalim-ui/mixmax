@@ -195,11 +195,12 @@ function searchClientInVentes(clientName) {
     else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
 }
 
+// ✅ Cherche dans le dropdown ET met le vrai nom
 function searchClientInCredits(clientName) {
     if (!clientName) return;
-    var searchInput = document.getElementById('creditsSearchInput');
-    if (searchInput) { searchInput.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); }
-    else { if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { var si = document.getElementById('creditsSearchInput'); if (si) { si.value = clientName; if (typeof window.creditsSearch !== 'undefined') window.creditsSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.credits = 1; if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
+    if (typeof selectCreditClient === 'function') {
+        selectCreditClient(clientName);
+    }
 }
 
 function handleVoiceCommand(command) {
@@ -276,13 +277,19 @@ function posStartVoiceRecording() {
     voiceRecognition.onresult = function(event) {
         var interimTranscript = '', finalTranscriptTemp = '';
         for (var i = event.resultIndex; i < event.results.length; i++) { var t = event.results[i][0].transcript; if (event.results[i].isFinal) finalTranscriptTemp += t; else interimTranscript += t; }
-        var currentPage = document.getElementById('pageTitle')?.textContent || '', searchInputId = (currentPage === 'Crédits') ? 'creditsSearchInput' : 'posSearchInput', searchInputElem = document.getElementById(searchInputId);
-        if (searchInputElem) {
-            if (finalTranscriptTemp) {
-                finalTranscript = finalTranscriptTemp;
-                searchInputElem.value = finalTranscriptTemp;
-                if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscript); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; }
-            } else if (interimTranscript && interimTranscript !== lastInterim) { searchInputElem.value = interimTranscript + ' ✍️'; lastInterim = interimTranscript; }
+        var currentPage = document.getElementById('pageTitle')?.textContent || '';
+        if (currentPage === 'Crédits') {
+            var voiceDisplay = document.getElementById('creditsVoiceDisplay');
+            if (voiceDisplay) {
+                if (finalTranscriptTemp) { voiceDisplay.value = finalTranscriptTemp; if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscriptTemp); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; } }
+                else if (interimTranscript) { voiceDisplay.value = interimTranscript + ' ✍️'; }
+            }
+        } else {
+            var searchInputId = 'posSearchInput', searchInputElem = document.getElementById(searchInputId);
+            if (searchInputElem) {
+                if (finalTranscriptTemp) { searchInputElem.value = finalTranscriptTemp; if (!processing) { processing = true; var command = parseVoiceCommand(finalTranscriptTemp); if (command.type !== 'ignore') handleVoiceCommand(command); processing = false; } }
+                else if (interimTranscript && interimTranscript !== lastInterim) { searchInputElem.value = interimTranscript + ' ✍️'; lastInterim = interimTranscript; }
+            }
         }
     };
     voiceRecognition.onend = function() { if (isRecording) { try { voiceRecognition.start(); } catch (e) { console.error('❌ Erreur redémarrage:', e); posStopVoiceSearch(); } } };
