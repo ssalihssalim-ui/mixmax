@@ -153,7 +153,11 @@ function parseVoiceCommand(transcript) {
         if (clientMatch2) clientName2 = clientMatch2[1]; else if (searchMatch2) clientName2 = searchMatch2[1];
         else if (directMatch2 && directMatch2[1].length > 2) { var name2 = directMatch2[1].toLowerCase(); var found2 = window.posAllClients && window.posAllClients.some(function(c) { var fullName = (c.nom + ' ' + c.prenom).toLowerCase(), desc = (c.description || '').toLowerCase(); return fullName.indexOf(name2) !== -1 || c.nom.toLowerCase().indexOf(name2) !== -1 || c.prenom.toLowerCase().indexOf(name2) !== -1 || (desc && desc.indexOf(name2) !== -1); }); if (found2) clientName2 = directMatch2[1]; }
         if (!clientName2) { var q2 = transcript.toLowerCase().trim(); if (window.posAllClients) { for (var j2 = 0; j2 < window.posAllClients.length; j2++) { var c2 = window.posAllClients[j2], nom2 = (c2.nom || '').toLowerCase(), prenom2 = (c2.prenom || '').toLowerCase(), desc2 = (c2.description || '').toLowerCase(), fullName2 = nom2 + ' ' + prenom2; if (q2 && (fullName2.indexOf(q2) !== -1 || nom2.indexOf(q2) !== -1 || prenom2.indexOf(q2) !== -1 || (desc2 && desc2.indexOf(q2) !== -1))) { clientName2 = c2.nom + ' ' + c2.prenom; break; } } } }
-        if (clientName2) return { type: 'search_client_in_credits', clientName: clientName2 };
+        // ✅ Comme le POS : retourner le nom complet
+        if (clientName2) {
+            var clientObj = window.posAllClients.find(function(c) { return (c.nom + ' ' + c.prenom) === clientName2; });
+            if (clientObj) { return { type: 'search_client_in_credits', clientName: clientObj.nom + ' ' + clientObj.prenom }; }
+        }
         if (transcript.includes('sélectionner') || transcript.includes('select') || transcript.includes('choisir') || transcript.includes('cocher')) return { type: 'activate_credit_selection' };
         var lineMatch = transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if (lineMatch) { var numStr = lineMatch[1], num = parseInt(numStr); if (isNaN(num)) { for (var word in numberMap) { if (numStr.toLowerCase() === word) { num = numberMap[word]; break; } } } if (!isNaN(num) && num > 0) return { type: 'select_credit_line', lineNumber: num }; }
@@ -195,19 +199,26 @@ function searchClientInVentes(clientName) {
     else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = clientName; if (typeof window.ventesSearch !== 'undefined') window.ventesSearch = clientName; if (typeof window.currentPages !== 'undefined') window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 Client: ' + clientName); } }, 500); } }
 }
 
-// ✅ Cherche dans le dropdown ET met le vrai nom
 function searchClientInCredits(clientName) {
     if (!clientName) return;
-    if (typeof selectCreditClient === 'function') {
-        selectCreditClient(clientName);
-    }
+    if (typeof selectCreditClient === 'function') { selectCreditClient(clientName); }
 }
 
 function handleVoiceCommand(command) {
     console.log('🎤 Commande vocale:', command); var currentPage = document.getElementById('pageTitle')?.textContent || '';
     switch (command.type) {
         case 'search_client_in_ventes': searchClientInVentes(command.clientName); break;
-        case 'search_client_in_credits': searchClientInCredits(command.clientName); break;
+        // ✅ Exactement comme le POS : mettre le nom dans le champ + barre verte
+        case 'search_client_in_credits':
+            var creditsInput = document.getElementById('creditsSearchInput');
+            if (creditsInput) {
+                creditsInput.value = command.clientName;
+                window.creditsSearch = command.clientName;
+                window.currentPages.credits = 1;
+                if (typeof window.applyCreditsFilters === 'function') { window.applyCreditsFilters(); }
+                showVoiceResult('👤 Client: ' + command.clientName);
+            }
+            break;
         case 'activate_credit_selection': activateCreditSelection(); break;
         case 'select_credit_line': selectCreditLine(command.lineNumber); break;
         case 'mark_credit_paid': markCreditForPayment(); break;
