@@ -101,7 +101,6 @@ function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKey
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
-    // ✅ OPTIMISÉ : anti-doublon 300ms au lieu de 500ms
     if (now - lastVoiceCommandTime < 300) return { type: 'ignore' };
     lastVoiceCommandTime = now;
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
@@ -110,46 +109,25 @@ function parseVoiceCommand(transcript) {
     // BLOC VENTES - Navigation + Recherche client
     // ===================================================================
     if (currentPage === 'Ventes') {
-        
-        // ✅ NAVIGATION DEPUIS VENTES (À VÉRIFIER EN PREMIER)
         if (transcript.includes('point de vente') || transcript.includes('point vente') || 
             transcript.includes('pos') || transcript.includes('caisse') ||
             transcript.includes('retour pos') || transcript.includes('aller au pos')) {
             return { type: 'navigate', page: 'pos' };
         }
-        if (transcript.includes('crédits') || transcript.includes('impayés')) {
-            return { type: 'navigate', page: 'credits' };
-        }
-        if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) {
-            return { type: 'navigate', page: 'dashboard' };
-        }
-        if (transcript.includes('commandes en ligne') || transcript.includes('commandes')) {
-            return { type: 'navigate', page: 'commandes' };
-        }
-        if (transcript.includes('produits') || transcript.includes('catalogue')) {
-            return { type: 'navigate', page: 'products' };
-        }
-        if (transcript.includes('clients') || transcript.includes('clientèle')) {
-            return { type: 'navigate', page: 'clients' };
-        }
-        if (transcript.includes('ventes') || transcript.includes('vente')) {
-            showVoiceResult('✅ Déjà sur Ventes');
-            return { type: 'ignore' };
-        }
+        if (transcript.includes('crédits') || transcript.includes('impayés')) return { type: 'navigate', page: 'credits' };
+        if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) return { type: 'navigate', page: 'dashboard' };
+        if (transcript.includes('commandes en ligne') || transcript.includes('commandes')) return { type: 'navigate', page: 'commandes' };
+        if (transcript.includes('produits') || transcript.includes('catalogue')) return { type: 'navigate', page: 'products' };
+        if (transcript.includes('clients') || transcript.includes('clientèle')) return { type: 'navigate', page: 'clients' };
+        if (transcript.includes('ventes') || transcript.includes('vente')) { showVoiceResult('✅ Déjà sur Ventes'); return { type: 'ignore' }; }
 
-        // ✅ OPTIMISÉ : Recherche client avec l'index
         var clientName = null;
         var foundClients = fastFindClient(transcript);
-        if (foundClients.length === 1) {
-            clientName = foundClients[0].nom + ' ' + foundClients[0].prenom;
-        } else if (foundClients.length > 1) {
-            // Prendre le meilleur match (nom complet)
+        if (foundClients.length === 1) { clientName = foundClients[0].nom + ' ' + foundClients[0].prenom; }
+        else if (foundClients.length > 1) {
             for (var j = 0; j < foundClients.length; j++) {
-                var c = foundClients[j];
-                var fullName = (c.nom + ' ' + c.prenom).toLowerCase();
-                if (fullName.indexOf(transcript) !== -1) {
-                    clientName = c.nom + ' ' + c.prenom;
-                    break;
+                if ((foundClients[j].nom + ' ' + foundClients[j].prenom).toLowerCase().indexOf(transcript) !== -1) {
+                    clientName = foundClients[j].nom + ' ' + foundClients[j].prenom; break;
                 }
             }
             if (!clientName) clientName = foundClients[0].nom + ' ' + foundClients[0].prenom;
@@ -161,52 +139,31 @@ function parseVoiceCommand(transcript) {
     // BLOC CRÉDITS - Navigation + Commandes crédits
     // ===================================================================
     if (currentPage === 'Crédits') {
-        
-        // ✅ NAVIGATION DEPUIS CRÉDITS (À VÉRIFIER EN PREMIER)
         if (transcript.includes('point de vente') || transcript.includes('point vente') || 
             transcript.includes('pos') || transcript.includes('caisse') ||
             transcript.includes('retour pos') || transcript.includes('aller au pos')) {
             return { type: 'navigate', page: 'pos' };
         }
-        if (transcript.includes('ventes') || transcript.includes('vente')) {
-            return { type: 'navigate', page: 'ventes' };
-        }
-        if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) {
-            return { type: 'navigate', page: 'dashboard' };
-        }
-        if (transcript.includes('commandes en ligne') || transcript.includes('commandes')) {
-            return { type: 'navigate', page: 'commandes' };
-        }
-        if (transcript.includes('produits') || transcript.includes('catalogue')) {
-            return { type: 'navigate', page: 'products' };
-        }
-        if (transcript.includes('clients') || transcript.includes('clientèle')) {
-            return { type: 'navigate', page: 'clients' };
-        }
-        if (transcript.includes('crédits') || transcript.includes('impayés')) {
-            showVoiceResult('✅ Déjà sur Crédits');
-            return { type: 'ignore' };
-        }
+        if (transcript.includes('ventes') || transcript.includes('vente')) return { type: 'navigate', page: 'ventes' };
+        if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) return { type: 'navigate', page: 'dashboard' };
+        if (transcript.includes('commandes en ligne') || transcript.includes('commandes')) return { type: 'navigate', page: 'commandes' };
+        if (transcript.includes('produits') || transcript.includes('catalogue')) return { type: 'navigate', page: 'products' };
+        if (transcript.includes('clients') || transcript.includes('clientèle')) return { type: 'navigate', page: 'clients' };
+        if (transcript.includes('crédits') || transcript.includes('impayés')) { showVoiceResult('✅ Déjà sur Crédits'); return { type: 'ignore' }; }
 
-        // ✅ OPTIMISÉ : Recherche client avec l'index
         var clientName2 = null;
         var foundClients2 = fastFindClient(transcript);
-        if (foundClients2.length === 1) {
-            clientName2 = foundClients2[0].nom + ' ' + foundClients2[0].prenom;
-        } else if (foundClients2.length > 1) {
+        if (foundClients2.length === 1) { clientName2 = foundClients2[0].nom + ' ' + foundClients2[0].prenom; }
+        else if (foundClients2.length > 1) {
             for (var j2 = 0; j2 < foundClients2.length; j2++) {
-                var c2 = foundClients2[j2];
-                var fullName2 = (c2.nom + ' ' + c2.prenom).toLowerCase();
-                if (fullName2.indexOf(transcript) !== -1) {
-                    clientName2 = c2.nom + ' ' + c2.prenom;
-                    break;
+                if ((foundClients2[j2].nom + ' ' + foundClients2[j2].prenom).toLowerCase().indexOf(transcript) !== -1) {
+                    clientName2 = foundClients2[j2].nom + ' ' + foundClients2[j2].prenom; break;
                 }
             }
             if (!clientName2) clientName2 = foundClients2[0].nom + ' ' + foundClients2[0].prenom;
         }
         if (clientName2) return { type: 'search_client_in_credits', clientName: clientName2 };
 
-        // Commandes spécifiques crédits
         if (transcript.includes('sélectionner') || transcript.includes('select') || transcript.includes('choisir') || transcript.includes('cocher')) return { type: 'activate_credit_selection' };
         var lineMatch = transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if (lineMatch) { var numStr = lineMatch[1], num = parseInt(numStr); if (isNaN(num)) { for (var word in numberMap) { if (numStr.toLowerCase() === word) { num = numberMap[word]; break; } } } if (!isNaN(num) && num > 0) return { type: 'select_credit_line', lineNumber: num }; }
@@ -221,7 +178,7 @@ function parseVoiceCommand(transcript) {
     }
 
     // ===================================================================
-    // NAVIGATION VOCALE (depuis POS, Dashboard, ou autres pages)
+    // NAVIGATION VOCALE
     // ===================================================================
     if (transcript.includes('crédits') || transcript.includes('impayés')) return { type: 'navigate', page: 'credits' };
     if (transcript.includes('ventes') || transcript.includes('vente')) return { type: 'navigate', page: 'ventes' };
@@ -232,52 +189,24 @@ function parseVoiceCommand(transcript) {
     if (transcript.includes('catégories')) return { type: 'navigate', page: 'categories' };
     if (transcript.includes('point de vente') || transcript.includes('pos') || transcript.includes('caisse')) return { type: 'navigate', page: 'pos' };
 
-    // === MODE PAIEMENT ===
     if (window.posStep === 2) { var paymentMode = detectPaymentMode(transcript); if (paymentMode) return { type: 'payment_mode', mode: paymentMode }; }
-
-    // === NOMBRES ===
     var numberMatch = transcript.match(/\b(\d+)\b/); if (numberMatch) return { type: 'number', value: parseInt(numberMatch[1]) };
     for (var word in numberMap) { if (transcript.indexOf(word) !== -1) return { type: 'number', value: numberMap[word] }; }
-
-    // === ACTIONS ===
     if (transcript.includes('passe') || transcript.includes('passer') || transcript.includes('suivant')) return { type: 'next' };
     if (currentPage !== 'Crédits') { if (transcript.includes('valide') || transcript.includes('valider') || transcript.includes('confirmer') || transcript.includes('ok')) return { type: 'validate' }; }
     if (transcript.includes('annule') || transcript.includes('annuler')) return { type: 'cancel' };
     if (transcript.includes('efface') || transcript.includes('vider')) return { type: 'clear' };
     if (transcript.includes('termine') || transcript.includes('terminer') || transcript.includes('fin')) return { type: 'finalize' };
 
-    // === RECHERCHE PRODUIT/CLIENT (OPTIMISÉ) ===
     if (window.posStep === 2) {
-        // ✅ OPTIMISÉ : Recherche client avec l'index
-        if (window.posAllClients) {
-            var fc = fastFindClient(transcript);
-            if (fc.length > 0) {
-                var best = fc[0];
-                for (var j = 0; j < fc.length; j++) {
-                    if ((fc[j].nom + ' ' + fc[j].prenom).toLowerCase().indexOf(transcript) !== -1) { best = fc[j]; break; }
-                }
-                return { type: 'client', client: best };
-            }
-        }
+        if (window.posAllClients) { var fc = fastFindClient(transcript); if (fc.length > 0) { var best = fc[0]; for (var j = 0; j < fc.length; j++) { if ((fc[j].nom + ' ' + fc[j].prenom).toLowerCase().indexOf(transcript) !== -1) { best = fc[j]; break; } } return { type: 'client', client: best }; } }
         if (window.posProductsList) { var fp2 = null, bml2 = 0; for (var i2 = 0; i2 < window.posProductsList.length; i2++) { var p2 = window.posProductsList[i2], pn2 = p2.nom.toLowerCase(); if (transcript.includes(pn2) && pn2.length > bml2) { fp2 = p2; bml2 = pn2.length; } } if (fp2) return { type: 'product', product: fp2 }; }
     } else {
         if (window.posProductsList) { var fp = null, bml = 0; for (var i = 0; i < window.posProductsList.length; i++) { var p = window.posProductsList[i], pn = p.nom.toLowerCase(); if (transcript.includes(pn) && pn.length > bml) { fp = p; bml = pn.length; } } if (fp) return { type: 'product', product: fp }; }
-        // ✅ OPTIMISÉ : Recherche client avec l'index
-        if (window.posAllClients) {
-            var fc2 = fastFindClient(transcript);
-            if (fc2.length > 0) {
-                var best2 = fc2[0];
-                for (var j = 0; j < fc2.length; j++) {
-                    if ((fc2[j].nom + ' ' + fc2[j].prenom).toLowerCase().indexOf(transcript) !== -1) { best2 = fc2[j]; break; }
-                }
-                return { type: 'client', client: best2 };
-            }
-        }
+        if (window.posAllClients) { var fc2 = fastFindClient(transcript); if (fc2.length > 0) { var best2 = fc2[0]; for (var j = 0; j < fc2.length; j++) { if ((fc2[j].nom + ' ' + fc2[j].prenom).toLowerCase().indexOf(transcript) !== -1) { best2 = fc2[j]; break; } } return { type: 'client', client: best2 }; } }
     }
 
-    // === MONTANT ===
     var amountMatch = transcript.match(/\d+[.,]?\d*/); if (amountMatch) { var amount = parseFloat(amountMatch[0].replace(',', '.')); if (amount > 0) return { type: 'amount', value: amount }; }
-
     return { type: 'unknown', text: transcript };
 }
 
@@ -324,14 +253,9 @@ function handleVoiceCommand(cmd){
         case'cancel': if(voiceMode!=='search'){ setVoiceMode('search','🎤 Recherche vocale active',null); showVoiceResult('↩️ Retour à la recherche'); if(typeof window.renderPOS==='function') window.renderPOS(); } break;
         default:
             if(cmd.text){ var q=cmd.text.toLowerCase().trim(),found=false;
-                if(window.posStep===2){
-                    // ✅ OPTIMISÉ : Recherche client avec l'index
-                    if(window.posAllClients){ var fc3=fastFindClient(q); if(fc3.length>0){ var best3=fc3[0]; for(var j=0;j<fc3.length;j++){ if((fc3[j].nom+' '+fc3[j].prenom).toLowerCase().indexOf(q)!==-1){ best3=fc3[j]; break; } } window.posCurrentClient={id:best3.id,name:best3.nom+' '+best3.prenom}; window.posCurrentTable=''; var ci2=document.getElementById('posClientSearchInput'); if(ci2) ci2.value=window.posCurrentClient.name; if(typeof window.updatePaymentButtons==='function') window.updatePaymentButtons(); if(typeof window.renderPOS==='function') window.renderPOS(); showVoiceResult('👤 Client: '+window.posCurrentClient.name); found=true; } }
-                    if(!found&&typeof window.posSearchProducts==='function') window.posSearchProducts(q); }
-                else{ if(typeof window.posSearchProducts==='function') window.posSearchProducts(q);
-                    // ✅ OPTIMISÉ : Recherche client avec l'index
-                    if(window.posAllClients){ var fc4=fastFindClient(q); if(fc4.length>0){ var best4=fc4[0]; for(var j=0;j<fc4.length;j++){ if((fc4[j].nom+' '+fc4[j].prenom).toLowerCase().indexOf(q)!==-1){ best4=fc4[j]; break; } } window.posCurrentClient={id:best4.id,name:best4.nom+' '+best4.prenom}; window.posCurrentTable=''; var ci3=document.getElementById('posClientSearchInput'); if(ci3) ci3.value=window.posCurrentClient.name; if(typeof window.updatePaymentButtons==='function') window.updatePaymentButtons(); if(typeof window.renderPOS==='function') window.renderPOS(); showVoiceResult('👤 Client: '+window.posCurrentClient.name); } } }
-            } break;
+                if(window.posStep===2){ if(window.posAllClients){ var fc3=fastFindClient(q); if(fc3.length>0){ var best3=fc3[0]; for(var j=0;j<fc3.length;j++){ if((fc3[j].nom+' '+fc3[j].prenom).toLowerCase().indexOf(q)!==-1){ best3=fc3[j]; break; } } window.posCurrentClient={id:best3.id,name:best3.nom+' '+best3.prenom}; window.posCurrentTable=''; var ci2=document.getElementById('posClientSearchInput'); if(ci2) ci2.value=window.posCurrentClient.name; if(typeof window.updatePaymentButtons==='function') window.updatePaymentButtons(); if(typeof window.renderPOS==='function') window.renderPOS(); showVoiceResult('👤 Client: '+window.posCurrentClient.name); found=true; } } if(!found&&typeof window.posSearchProducts==='function') window.posSearchProducts(q); }
+                else{ if(typeof window.posSearchProducts==='function') window.posSearchProducts(q); if(window.posAllClients){ var fc4=fastFindClient(q); if(fc4.length>0){ var best4=fc4[0]; for(var j=0;j<fc4.length;j++){ if((fc4[j].nom+' '+fc4[j].prenom).toLowerCase().indexOf(q)!==-1){ best4=fc4[j]; break; } } window.posCurrentClient={id:best4.id,name:best4.nom+' '+best4.prenom}; window.posCurrentTable=''; var ci3=document.getElementById('posClientSearchInput'); if(ci3) ci3.value=window.posCurrentClient.name; if(typeof window.updatePaymentButtons==='function') window.updatePaymentButtons(); if(typeof window.renderPOS==='function') window.renderPOS(); showVoiceResult('👤 Client: '+window.posCurrentClient.name); } } } }
+            break;
     }
 }
 
@@ -343,7 +267,6 @@ function posToggleVoiceSearch(){ var s=checkVoiceSupport(); if(!s.supported){ al
 function posStartVoiceRecording(){
     var mb=document.getElementById('posMicBtn'); if(voiceRecognition){ try{ voiceRecognition.abort(); }catch(e){} voiceRecognition=null; }
     var SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR){ alert('❌ Reconnaissance vocale non disponible.'); return; }
-    // ✅ OPTIMISÉ : maxAlternatives=1 pour plus de rapidité
     voiceRecognition=new SR(); voiceRecognition.lang='fr-FR'; voiceRecognition.continuous=true; voiceRecognition.interimResults=true; voiceRecognition.maxAlternatives=1;
     if(mb){ mb.classList.add('recording'); mb.innerHTML='<i class="fas fa-circle" style="color:#ef4444;animation:pulse 0.5s ease-in-out infinite;"></i>'; mb.style.background='#fee2e2'; mb.style.borderColor='#ef4444'; mb.style.boxShadow='0 0 0 4px rgba(239,68,68,0.3)'; mb.style.transform='scale(0.95)'; mb.style.border='3px solid #ef4444'; }
     var style=document.getElementById('voiceStyle'); if(!style){ style=document.createElement('style'); style.id='voiceStyle'; document.head.appendChild(style); } style.textContent='@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.2;transform:scale(1.3)}}.recording .fa-circle{animation:pulse 0.5s ease-in-out infinite !important}';
@@ -351,12 +274,8 @@ function posStartVoiceRecording(){
     voiceRecognition.onresult=function(e){
         var it='',ftt=''; for(var i=e.resultIndex;i<e.results.length;i++){ var t=e.results[i][0].transcript; if(e.results[i].isFinal) ftt+=t; else it+=t; }
         var cp=document.getElementById('pageTitle')?.textContent||'';
-        if(cp==='Crédits'){ var vd=document.getElementById('creditsVoiceDisplay'); if(vd){ if(ftt){ vd.value=ftt; clearTimeout(vdt);
-            // ✅ OPTIMISÉ : debounce 150ms au lieu de 300ms
-            vdt=setTimeout(function(){ if(!proc){ proc=true; var cmd=parseVoiceCommand(ftt); if(cmd.type!=='ignore') handleVoiceCommand(cmd); proc=false; } },150); }else if(it){ vd.value=it+' ✍️'; } } }
-        else{ var si=document.getElementById('posSearchInput'); if(si){ if(ftt){ si.value=ftt; clearTimeout(vdt);
-            // ✅ OPTIMISÉ : debounce 150ms au lieu de 300ms
-            vdt=setTimeout(function(){ if(!proc){ proc=true; var cmd=parseVoiceCommand(ftt); if(cmd.type!=='ignore') handleVoiceCommand(cmd); proc=false; } },150); }else if(it&&it!==li){ si.value=it+' ✍️'; li=it; } } }
+        if(cp==='Crédits'){ var vd=document.getElementById('creditsVoiceDisplay'); if(vd){ if(ftt){ vd.value=ftt; clearTimeout(vdt); vdt=setTimeout(function(){ if(!proc){ proc=true; var cmd=parseVoiceCommand(ftt); if(cmd.type!=='ignore') handleVoiceCommand(cmd); proc=false; } },150); }else if(it){ vd.value=it+' ✍️'; } } }
+        else{ var si=document.getElementById('posSearchInput'); if(si){ if(ftt){ si.value=ftt; clearTimeout(vdt); vdt=setTimeout(function(){ if(!proc){ proc=true; var cmd=parseVoiceCommand(ftt); if(cmd.type!=='ignore') handleVoiceCommand(cmd); proc=false; } },150); }else if(it&&it!==li){ si.value=it+' ✍️'; li=it; } } }
     };
     voiceRecognition.onend=function(){ if(isRecording){ try{ voiceRecognition.start(); }catch(e){ posStopVoiceSearch(); } } };
     voiceRecognition.onerror=function(e){ if(e.error==='aborted'||e.error==='no-speech') return; if(e.error==='network') showVoiceResult('❌ Erreur réseau'); posStopVoiceSearch(); };
