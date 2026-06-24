@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS - RECONNAISSANCE VOCALE (v4) ====================
-// Mixmax Minimarket - Module vocal complet avec navigation Crédits→POS corrigée
+// ==================== POS-AUDIO.JS - RECONNAISSANCE VOCALE (v5 FINAL) ====================
+// Mixmax Minimarket - Module vocal complet - Navigation corrigée depuis toutes les pages
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -50,7 +50,7 @@ function closeCreditSelection(){ window.creditSelectionMode=false; window.credit
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } if(t==='espece'||t==='especes'||t==='cash') return'espece'; if(t==='credit') return'credit'; if(t==='partiel'||t==='partial') return'partiel'; return null; }
 
-// ==================== PARSER VOCAL (CORRIGÉ v4) ====================
+// ==================== PARSER VOCAL (v5 FINAL - Navigation depuis toutes les pages) ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
@@ -58,8 +58,38 @@ function parseVoiceCommand(transcript) {
     lastVoiceCommandTime = now;
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
 
-    // === RECHERCHE CLIENT DANS VENTES ===
+    // ===================================================================
+    // BLOC VENTES - Navigation + Recherche client
+    // ===================================================================
     if (currentPage === 'Ventes') {
+        
+        // ✅ NAVIGATION DEPUIS VENTES (À VÉRIFIER EN PREMIER)
+        if (transcript.includes('point de vente') || transcript.includes('point vente') || 
+            transcript.includes('pos') || transcript.includes('caisse') ||
+            transcript.includes('retour pos') || transcript.includes('aller au pos')) {
+            return { type: 'navigate', page: 'pos' };
+        }
+        if (transcript.includes('crédits') || transcript.includes('impayés')) {
+            return { type: 'navigate', page: 'credits' };
+        }
+        if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) {
+            return { type: 'navigate', page: 'dashboard' };
+        }
+        if (transcript.includes('commandes en ligne') || transcript.includes('commandes')) {
+            return { type: 'navigate', page: 'commandes' };
+        }
+        if (transcript.includes('produits') || transcript.includes('catalogue')) {
+            return { type: 'navigate', page: 'products' };
+        }
+        if (transcript.includes('clients') || transcript.includes('clientèle')) {
+            return { type: 'navigate', page: 'clients' };
+        }
+        if (transcript.includes('ventes') || transcript.includes('vente')) {
+            showVoiceResult('✅ Déjà sur Ventes');
+            return { type: 'ignore' };
+        }
+
+        // Recherche client dans ventes
         var clientMatch = transcript.match(/client\s+([a-zéèêëàâîïôûùç]+(?:\s+[a-zéèêëàâîïôûùç]+)*)/i);
         var searchMatch = transcript.match(/rechercher\s+([a-zéèêëàâîïôûùç]+(?:\s+[a-zéèêëàâîïôûùç]+)*)/i);
         var clientName = null;
@@ -77,11 +107,15 @@ function parseVoiceCommand(transcript) {
         if (clientName) return { type: 'search_client_in_ventes', clientName: clientName };
     }
 
-    // === COMMANDES SPÉCIFIQUES À LA PAGE CRÉDITS (CORRIGÉ v4) ===
+    // ===================================================================
+    // BLOC CRÉDITS - Navigation + Commandes crédits
+    // ===================================================================
     if (currentPage === 'Crédits') {
         
-        // ✅✅✅ NAVIGATION DEPUIS CRÉDITS (AJOUTÉ - à mettre EN PREMIER) ✅✅✅
-        if (transcript.includes('point de vente') || transcript.includes('point vente') || transcript.includes('pos') || transcript.includes('caisse') || transcript.includes('retour pos') || transcript.includes('aller au pos')) {
+        // ✅ NAVIGATION DEPUIS CRÉDITS (À VÉRIFIER EN PREMIER)
+        if (transcript.includes('point de vente') || transcript.includes('point vente') || 
+            transcript.includes('pos') || transcript.includes('caisse') ||
+            transcript.includes('retour pos') || transcript.includes('aller au pos')) {
             return { type: 'navigate', page: 'pos' };
         }
         if (transcript.includes('ventes') || transcript.includes('vente')) {
@@ -93,11 +127,16 @@ function parseVoiceCommand(transcript) {
         if (transcript.includes('commandes en ligne') || transcript.includes('commandes')) {
             return { type: 'navigate', page: 'commandes' };
         }
+        if (transcript.includes('produits') || transcript.includes('catalogue')) {
+            return { type: 'navigate', page: 'products' };
+        }
+        if (transcript.includes('clients') || transcript.includes('clientèle')) {
+            return { type: 'navigate', page: 'clients' };
+        }
         if (transcript.includes('crédits') || transcript.includes('impayés')) {
             showVoiceResult('✅ Déjà sur Crédits');
             return { type: 'ignore' };
         }
-        // ✅✅✅ FIN NAVIGATION DEPUIS CRÉDITS ✅✅✅
 
         // Recherche client dans crédits
         var clientMatch2 = transcript.match(/client\s+([a-zéèêëàâîïôûùç]+(?:\s+[a-zéèêëàâîïôûùç]+)*)/i);
@@ -116,6 +155,7 @@ function parseVoiceCommand(transcript) {
         }
         if (clientName2) return { type: 'search_client_in_credits', clientName: clientName2 };
 
+        // Commandes spécifiques crédits
         if (transcript.includes('sélectionner') || transcript.includes('select') || transcript.includes('choisir') || transcript.includes('cocher')) return { type: 'activate_credit_selection' };
         var lineMatch = transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if (lineMatch) { var numStr = lineMatch[1], num = parseInt(numStr); if (isNaN(num)) { for (var word in numberMap) { if (numStr.toLowerCase() === word) { num = numberMap[word]; break; } } } if (!isNaN(num) && num > 0) return { type: 'select_credit_line', lineNumber: num }; }
@@ -129,7 +169,9 @@ function parseVoiceCommand(transcript) {
         return { type: 'unknown', text: transcript };
     }
 
-    // === NAVIGATION VOCALE (depuis les autres pages : POS, Dashboard, etc.) ===
+    // ===================================================================
+    // NAVIGATION VOCALE (depuis POS, Dashboard, ou autres pages)
+    // ===================================================================
     if (transcript.includes('crédits') || transcript.includes('impayés')) return { type: 'navigate', page: 'credits' };
     if (transcript.includes('ventes') || transcript.includes('vente')) return { type: 'navigate', page: 'ventes' };
     if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) return { type: 'navigate', page: 'dashboard' };
@@ -257,4 +299,4 @@ window.closeCreditSelection=closeCreditSelection; window.parseVoiceCommand=parse
 window.handleVoiceCommand=handleVoiceCommand;
 window.onProductAdded=function(pid){ lastAddedProductId=pid; setVoiceMode('quantity','🎤 Dites un nombre, "passe" ou "valide"',pid); showVoiceModeIndicator(); };
 
-console.log('🎤 Mixmax Minimarket - Module vocal v4 (navigation Crédits→POS corrigée)');
+console.log('🎤 Mixmax Minimarket - Module vocal v5 FINAL (navigation toutes pages corrigée)');
