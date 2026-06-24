@@ -127,7 +127,6 @@ function markCreditPaid(creditId) {
     renderCreditsTable();
 }
 
-// ✅ Dropdown + sélection automatique
 function searchClientInCreditsDropdown(query) {
     var q = query.toLowerCase().trim();
     var dropdown = document.getElementById('creditsClientDropdown');
@@ -136,7 +135,14 @@ function searchClientInCreditsDropdown(query) {
         return (c.nom || '').toLowerCase().indexOf(q) !== -1 || (c.prenom || '').toLowerCase().indexOf(q) !== -1 || (c.telephone || '').toLowerCase().indexOf(q) !== -1 || (c.description || '').toLowerCase().indexOf(q) !== -1;
     });
     if (results.length === 0) { if (dropdown) dropdown.style.display = 'none'; window.creditsSearch = q; window.currentPages.credits = 1; applyCreditsFilters(); return; }
-    selectCreditClient(results[0].nom + ' ' + results[0].prenom);
+    if (results.length === 1) { selectCreditClient(results[0].nom + ' ' + results[0].prenom); return; }
+    var h = '';
+    results.forEach(function(c) {
+        h += '<div onclick="selectCreditClient(\'' + (c.nom + ' ' + c.prenom).replace(/'/g, "\\'") + '\')" style="padding:8px;cursor:pointer;border-bottom:1px solid #f1f5f9;">' +
+            '<strong>' + escapeHtml(c.nom) + ' ' + escapeHtml(c.prenom) + '</strong>' +
+            '<span style="color:#94a3b8;font-size:0.65rem;display:block;">' + escapeHtml(c.description || c.telephone || '') + '</span></div>';
+    });
+    if (dropdown) { dropdown.innerHTML = h; dropdown.style.display = 'block'; }
 }
 
 function selectCreditClient(clientName) {
