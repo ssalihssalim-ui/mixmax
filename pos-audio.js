@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v5.5 FINAL - RECONNAISSANCE VOCALE COMPLÈTE ====================
-// Mixmax Minimarket - Validation crédit corrigée + suppression simple + suppression par ligne
+// ==================== POS-AUDIO.JS v5.6 FINAL - RECONNAISSANCE VOCALE COMPLÈTE ====================
+// Mixmax Minimarket - Confirmation vocale pour suppression + validation crédit corrigée
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -18,7 +18,7 @@ var paymentKeywords = {
 };
 
 var numberMap = {
-    'Wahed': 1,'Ouais': 1,'Wad': 1, 'un': 1, 'une': 1,'juge': 2,'Souche': 2,'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
+    'Wahed': 1,'Ouais': 1,'Wad': 1, 'un': 1, 'une': 1,'juge': 2,'Joue': 2,'Souche': 2,'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
     'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
     'onze': 11, 'douze': 12, 'douz': 12, 'treize': 13, 'quatorze': 14,
     'quinze': 15, 'seize': 16, 'vingt': 20, 'trente': 30, 'quarante': 40,
@@ -29,6 +29,7 @@ window.creditSelectionMode = false;
 window.creditSelectedIndex = -1;
 window.creditPaymentAmount = 0;
 window.creditPaymentStep = 'idle';
+var creditDeletePending = null; // ✅ État d'attente de confirmation suppression
 
 // ========== INDEX DE RECHERCHE CLIENT ==========
 var clientSearchIndex = {};
@@ -83,19 +84,21 @@ function checkVoiceSupport(){ var i=/iPad|iPhone|iPod/.test(navigator.userAgent)
 async function requestMicrophonePermission(){ try{ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return false; const s=await navigator.mediaDevices.getUserMedia({audio:true}); s.getTracks().forEach(t=>t.stop()); return true; }catch(e){ return false; } }
 function showSafariBanner(){ if(!isIOSStandalone()) return; if(document.getElementById('iosPwaBanner')) return; var c=document.getElementById('dynamicContent'); if(!c) return; var b=document.createElement('div'); b.id='iosPwaBanner'; b.style.cssText='background:#fef3c7;border:2px solid #f59e0b;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;'; b.innerHTML='<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-exclamation-triangle" style="color:#d97706;"></i><span style="font-size:0.8rem;color:#92400e;"><strong>📱 Microphone</strong><br><span style="font-size:0.7rem;">Ouvrez dans Safari pour le micro.</span></span></div><button onclick="window.open(window.location.href.split(\'?\')[0],\'_blank\')" style="background:#f59e0b;border:none;padding:6px 14px;border-radius:6px;color:#fff;font-weight:600;cursor:pointer;">🌐 Ouvrir</button>'; c.insertBefore(b,c.firstChild); }
 function showVoiceModeIndicator(){ var ind=document.getElementById('voiceModeIndicator'); if(!ind){ var cont=document.querySelector('.pos-products-panel'); if(!cont) return; ind=document.createElement('div'); ind.id='voiceModeIndicator'; ind.style.cssText='background:#f0fdf4;border:2px solid #16a34a;border-radius:8px;padding:6px 12px;margin-bottom:8px;font-size:0.8rem;display:flex;align-items:center;gap:8px;color:#14532d;'; cont.insertBefore(ind,cont.firstChild); } var icon=voiceMode==='search'?'fa-microphone':(voiceMode==='quantity'?'fa-hashtag':(voiceMode==='client'?'fa-user':'fa-money-bill-wave')); var color=voiceMode==='search'?'#16a34a':(voiceMode==='quantity'?'#f59e0b':(voiceMode==='client'?'#4f46e5':'#dc2626')); ind.innerHTML='<i class="fas '+icon+'" style="color:'+color+';"></i> '+(voiceModeMessage||'🎤 Recherche vocale active')+' <span style="font-size:0.6rem;color:#94a3b8;margin-left:auto;">'+voiceMode+'</span>'; ind.style.borderColor=color; ind.style.background=voiceMode==='search'?'#f0fdf4':'#fefce8'; }
-function showVoiceResult(msg){ var div=document.getElementById('voiceResultDisplay'); if(!div){ div=document.createElement('div'); div.id='voiceResultDisplay'; div.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#2E7D32;color:#fff;padding:12px 24px;border-radius:12px;font-weight:600;font-size:1rem;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);display:none;max-width:90%;text-align:center;'; document.body.appendChild(div); } var isErr=msg.indexOf('⚠️')!==-1||msg.indexOf('❌')!==-1; div.style.background=isErr?'#ef4444':'#2E7D32'; div.textContent=msg; div.style.display='block'; clearTimeout(window._voiceResultTimeout); window._voiceResultTimeout=setTimeout(function(){ div.style.display='none'; },2000); }
+function showVoiceResult(msg){ var div=document.getElementById('voiceResultDisplay'); if(!div){ div=document.createElement('div'); div.id='voiceResultDisplay'; div.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#2E7D32;color:#fff;padding:12px 24px;border-radius:12px;font-weight:600;font-size:1rem;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);display:none;max-width:90%;text-align:center;'; document.body.appendChild(div); } var isErr=msg.indexOf('⚠️')!==-1||msg.indexOf('❌')!==-1; div.style.background=isErr?'#ef4444':'#2E7D32'; div.textContent=msg; div.style.display='block'; clearTimeout(window._voiceResultTimeout); window._voiceResultTimeout=setTimeout(function(){ div.style.display='none'; },2500); }
 function isModalOpen(){ var m=document.getElementById('modalOverlay'); return m&&!m.classList.contains('hidden'); }
 
 // ==================== GESTION CRÉDITS ====================
-function activateCreditSelection(){ window.creditSelectionMode=true; window.creditSelectedIndex=-1; window.creditPaymentStep='idle'; if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); showVoiceResult('📋 Mode sélection activé'); }
-function selectCreditLine(n){ var d=window.filteredCredits||window.allCreditsData||[]; var i=n-1; if(i<0||i>=d.length){ showVoiceResult('❌ Ligne '+n+' inexistante'); return; } if(!window.creditSelectionMode){ showVoiceResult('⚠️ Dites "sélectionner" d\'abord'); return; } window.creditSelectedIndex=i; window.creditPaymentStep='selection'; window.creditPaymentAmount=0; if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); var c=d[i]; showVoiceResult('✅ Ligne '+n+' - '+(c.clientName||'')+' - '+(c.remainingAmount||c.total||0).toFixed(2)+' MAD'); }
-function markCreditForPayment(){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucune ligne sélectionnée'); return; } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Crédit introuvable'); return; } if(c.paid){ showVoiceResult('⚠️ Déjà payé'); return; } window.creditPaymentStep='payment'; var r=c.remainingAmount||c.total||0; showVoiceResult('💳 Restant: '+r.toFixed(2)+' MAD. Dites le montant'); var z=document.getElementById('creditPaymentZone'); if(z){ z.style.display='block'; var info=document.getElementById('creditPaymentInfo'); if(info) info.textContent='Client: '+(c.clientName||'Inconnu')+' | Restant: '+r.toFixed(2)+' MAD'; var inp=document.getElementById('creditPaymentAmountInput'); if(inp){ inp.value=''; inp.focus(); inp.select(); } } }
+function activateCreditSelection(){ window.creditSelectionMode=true; window.creditSelectedIndex=-1; window.creditPaymentStep='idle'; creditDeletePending=null; if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); showVoiceResult('📋 Mode sélection activé'); }
+function selectCreditLine(n){ var d=window.filteredCredits||window.allCreditsData||[]; var i=n-1; if(i<0||i>=d.length){ showVoiceResult('❌ Ligne '+n+' inexistante'); return; } if(!window.creditSelectionMode){ showVoiceResult('⚠️ Dites "sélectionner" d\'abord'); return; } window.creditSelectedIndex=i; window.creditPaymentStep='selection'; window.creditPaymentAmount=0; creditDeletePending=null; if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); var c=d[i]; showVoiceResult('✅ Ligne '+n+' - '+(c.clientName||'')+' - '+(c.remainingAmount||c.total||0).toFixed(2)+' MAD'); }
+function markCreditForPayment(){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucune ligne sélectionnée'); return; } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Crédit introuvable'); return; } if(c.paid){ showVoiceResult('⚠️ Déjà payé'); return; } window.creditPaymentStep='payment'; creditDeletePending=null; var r=c.remainingAmount||c.total||0; showVoiceResult('💳 Restant: '+r.toFixed(2)+' MAD. Dites le montant'); var z=document.getElementById('creditPaymentZone'); if(z){ z.style.display='block'; var info=document.getElementById('creditPaymentInfo'); if(info) info.textContent='Client: '+(c.clientName||'Inconnu')+' | Restant: '+r.toFixed(2)+' MAD'; var inp=document.getElementById('creditPaymentAmountInput'); if(inp){ inp.value=''; inp.focus(); inp.select(); } } }
 function setCreditPaymentAmount(a){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucun crédit sélectionné'); return; } if(a<=0){ showVoiceResult('❌ Montant invalide'); return; } window.creditPaymentAmount=a; window.creditPaymentStep='amount'; var inp=document.getElementById('creditPaymentAmountInput'); if(inp) inp.value=a; showVoiceResult('💰 '+a.toFixed(2)+' MAD. Dites "valide"'); }
 function validateCreditPayment(){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucun crédit sélectionné'); return; } var inp=document.getElementById('creditPaymentAmountInput'); var a=parseFloat(inp?inp.value:window.creditPaymentAmount); if(isNaN(a)||a<=0){ showVoiceResult('❌ Montant invalide'); return; } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Crédit introuvable'); return; } var r=c.remainingAmount||c.total||0; if(a>r){ showVoiceResult('⚠️ Montant > reste ('+r.toFixed(2)+' MAD)'); return; } var nr=r-a; var p=nr<=0.01; CacheDB.write('credits',c.id,{paid:p,remainingAmount:Math.max(0,nr),amountGiven:(c.amountGiven||0)+a,paidAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},'update').then(function(){ showVoiceResult(p?'✅ Crédit soldé !':'✅ Payé. Reste: '+nr.toFixed(2)+' MAD'); window.creditPaymentStep='idle'; window.creditSelectedIndex=-1; window.creditPaymentAmount=0; window.creditSelectionMode=false; var z=document.getElementById('creditPaymentZone'); if(z) z.style.display='none'; if(typeof window.loadCredits==='function') window.loadCredits(); CacheDB.sync(); }).catch(function(e){ showVoiceResult('❌ Erreur: '+e.message); }); }
-function closeCreditSelection(){ window.creditSelectionMode=false; window.creditSelectedIndex=-1; window.creditPaymentAmount=0; window.creditPaymentStep='idle'; var z=document.getElementById('creditPaymentZone'); if(z) z.style.display='none'; if(typeof window.applyCreditsFilters==='function'){ window.creditsSearch=''; window.currentPages.credits=1; window.filteredCredits=null; window.applyCreditsFilters(); } showVoiceResult('📋 Liste complète'); }
+function closeCreditSelection(){ window.creditSelectionMode=false; window.creditSelectedIndex=-1; window.creditPaymentAmount=0; window.creditPaymentStep='idle'; creditDeletePending=null; var z=document.getElementById('creditPaymentZone'); if(z) z.style.display='none'; if(typeof window.applyCreditsFilters==='function'){ window.creditsSearch=''; window.currentPages.credits=1; window.filteredCredits=null; window.applyCreditsFilters(); } showVoiceResult('📋 Liste complète'); }
 
-// ✅ SUPPRESSION VOCALE D'UN CRÉDIT (par ligne)
-async function deleteCreditByVoice(lineNumber) {
+// ==================== SUPPRESSION VOCALE AVEC CONFIRMATION ====================
+
+// ✅ Étape 1 : Demander la confirmation
+function deleteCreditByVoice(lineNumber) {
     var data = window.filteredCredits || window.allCreditsData || [];
     var index = lineNumber - 1;
     if (index < 0 || index >= data.length) {
@@ -105,10 +108,27 @@ async function deleteCreditByVoice(lineNumber) {
     var credit = data[index];
     if (!credit) { showVoiceResult('❌ Crédit introuvable'); return; }
     
-    if (!confirm('🗑️ Supprimer le crédit de ' + (credit.clientName || 'Inconnu') + ' (' + (credit.total || 0).toFixed(2) + ' MAD) ?')) {
-        showVoiceResult('↩️ Suppression annulée');
+    // Stocker la demande en attente de confirmation
+    creditDeletePending = { lineNumber: lineNumber, credit: credit };
+    showVoiceResult('🗑️ Supprimer ' + (credit.clientName || 'Inconnu') + ' (' + (credit.total || 0).toFixed(2) + ' MAD) ? Dites "valide" ou "annule"');
+}
+
+// ✅ Suppression de la ligne sélectionnée (appelle deleteCreditByVoice)
+function deleteSelectedCredit() {
+    if (window.creditSelectedIndex < 0) {
+        showVoiceResult('⚠️ Aucune ligne sélectionnée');
         return;
     }
+    deleteCreditByVoice(window.creditSelectedIndex + 1);
+}
+
+// ✅ Étape 2 : Confirmer la suppression
+async function confirmDeleteCredit() {
+    if (!creditDeletePending) {
+        showVoiceResult('⚠️ Aucune suppression en attente');
+        return;
+    }
+    var credit = creditDeletePending.credit;
     
     try {
         if (typeof window.deleteCredit === 'function') {
@@ -120,25 +140,27 @@ async function deleteCreditByVoice(lineNumber) {
         }
         window.creditSelectedIndex = -1;
         window.creditSelectionMode = false;
-        showVoiceResult('✅ Crédit supprimé');
+        showVoiceResult('✅ Crédit de ' + (credit.clientName || 'Inconnu') + ' supprimé');
     } catch (e) {
         showVoiceResult('❌ Erreur: ' + e.message);
     }
+    creditDeletePending = null;
 }
 
-// ✅ SUPPRESSION DE LA LIGNE SÉLECTIONNÉE
-async function deleteSelectedCredit() {
-    if (window.creditSelectedIndex < 0) {
-        showVoiceResult('⚠️ Aucune ligne sélectionnée');
-        return;
+// ✅ Étape 2 : Annuler la suppression
+function cancelDeleteCredit() {
+    if (creditDeletePending) {
+        showVoiceResult('↩️ Suppression annulée');
+        creditDeletePending = null;
+    } else {
+        showVoiceResult('⚠️ Aucune suppression en attente');
     }
-    await deleteCreditByVoice(window.creditSelectedIndex + 1);
 }
 
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL v5.5 ====================
+// ==================== PARSER VOCAL v5.6 ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
@@ -161,9 +183,22 @@ function parseVoiceCommand(transcript) {
     }
 
     // ===================================================================
-    // BLOC CRÉDITS v5.5 (validation corrigée + suppression simple + par ligne)
+    // BLOC CRÉDITS v5.6 (confirmation vocale suppression + validation corrigée)
     // ===================================================================
     if (currentPage === 'Crédits') {
+        
+        // ✅ CONFIRMATION / ANNULATION DE SUPPRESSION (PRIORITAIRE ABSOLU)
+        if (creditDeletePending) {
+            if (transcript.includes('valide') || transcript.includes('valider') || transcript.includes('oui') || transcript.includes('confirmer') || transcript.includes('ok')) {
+                return { type: 'confirm_delete_credit' };
+            }
+            if (transcript.includes('annule') || transcript.includes('annuler') || transcript.includes('non')) {
+                return { type: 'cancel_delete_credit' };
+            }
+            // Si en attente de confirmation, ignorer les autres commandes
+            showVoiceResult('⚠️ Dites "valide" pour confirmer ou "annule" pour annuler');
+            return { type: 'ignore' };
+        }
         
         // ✅ Navigation (ignorée si en mode paiement)
         if (window.creditPaymentStep !== 'payment' && window.creditPaymentStep !== 'amount') {
@@ -176,7 +211,7 @@ function parseVoiceCommand(transcript) {
             if (transcript.includes('crédits') || transcript.includes('impayés')) { showVoiceResult('✅ Déjà sur Crédits'); return { type: 'ignore' }; }
         }
 
-        // ✅ SUPPRESSION SIMPLE (ligne déjà sélectionnée, dire juste "supprimer")
+        // ✅ SUPPRESSION SIMPLE (ligne déjà sélectionnée)
         if ((transcript === 'supprimer' || transcript === 'effacer' || transcript === 'enlever' || transcript === 'retirer') && 
             window.creditSelectedIndex >= 0 && window.creditSelectionMode) {
             return { type: 'delete_selected_credit' };
@@ -282,6 +317,8 @@ function handleVoiceCommand(cmd){
         case'close_credit_list':closeCreditSelection();break;
         case'delete_credit_line':deleteCreditByVoice(cmd.lineNumber);break;
         case'delete_selected_credit':deleteSelectedCredit();break;
+        case'confirm_delete_credit':confirmDeleteCredit();break;
+        case'cancel_delete_credit':cancelDeleteCredit();break;
         case'navigate':
             var p=cmd.page,pt={'credits':'Crédits','ventes':'Ventes','dashboard':'Dashboard','products':'Produits','clients':'Clients','commandes':'Commandes en ligne','categories':'Catégories','pos':'POS'};
             if(cp===pt[p]){showVoiceResult('✅ Déjà sur '+pt[p]);return;}
@@ -358,6 +395,7 @@ window.setCreditPaymentAmount=setCreditPaymentAmount;window.validateCreditPaymen
 window.closeCreditSelection=closeCreditSelection;window.parseVoiceCommand=parseVoiceCommand;
 window.handleVoiceCommand=handleVoiceCommand;window.invalidateClientIndex=invalidateClientIndex;
 window.deleteCreditByVoice=deleteCreditByVoice;window.deleteSelectedCredit=deleteSelectedCredit;
+window.confirmDeleteCredit=confirmDeleteCredit;window.cancelDeleteCredit=cancelDeleteCredit;
 window.onProductAdded=function(pid){lastAddedProductId=pid;setVoiceMode('quantity','🎤 Dites un nombre, "passe" ou "valide"',pid);showVoiceModeIndicator();};
 
-console.log('🎤 Mixmax Minimarket - Module vocal v5.5 FINAL (validation+suppression simple+ligne)');
+console.log('🎤 Mixmax Minimarket - Module vocal v5.6 FINAL (confirmation vocale suppression)');
