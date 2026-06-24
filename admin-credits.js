@@ -1,5 +1,5 @@
 // ==================== ADMIN-CREDITS.JS - MIXMAX MINIMARKET ====================
-// Gestion des crédits - Version corrigée (recherche description → nom officiel)
+// Gestion des crédits - Version corrigée (recherche description → nom officiel + suppression vocale)
 
 // ========== VARIABLES GLOBALES DU MODULE ==========
 window.creditsPeriod = window.creditsPeriod || 'all';
@@ -111,7 +111,6 @@ function applyCreditsFilters() {
     if (window.creditsSearch && window.creditsSearch.trim() !== '') {
         var q = window.creditsSearch.toLowerCase().trim();
         
-        // ✅ Construire un index : nom_complet → { description, nom, prenom }
         var clientsIndex = {};
         if (window.posAllClients) {
             window.posAllClients.forEach(function(c) {
@@ -126,34 +125,21 @@ function applyCreditsFilters() {
         
         filtered = filtered.filter(function(credit) {
             var creditName = (credit.clientName || '').toLowerCase().trim();
-            
-            // 1. Le nom du client dans le crédit correspond à la recherche
             if (creditName.indexOf(q) !== -1) return true;
-            
-            // 2. Chercher dans l'index : est-ce que ce client a une description qui correspond ?
             var clientInfo = clientsIndex[creditName];
             if (clientInfo) {
-                // La description contient le mot recherché
                 if (clientInfo.description.indexOf(q) !== -1) return true;
-                // Le nom ou prénom contient le mot recherché
                 if (clientInfo.nom.toLowerCase().indexOf(q) !== -1) return true;
                 if (clientInfo.prenom.toLowerCase().indexOf(q) !== -1) return true;
             }
-            
-            // 3. Chercher dans tous les clients : est-ce qu'un client a cette description
-            // et son nom correspond au credit.clientName ?
             if (window.posAllClients) {
                 for (var i = 0; i < window.posAllClients.length; i++) {
                     var c = window.posAllClients[i];
                     var fullName = (c.nom + ' ' + c.prenom).toLowerCase().trim();
                     var desc = (c.description || '').toLowerCase();
-                    // Si la description contient la recherche ET que le nom complet match le crédit
-                    if (desc.indexOf(q) !== -1 && fullName === creditName) {
-                        return true;
-                    }
+                    if (desc.indexOf(q) !== -1 && fullName === creditName) return true;
                 }
             }
-            
             return false;
         });
     }
@@ -230,7 +216,8 @@ function renderCreditsTable() {
         var isAdmin = window.currentUserData && window.currentUserData.userData.role === 'admin';
         if (isAdmin) {
             actions += '<button class="btn-edit" onclick="editCredit(\'' + d.id + '\')"><i class="fas fa-edit"></i></button> ';
-            actions += '<button class="btn-delete" onclick="deleteCredit(\'' + d.id + '\')"><i class="fas fa-trash"></i></button>';
+            // ✅ Clic bouton : garde le confirm() pour la sécurité
+            actions += '<button class="btn-delete" onclick="if(confirm(\'Supprimer définitivement ce crédit ?\')) deleteCredit(\'' + d.id + '\')"><i class="fas fa-trash"></i></button>';
         }
         
         var isSelected = (window.creditSelectedIndex === index);
@@ -337,10 +324,6 @@ function markCreditPaid(creditId) {
 }
 
 // ========== RECHERCHE CLIENT DROPDOWN (CORRIGÉ) ==========
-// ✅ Cette fonction cherche par nom, prénom, téléphone ET description
-// ✅ Le dropdown affiche Nom Prénom + description en dessous
-// ✅ Au clic, selectCreditClient reçoit le NOM COMPLET officiel
-
 function searchClientInCreditsDropdown(query) {
     var q = query.toLowerCase().trim();
     var dropdown = document.getElementById('creditsClientDropdown');
@@ -353,7 +336,6 @@ function searchClientInCreditsDropdown(query) {
         return;
     }
     
-    // ✅ Chercher dans nom, prénom, téléphone ET description
     var results = window.posAllClients.filter(function(c) {
         return (c.nom || '').toLowerCase().indexOf(q) !== -1 ||
                (c.prenom || '').toLowerCase().indexOf(q) !== -1 ||
@@ -363,21 +345,18 @@ function searchClientInCreditsDropdown(query) {
     
     if (results.length === 0) {
         if (dropdown) dropdown.style.display = 'none';
-        // Même sans résultat dans le dropdown, on filtre quand même
         window.creditsSearch = q;
         window.currentPages.credits = 1;
         applyCreditsFilters();
         return;
     }
     
-    // ✅ Si un seul résultat, sélectionner avec le NOM COMPLET officiel
     if (results.length === 1) {
         var nomComplet = results[0].nom + ' ' + results[0].prenom;
         selectCreditClient(nomComplet);
         return;
     }
     
-    // ✅ Afficher le dropdown : Nom Prénom en gras, description en dessous
     var h = '';
     results.forEach(function(c) {
         var clientNameSafe = (c.nom + ' ' + c.prenom).replace(/'/g, "\\'");
@@ -392,17 +371,13 @@ function searchClientInCreditsDropdown(query) {
     }
 }
 
-// ✅ selectCreditClient : reçoit le NOM COMPLET, l'affiche dans l'input,
-// ✅ met à jour creditsSearch avec le nom officiel, et lance le filtre
 function selectCreditClient(clientName) {
     var searchInput = document.getElementById('creditsSearchInput');
     var dropdown = document.getElementById('creditsClientDropdown');
     
-    // ✅ Toujours afficher le nom complet dans l'input
     if (searchInput) searchInput.value = clientName;
     if (dropdown) dropdown.style.display = 'none';
     
-    // ✅ Mettre à jour la recherche avec le nom officiel
     window.creditsSearch = clientName;
     window.currentPages.credits = 1;
     applyCreditsFilters();
@@ -476,17 +451,15 @@ async function saveEditCredit() {
     }
 }
 
-// ========== SUPPRIMER UN CRÉDIT ==========
+// ========== SUPPRIMER UN CRÉDIT (sans confirm pour la voix) ==========
 async function deleteCredit(id) {
-    if (!confirm('Supprimer définitivement ce crédit ?')) return;
     try {
         await db.collection('credits').doc(id).delete();
-        window.allCreditsData = window.allCreditsData.filter(function(c) { return c.id !== id; });
-        loadCredits();
-        alert('✅ Crédit supprimé');
+        window.allCreditsData = (window.allCreditsData || []).filter(function(c) { return c.id !== id; });
+        if (typeof loadCredits === 'function') loadCredits();
     } catch (e) {
         console.error('Erreur deleteCredit:', e);
-        alert('❌ Erreur lors de la suppression');
+        throw e;
     }
 }
 
@@ -607,4 +580,4 @@ window.saveEditCredit = saveEditCredit;
 window.validateCreditPayment = validateCreditPayment;
 window.closeCreditSelection = closeCreditSelection;
 
-console.log('🛒 Mixmax Minimarket - Admin Credits chargé (v3 - recherche description corrigée)');
+console.log('🛒 Mixmax Minimarket - Admin Credits chargé (v finale corrigée)');
