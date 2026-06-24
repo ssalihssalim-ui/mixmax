@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v5.7 FINAL - RECONNAISSANCE VOCALE COMPLÈTE ====================
-// Mixmax Minimarket - Bannière de confirmation pour suppression + validation crédit corrigée
+// ==================== POS-AUDIO.JS v5.8 FINAL - RECONNAISSANCE VOCALE COMPLÈTE ====================
+// Mixmax Minimarket - Modal confirmation style "alert" pour suppression + validation crédit
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -87,47 +87,15 @@ function showVoiceModeIndicator(){ var ind=document.getElementById('voiceModeInd
 function showVoiceResult(msg){ var div=document.getElementById('voiceResultDisplay'); if(!div){ div=document.createElement('div'); div.id='voiceResultDisplay'; div.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#2E7D32;color:#fff;padding:12px 24px;border-radius:12px;font-weight:600;font-size:1rem;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);display:none;max-width:90%;text-align:center;'; document.body.appendChild(div); } var isErr=msg.indexOf('⚠️')!==-1||msg.indexOf('❌')!==-1; div.style.background=isErr?'#ef4444':'#2E7D32'; div.textContent=msg; div.style.display='block'; clearTimeout(window._voiceResultTimeout); window._voiceResultTimeout=setTimeout(function(){ div.style.display='none'; },2500); }
 function isModalOpen(){ var m=document.getElementById('modalOverlay'); return m&&!m.classList.contains('hidden'); }
 
-// ==================== BANNIÈRE DE CONFIRMATION ====================
-function showDeleteBanner(credit) {
-    var banner = document.getElementById('creditDeleteBanner');
-    if (!banner) {
-        banner = document.createElement('div');
-        banner.id = 'creditDeleteBanner';
-        banner.style.cssText = 'background:#fef3c7;border:2px solid #f59e0b;border-radius:12px;padding:15px 20px;margin-bottom:15px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;';
-        var container = document.getElementById('creditsTableContainer');
-        if (container && container.parentNode) {
-            container.parentNode.insertBefore(banner, container);
-        }
-    }
-    
-    banner.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">' +
-        '<i class="fas fa-trash-alt" style="font-size:1.5rem;color:#ef4444;"></i>' +
-        '<div><strong>🗑️ Supprimer ce crédit ?</strong><br>' +
-        '<span style="font-size:0.85rem;">Client: <strong>' + escapeHtml(credit.clientName || 'Inconnu') + '</strong> | Montant: <strong style="color:#ef4444;">' + (credit.total || 0).toFixed(2) + ' MAD</strong></span><br>' +
-        '<span style="font-size:0.7rem;color:#92400e;">🎤 Dites <strong>"valide"</strong> pour confirmer ou <strong>"annule"</strong> pour annuler</span></div></div>' +
-        '<div style="display:flex;gap:8px;">' +
-        '<button class="btn-save" onclick="confirmDeleteCredit()" style="background:#ef4444;padding:8px 16px;font-size:0.8rem;margin:0;"><i class="fas fa-check"></i> Valider</button>' +
-        '<button class="btn-cancel" onclick="cancelDeleteCredit()" style="padding:8px 16px;font-size:0.8rem;margin:0;"><i class="fas fa-times"></i> Annuler</button>' +
-        '</div>';
-    banner.style.display = 'flex';
-}
-
-function hideDeleteBanner() {
-    var banner = document.getElementById('creditDeleteBanner');
-    if (banner) {
-        banner.style.display = 'none';
-    }
-}
-
 // ==================== GESTION CRÉDITS ====================
-function activateCreditSelection(){ window.creditSelectionMode=true; window.creditSelectedIndex=-1; window.creditPaymentStep='idle'; creditDeletePending=null; hideDeleteBanner(); if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); showVoiceResult('📋 Mode sélection activé'); }
-function selectCreditLine(n){ var d=window.filteredCredits||window.allCreditsData||[]; var i=n-1; if(i<0||i>=d.length){ showVoiceResult('❌ Ligne '+n+' inexistante'); return; } if(!window.creditSelectionMode){ showVoiceResult('⚠️ Dites "sélectionner" d\'abord'); return; } window.creditSelectedIndex=i; window.creditPaymentStep='selection'; window.creditPaymentAmount=0; creditDeletePending=null; hideDeleteBanner(); if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); var c=d[i]; showVoiceResult('✅ Ligne '+n+' - '+(c.clientName||'')+' - '+(c.remainingAmount||c.total||0).toFixed(2)+' MAD'); }
-function markCreditForPayment(){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucune ligne sélectionnée'); return; } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Crédit introuvable'); return; } if(c.paid){ showVoiceResult('⚠️ Déjà payé'); return; } window.creditPaymentStep='payment'; creditDeletePending=null; hideDeleteBanner(); var r=c.remainingAmount||c.total||0; showVoiceResult('💳 Restant: '+r.toFixed(2)+' MAD. Dites le montant'); var z=document.getElementById('creditPaymentZone'); if(z){ z.style.display='block'; var info=document.getElementById('creditPaymentInfo'); if(info) info.textContent='Client: '+(c.clientName||'Inconnu')+' | Restant: '+r.toFixed(2)+' MAD'; var inp=document.getElementById('creditPaymentAmountInput'); if(inp){ inp.value=''; inp.focus(); inp.select(); } } }
+function activateCreditSelection(){ window.creditSelectionMode=true; window.creditSelectedIndex=-1; window.creditPaymentStep='idle'; creditDeletePending=null; if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); showVoiceResult('📋 Mode sélection activé'); }
+function selectCreditLine(n){ var d=window.filteredCredits||window.allCreditsData||[]; var i=n-1; if(i<0||i>=d.length){ showVoiceResult('❌ Ligne '+n+' inexistante'); return; } if(!window.creditSelectionMode){ showVoiceResult('⚠️ Dites "sélectionner" d\'abord'); return; } window.creditSelectedIndex=i; window.creditPaymentStep='selection'; window.creditPaymentAmount=0; creditDeletePending=null; if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); var c=d[i]; showVoiceResult('✅ Ligne '+n+' - '+(c.clientName||'')+' - '+(c.remainingAmount||c.total||0).toFixed(2)+' MAD'); }
+function markCreditForPayment(){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucune ligne sélectionnée'); return; } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Crédit introuvable'); return; } if(c.paid){ showVoiceResult('⚠️ Déjà payé'); return; } window.creditPaymentStep='payment'; creditDeletePending=null; var r=c.remainingAmount||c.total||0; showVoiceResult('💳 Restant: '+r.toFixed(2)+' MAD. Dites le montant'); var z=document.getElementById('creditPaymentZone'); if(z){ z.style.display='block'; var info=document.getElementById('creditPaymentInfo'); if(info) info.textContent='Client: '+(c.clientName||'Inconnu')+' | Restant: '+r.toFixed(2)+' MAD'; var inp=document.getElementById('creditPaymentAmountInput'); if(inp){ inp.value=''; inp.focus(); inp.select(); } } }
 function setCreditPaymentAmount(a){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucun crédit sélectionné'); return; } if(a<=0){ showVoiceResult('❌ Montant invalide'); return; } window.creditPaymentAmount=a; window.creditPaymentStep='amount'; var inp=document.getElementById('creditPaymentAmountInput'); if(inp) inp.value=a; showVoiceResult('💰 '+a.toFixed(2)+' MAD. Dites "valide"'); }
 function validateCreditPayment(){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucun crédit sélectionné'); return; } var inp=document.getElementById('creditPaymentAmountInput'); var a=parseFloat(inp?inp.value:window.creditPaymentAmount); if(isNaN(a)||a<=0){ showVoiceResult('❌ Montant invalide'); return; } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Crédit introuvable'); return; } var r=c.remainingAmount||c.total||0; if(a>r){ showVoiceResult('⚠️ Montant > reste ('+r.toFixed(2)+' MAD)'); return; } var nr=r-a; var p=nr<=0.01; CacheDB.write('credits',c.id,{paid:p,remainingAmount:Math.max(0,nr),amountGiven:(c.amountGiven||0)+a,paidAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},'update').then(function(){ showVoiceResult(p?'✅ Crédit soldé !':'✅ Payé. Reste: '+nr.toFixed(2)+' MAD'); window.creditPaymentStep='idle'; window.creditSelectedIndex=-1; window.creditPaymentAmount=0; window.creditSelectionMode=false; var z=document.getElementById('creditPaymentZone'); if(z) z.style.display='none'; if(typeof window.loadCredits==='function') window.loadCredits(); CacheDB.sync(); }).catch(function(e){ showVoiceResult('❌ Erreur: '+e.message); }); }
-function closeCreditSelection(){ window.creditSelectionMode=false; window.creditSelectedIndex=-1; window.creditPaymentAmount=0; window.creditPaymentStep='idle'; creditDeletePending=null; hideDeleteBanner(); var z=document.getElementById('creditPaymentZone'); if(z) z.style.display='none'; if(typeof window.applyCreditsFilters==='function'){ window.creditsSearch=''; window.currentPages.credits=1; window.filteredCredits=null; window.applyCreditsFilters(); } showVoiceResult('📋 Liste complète'); }
+function closeCreditSelection(){ window.creditSelectionMode=false; window.creditSelectedIndex=-1; window.creditPaymentAmount=0; window.creditPaymentStep='idle'; creditDeletePending=null; var z=document.getElementById('creditPaymentZone'); if(z) z.style.display='none'; if(typeof window.applyCreditsFilters==='function'){ window.creditsSearch=''; window.currentPages.credits=1; window.filteredCredits=null; window.applyCreditsFilters(); } showVoiceResult('📋 Liste complète'); }
 
-// ==================== SUPPRESSION AVEC BANNIÈRE DE CONFIRMATION ====================
+// ==================== SUPPRESSION AVEC MODAL STYLE "ALERT" ====================
 function deleteCreditByVoice(lineNumber) {
     var data = window.filteredCredits || window.allCreditsData || [];
     var index = lineNumber - 1;
@@ -139,7 +107,19 @@ function deleteCreditByVoice(lineNumber) {
     if (!credit) { showVoiceResult('❌ Crédit introuvable'); return; }
     
     creditDeletePending = { lineNumber: lineNumber, credit: credit };
-    showDeleteBanner(credit);
+    
+    var modalHTML = '<div style="text-align:center;padding:20px;">' +
+        '<i class="fas fa-exclamation-triangle" style="font-size:3rem;color:#ef4444;display:block;margin-bottom:15px;"></i>' +
+        '<h3 style="margin-bottom:10px;color:#1e293b;">Supprimer définitivement ce crédit ?</h3>' +
+        '<p style="font-size:1rem;margin-bottom:5px;color:#64748b;">Client: <strong style="color:#1e293b;">' + escapeHtml(credit.clientName || 'Inconnu') + '</strong></p>' +
+        '<p style="font-size:1.2rem;color:#ef4444;font-weight:700;margin-bottom:15px;">' + (credit.total || 0).toFixed(2) + ' MAD</p>' +
+        '<p style="color:#94a3b8;margin-bottom:15px;font-size:0.85rem;">🎤 Dites <strong>"valide"</strong> pour confirmer<br>ou <strong>"annuler"</strong> pour annuler</p>' +
+        '<div style="display:flex;gap:10px;justify-content:center;">' +
+        '<button class="btn-save" onclick="confirmDeleteCredit()" style="background:#ef4444;padding:12px 30px;font-size:0.95rem;border-radius:8px;"><i class="fas fa-check"></i> Valider</button>' +
+        '<button class="btn-cancel" onclick="cancelDeleteCredit()" style="padding:12px 30px;font-size:0.95rem;border-radius:8px;"><i class="fas fa-times"></i> Annuler</button>' +
+        '</div></div>';
+    
+    openModal('🗑️ Confirmation de suppression', modalHTML);
     showVoiceResult('🗑️ Dites "valide" pour supprimer ou "annule" pour annuler');
 }
 
@@ -168,7 +148,7 @@ async function confirmDeleteCredit() {
         }
         window.creditSelectedIndex = -1;
         window.creditSelectionMode = false;
-        hideDeleteBanner();
+        closeModal();
         showVoiceResult('✅ Crédit de ' + (credit.clientName || 'Inconnu') + ' supprimé');
     } catch (e) {
         showVoiceResult('❌ Erreur: ' + e.message);
@@ -180,14 +160,14 @@ function cancelDeleteCredit() {
     if (creditDeletePending) {
         creditDeletePending = null;
     }
-    hideDeleteBanner();
+    closeModal();
     showVoiceResult('↩️ Suppression annulée');
 }
 
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL v5.7 ====================
+// ==================== PARSER VOCAL v5.8 ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
@@ -210,7 +190,7 @@ function parseVoiceCommand(transcript) {
     }
 
     // ===================================================================
-    // BLOC CRÉDITS v5.7
+    // BLOC CRÉDITS v5.8
     // ===================================================================
     if (currentPage === 'Crédits') {
         
@@ -226,7 +206,6 @@ function parseVoiceCommand(transcript) {
             return { type: 'ignore' };
         }
         
-        // Navigation (ignorée si en mode paiement)
         if (window.creditPaymentStep !== 'payment' && window.creditPaymentStep !== 'amount') {
             if (transcript.includes('point de vente') || transcript.includes('point vente') || transcript.includes('pos') || transcript.includes('caisse') || transcript.includes('retour pos') || transcript.includes('aller au pos')) return { type: 'navigate', page: 'pos' };
             if (transcript.includes('ventes') || transcript.includes('vente')) return { type: 'navigate', page: 'ventes' };
@@ -237,68 +216,45 @@ function parseVoiceCommand(transcript) {
             if (transcript.includes('crédits') || transcript.includes('impayés')) { showVoiceResult('✅ Déjà sur Crédits'); return { type: 'ignore' }; }
         }
 
-        // SUPPRESSION SIMPLE (ligne déjà sélectionnée)
         if ((transcript === 'supprimer' || transcript === 'effacer' || transcript === 'enlever' || transcript === 'retirer') && 
             window.creditSelectedIndex >= 0 && window.creditSelectionMode) {
             return { type: 'delete_selected_credit' };
         }
 
-        // Recherche client
         var cn2=null,fc2=fastFindClient(transcript);
         if(fc2.length===1)cn2=fc2[0].nom+' '+fc2[0].prenom;
         else if(fc2.length>1){ for(var j2=0;j2<fc2.length;j2++){ if((fc2[j2].nom+' '+fc2[j2].prenom).toLowerCase().indexOf(transcript)!==-1){ cn2=fc2[j2].nom+' '+fc2[j2].prenom;break; } } if(!cn2)cn2=fc2[0].nom+' '+fc2[0].prenom; }
         if(cn2)return{type:'search_client_in_credits',clientName:cn2};
 
-        // VALIDATION DU PAIEMENT (PRIORITAIRE)
         if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
             var amtNum = transcript.match(/\b(\d+[.,]?\d*)\b/);
             if (amtNum) { var amt = parseFloat(amtNum[1].replace(',', '.')); if (!isNaN(amt) && amt > 0) return { type: 'set_credit_amount', amount: amt }; }
             var foundAmt = null;
             for (var w in numberMap) { if (transcript.includes(w)) { foundAmt = numberMap[w]; break; } }
             if (foundAmt !== null && foundAmt > 0) return { type: 'set_credit_amount', amount: foundAmt };
-            
-            if (transcript.includes('valide') || transcript.includes('confirmer') || transcript.includes('ok') || transcript.includes('oui')) {
-                return { type: 'validate_credit_payment' };
-            }
+            if (transcript.includes('valide') || transcript.includes('confirmer') || transcript.includes('ok') || transcript.includes('oui')) return { type: 'validate_credit_payment' };
             return { type: 'unknown', text: transcript };
         }
 
-        // SUPPRESSION PAR LIGNE
         var deleteMatch = transcript.match(/(?:supprimer|effacer|enlever|retirer)\s+(?:ligne\s+)?(\d+|[a-z]+)/i);
         if (deleteMatch) {
             var delNum = parseInt(deleteMatch[1]);
-            if (isNaN(delNum)) {
-                for (var w in numberMap) {
-                    if (deleteMatch[1].toLowerCase() === w) { delNum = numberMap[w]; break; }
-                }
-            }
+            if (isNaN(delNum)) { for (var w in numberMap) { if (deleteMatch[1].toLowerCase() === w) { delNum = numberMap[w]; break; } } }
             if (!isNaN(delNum) && delNum > 0) return { type: 'delete_credit_line', lineNumber: delNum };
         }
 
-        // Commandes crédits
         if (transcript.includes('sélectionner') || transcript.includes('select') || transcript.includes('choisir') || transcript.includes('cocher')) return { type: 'activate_credit_selection' };
-        
         var lm=transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if(lm){ var ns=lm[1],num=parseInt(ns); if(isNaN(num)){ for(var w in numberMap){ if(ns.toLowerCase()===w){ num=numberMap[w];break; } } } if(!isNaN(num)&&num>0)return{type:'select_credit_line',lineNumber:num}; }
-        
         if(window.creditSelectionMode&&(window.creditPaymentStep!=='payment'&&window.creditPaymentStep!=='amount')){ var an=transcript.match(/\b(\d+)\b/),num=null; if(an){ num=parseInt(an[1]); }else{ for(var w in numberMap){ if(transcript.includes(w)){ num=numberMap[w];break; } } } if(num!==null&&!isNaN(num)&&num>0)return{type:'select_credit_line',lineNumber:num}; }
-        
         if(transcript.includes('marquer payé')||transcript.includes('payer')||transcript.includes('régler'))return{type:'mark_credit_paid'};
-        
         var am=transcript.match(/montant\s+(\d+[.,]?\d*)/i);
         if(am){ var a=parseFloat(am[1].replace(',','.')); if(!isNaN(a)&&a>0)return{type:'set_credit_amount',amount:a}; }
-
-        if (transcript.includes('valide') || transcript.includes('confirmer') || transcript.includes('ok')) {
-            if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
-                return { type: 'validate_credit_payment' };
-            }
-        }
-        
+        if (transcript.includes('valide') || transcript.includes('confirmer') || transcript.includes('ok')) { if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') return { type: 'validate_credit_payment' }; }
         if(transcript.includes('fermer')||transcript.includes('retour'))return{type:'close_credit_list'};
         return{type:'unknown',text:transcript};
     }
 
-    // === NAVIGATION ===
     if(transcript.includes('crédits')||transcript.includes('impayés'))return{type:'navigate',page:'credits'};
     if(transcript.includes('ventes')||transcript.includes('vente'))return{type:'navigate',page:'ventes'};
     if(transcript.includes('dashboard')||transcript.includes('accueil')||transcript.includes('home'))return{type:'navigate',page:'dashboard'};
@@ -379,7 +335,7 @@ function handleVoiceCommand(cmd){
 // ==================== MODE VOCAL ====================
 function setVoiceMode(m,msg,pid){voiceMode=m;if(msg)voiceModeMessage=msg;if(pid!==undefined)lastAddedProductId=pid;showVoiceModeIndicator();}
 
-// ==================== TOGGLE MICRO (DÉBOUNCE ADAPTATIF) ====================
+// ==================== TOGGLE MICRO ====================
 function posToggleVoiceSearch(){var s=checkVoiceSupport();if(!s.supported){alert('⚠️ '+s.reason);return;}if(!navigator.onLine){alert('⚠️ Connexion internet requise.');return;}var mb=document.getElementById('posMicBtn');if(isRecording){posStopVoiceSearch();return;}requestMicrophonePermission().then(function(p){if(!p){alert('❌ Micro refusé.');return;}posStartVoiceRecording();});}
 function posStartVoiceRecording(){
     var mb=document.getElementById('posMicBtn');if(voiceRecognition){try{voiceRecognition.abort();}catch(e){}voiceRecognition=null;}
@@ -421,7 +377,6 @@ window.closeCreditSelection=closeCreditSelection;window.parseVoiceCommand=parseV
 window.handleVoiceCommand=handleVoiceCommand;window.invalidateClientIndex=invalidateClientIndex;
 window.deleteCreditByVoice=deleteCreditByVoice;window.deleteSelectedCredit=deleteSelectedCredit;
 window.confirmDeleteCredit=confirmDeleteCredit;window.cancelDeleteCredit=cancelDeleteCredit;
-window.hideDeleteBanner=hideDeleteBanner;window.showDeleteBanner=showDeleteBanner;
 window.onProductAdded=function(pid){lastAddedProductId=pid;setVoiceMode('quantity','🎤 Dites un nombre, "passe" ou "valide"',pid);showVoiceModeIndicator();};
 
-console.log('🎤 Mixmax Minimarket - Module vocal v5.7 FINAL (bannière confirmation suppression)');
+console.log('🎤 Mixmax Minimarket - Module vocal v5.8 FINAL (modal confirmation style alert)');
