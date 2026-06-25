@@ -31,7 +31,6 @@ window.creditPaymentAmount = 0;
 window.creditPaymentStep = 'idle';
 var creditDeletePending = null;
 
-// ✅ Mode sélection Ventes
 window.venteSelectionMode = false;
 window.venteSelectedIndex = -1;
 
@@ -141,65 +140,38 @@ function parseVoiceCommand(transcript) {
         
         // ✅ FILTRES DE PÉRIODE
         if (transcript.includes("aujourd'hui") || transcript.includes('ce jour') || transcript.includes('du jour')) {
-            window.ventesPeriod = 'today';
-            window.currentPages.ventes = 1;
+            window.ventesPeriod = 'today'; window.currentPages.ventes = 1;
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
-            showVoiceResult('📅 Ventes du jour');
-            return { type: 'ignore' };
+            showVoiceResult('📅 Ventes du jour'); return { type: 'ignore' };
         }
         if (transcript.includes('cette semaine') || transcript.includes('7 jours') || transcript.includes('semaine')) {
-            window.ventesPeriod = '7';
-            window.currentPages.ventes = 1;
+            window.ventesPeriod = '7'; window.currentPages.ventes = 1;
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
-            showVoiceResult('📅 Ventes des 7 jours');
-            return { type: 'ignore' };
+            showVoiceResult('📅 Ventes des 7 jours'); return { type: 'ignore' };
         }
         if (transcript.includes('ce mois') || transcript.includes('30 jours') || transcript.includes('mensuel') || transcript.includes('mois')) {
-            window.ventesPeriod = '30';
-            window.currentPages.ventes = 1;
+            window.ventesPeriod = '30'; window.currentPages.ventes = 1;
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
-            showVoiceResult('📅 Ventes du mois');
-            return { type: 'ignore' };
+            showVoiceResult('📅 Ventes du mois'); return { type: 'ignore' };
         }
         if (transcript.includes('tout') || transcript.includes('historique') || transcript.includes('global') || transcript.includes('complet')) {
-            window.ventesPeriod = 'all';
-            window.currentPages.ventes = 1;
+            window.ventesPeriod = 'all'; window.currentPages.ventes = 1;
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
-            showVoiceResult('📅 Toutes les ventes');
-            return { type: 'ignore' };
+            showVoiceResult('📅 Toutes les ventes'); return { type: 'ignore' };
         }
         
         // ✅ MODE SÉLECTION VENTES
         if (transcript.includes('sélectionner') || transcript.includes('sélectionne') || transcript.includes('select') || transcript.includes('choisir') || transcript.includes('cocher')) {
-            window.venteSelectionMode = true;
-            window.venteSelectedIndex = -1;
+            window.venteSelectionMode = true; window.venteSelectedIndex = -1;
             if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
-            showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne');
-            return { type: 'ignore' };
+            showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne'); return { type: 'ignore' };
         }
         
         // ✅ SÉLECTION LIGNE VENTES
         if (window.venteSelectionMode) {
             var lm = transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
-            if (lm) {
-                var ns = lm[1], num = parseInt(ns);
-                if (isNaN(num)) { for (var w in numberMap) { if (ns.toLowerCase() === w) { num = numberMap[w]; break; } } }
-                if (!isNaN(num) && num > 0) {
-                    window.venteSelectedIndex = num - 1;
-                    if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
-                    showVoiceResult('✅ Ligne ' + num + ' sélectionnée');
-                    return { type: 'ignore' };
-                }
-            }
-            var an = transcript.match(/\b(\d+)\b/), num = null;
-            if (an) { num = parseInt(an[1]); }
-            else { for (var w in numberMap) { if (transcript.includes(w)) { num = numberMap[w]; break; } } }
-            if (num !== null && !isNaN(num) && num > 0) {
-                window.venteSelectedIndex = num - 1;
-                if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
-                showVoiceResult('✅ Ligne ' + num + ' sélectionnée');
-                return { type: 'ignore' };
-            }
+            if (lm) { var ns = lm[1], num = parseInt(ns); if (isNaN(num)) { for (var w in numberMap) { if (ns.toLowerCase() === w) { num = numberMap[w]; break; } } } if (!isNaN(num) && num > 0) { window.venteSelectedIndex = num - 1; if (typeof window.renderVentesTable === 'function') window.renderVentesTable(); showVoiceResult('✅ Ligne ' + num + ' sélectionnée'); return { type: 'ignore' }; } }
+            var an = transcript.match(/\b(\d+)\b/), num = null; if (an) { num = parseInt(an[1]); } else { for (var w in numberMap) { if (transcript.includes(w)) { num = numberMap[w]; break; } } } if (num !== null && !isNaN(num) && num > 0) { window.venteSelectedIndex = num - 1; if (typeof window.renderVentesTable === 'function') window.renderVentesTable(); showVoiceResult('✅ Ligne ' + num + ' sélectionnée'); return { type: 'ignore' }; }
         }
         
         // ✅ DÉTAIL VENTE
@@ -207,63 +179,29 @@ function parseVoiceCommand(transcript) {
             if (window.venteSelectedIndex >= 0) {
                 var data = window.filteredVentes || window.allVentesData || [];
                 var vente = data[window.venteSelectedIndex];
-                if (vente) {
-                    if (typeof window.editVente === 'function') {
-                        window.editVente(vente.id);
-                    } else {
-                        showVoiceResult('📋 Détail de la vente ' + (vente.factureNum || ''));
-                    }
-                    return { type: 'ignore' };
-                }
+                if (vente) { if (typeof window.editVente === 'function') { window.editVente(vente.id); } else { showVoiceResult('📋 Détail de la vente ' + (vente.factureNum || '')); } return { type: 'ignore' }; }
             }
-            showVoiceResult('⚠️ Sélectionnez d\'abord une ligne');
-            return { type: 'ignore' };
+            showVoiceResult('⚠️ Sélectionnez d\'abord une ligne'); return { type: 'ignore' };
         }
         
         // ✅ FERMER SÉLECTION VENTES
         if (transcript.includes('fermer') || transcript.includes('retour')) {
-            if (window.venteSelectionMode) {
-                window.venteSelectionMode = false;
-                window.venteSelectedIndex = -1;
-                if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
-                showVoiceResult('📋 Mode sélection fermé');
-                return { type: 'ignore' };
-            }
+            if (window.venteSelectionMode) { window.venteSelectionMode = false; window.venteSelectedIndex = -1; if (typeof window.renderVentesTable === 'function') window.renderVentesTable(); showVoiceResult('📋 Mode sélection fermé'); return { type: 'ignore' }; }
         }
 
         // ✅ NAVIGATION DEPUIS VENTES
-        if (transcript.includes('point de vente') || transcript.includes('point vente') || transcript.includes('pos') || transcript.includes('caisse') || transcript.includes('retour pos') || transcript.includes('aller au pos')) {
-            return { type: 'navigate', page: 'pos' };
-        }
-        if (transcript.includes('crédits') || transcript.includes('impayés') || transcript.includes('liste des crédits') || transcript.includes('liste de crédit')) {
-            return { type: 'navigate', page: 'credits' };
-        }
-        if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) {
-            return { type: 'navigate', page: 'dashboard' };
-        }
-        if (transcript.includes('commandes')) {
-            return { type: 'navigate', page: 'commandes' };
-        }
-        if (transcript.includes('produits') || transcript.includes('catalogue')) {
-            return { type: 'navigate', page: 'products' };
-        }
-        if (transcript.includes('clients') || transcript.includes('clientèle')) {
-            return { type: 'navigate', page: 'clients' };
-        }
-        if (transcript.includes('ventes') || transcript.includes('vente')) {
-            showVoiceResult('✅ Déjà sur Ventes');
-            return { type: 'ignore' };
-        }
+        if (transcript.includes('point de vente') || transcript.includes('point vente') || transcript.includes('pos') || transcript.includes('caisse') || transcript.includes('retour pos') || transcript.includes('aller au pos')) { return { type: 'navigate', page: 'pos' }; }
+        if (transcript.includes('crédits') || transcript.includes('impayés') || transcript.includes('liste des crédits') || transcript.includes('liste de crédit')) { return { type: 'navigate', page: 'credits' }; }
+        if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) { return { type: 'navigate', page: 'dashboard' }; }
+        if (transcript.includes('commandes')) { return { type: 'navigate', page: 'commandes' }; }
+        if (transcript.includes('produits') || transcript.includes('catalogue')) { return { type: 'navigate', page: 'products' }; }
+        if (transcript.includes('clients') || transcript.includes('clientèle')) { return { type: 'navigate', page: 'clients' }; }
+        if (transcript.includes('ventes') || transcript.includes('vente')) { showVoiceResult('✅ Déjà sur Ventes'); return { type: 'ignore' }; }
 
         // ✅ RECHERCHE CLIENT
         var cn = null, fc = fastFindClient(transcript);
         if (fc.length === 1) cn = fc[0].nom + ' ' + fc[0].prenom;
-        else if (fc.length > 1) {
-            for (var j = 0; j < fc.length; j++) {
-                if ((fc[j].nom + ' ' + fc[j].prenom).toLowerCase().indexOf(transcript) !== -1) { cn = fc[j].nom + ' ' + fc[j].prenom; break; }
-            }
-            if (!cn) cn = fc[0].nom + ' ' + fc[0].prenom;
-        }
+        else if (fc.length > 1) { for (var j = 0; j < fc.length; j++) { if ((fc[j].nom + ' ' + fc[j].prenom).toLowerCase().indexOf(transcript) !== -1) { cn = fc[j].nom + ' ' + fc[j].prenom; break; } } if (!cn) cn = fc[0].nom + ' ' + fc[0].prenom; }
         if (cn) return { type: 'search_client_in_ventes', clientName: cn };
     }
 
@@ -272,14 +210,9 @@ function parseVoiceCommand(transcript) {
     // ===================================================================
     if (currentPage === 'Crédits') {
         if (creditDeletePending) {
-            if (transcript.includes('valide') || transcript.includes('validé') || transcript.includes('valider') || transcript.includes('oui') || transcript.includes('confirmer') || transcript.includes('ok')) {
-                return { type: 'confirm_delete_credit' };
-            }
-            if (transcript.includes('annule') || transcript.includes('annuler') || transcript.includes('non')) {
-                return { type: 'cancel_delete_credit' };
-            }
-            showVoiceResult('⚠️ Dites "valide" pour confirmer ou "annule" pour annuler');
-            return { type: 'ignore' };
+            if (transcript.includes('valide') || transcript.includes('validé') || transcript.includes('valider') || transcript.includes('oui') || transcript.includes('confirmer') || transcript.includes('ok')) { return { type: 'confirm_delete_credit' }; }
+            if (transcript.includes('annule') || transcript.includes('annuler') || transcript.includes('non')) { return { type: 'cancel_delete_credit' }; }
+            showVoiceResult('⚠️ Dites "valide" pour confirmer ou "annule" pour annuler'); return { type: 'ignore' };
         }
         if (window.creditPaymentStep !== 'payment' && window.creditPaymentStep !== 'amount') {
             if (transcript.includes('point de vente') || transcript.includes('point vente') || transcript.includes('pos') || transcript.includes('caisse') || transcript.includes('retour pos') || transcript.includes('aller au pos')) return { type: 'navigate', page: 'pos' };
@@ -290,9 +223,7 @@ function parseVoiceCommand(transcript) {
             if (transcript.includes('clients') || transcript.includes('clientèle')) return { type: 'navigate', page: 'clients' };
             if (transcript.includes('crédits') || transcript.includes('impayés') || transcript.includes('liste des crédits') || transcript.includes('liste de crédit')) { showVoiceResult('✅ Déjà sur Crédits'); return { type: 'ignore' }; }
         }
-        if ((transcript === 'supprimer' || transcript === 'supprime' || transcript === 'effacer' || transcript === 'enlever' || transcript === 'retirer') && window.creditSelectedIndex >= 0 && window.creditSelectionMode) {
-            return { type: 'delete_selected_credit' };
-        }
+        if ((transcript === 'supprimer' || transcript === 'supprime' || transcript === 'effacer' || transcript === 'enlever' || transcript === 'retirer') && window.creditSelectedIndex >= 0 && window.creditSelectionMode) { return { type: 'delete_selected_credit' }; }
         if (transcript === 'supprimer' || transcript === 'supprime' || transcript === 'effacer' || transcript === 'enlever' || transcript === 'retirer') {
             if (!window.creditSelectionMode) { window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne'); return { type: 'ignore' }; }
             if (window.creditSelectedIndex < 0) { showVoiceResult('⚠️ Dites d\'abord le numéro de la ligne à supprimer'); return { type: 'ignore' }; }
@@ -356,41 +287,13 @@ function parseVoiceCommand(transcript) {
 function searchClientInVentes(n) {
     if (!n) return;
     var s = document.getElementById('ventesSearchInput');
-    if (s) {
-        s.value = n;
-        window.ventesSearch = n;
-        window.currentPages.ventes = 1;
-        if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
-        showVoiceResult('🔍 ' + n);
-    } else {
-        if (typeof navigateTo === 'function') {
-            navigateTo('ventes');
-            setTimeout(function() {
-                var si = document.getElementById('ventesSearchInput');
-                if (si) {
-                    si.value = n;
-                    window.ventesSearch = n;
-                    window.currentPages.ventes = 1;
-                    if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
-                    showVoiceResult('🔍 ' + n);
-                }
-            }, 400);
-        }
-    }
+    if (s) { s.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); }
+    else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); } }, 400); } }
 }
 
 function searchClientInCredits(n) {
     if (!n) return;
-    if (typeof navigateTo === 'function') {
-        navigateTo('credits');
-        setTimeout(function() {
-            window.creditSelectionMode = true;
-            window.creditSelectedIndex = -1;
-            window.creditPaymentStep = 'idle';
-            if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
-            if (typeof selectCreditClient === 'function') selectCreditClient(n);
-        }, 800);
-    }
+    if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); if (typeof selectCreditClient === 'function') selectCreditClient(n); }, 800); }
 }
 
 // ==================== GESTIONNAIRE DE COMMANDES ====================
@@ -412,24 +315,12 @@ function handleVoiceCommand(cmd) {
         case 'navigate':
             var p = cmd.page, pt = { 'credits': 'Crédits', 'ventes': 'Ventes', 'dashboard': 'Dashboard', 'products': 'Produits', 'clients': 'Clients', 'commandes': 'Commandes en ligne', 'categories': 'Catégories', 'pos': 'POS' };
             if (cp === pt[p]) { showVoiceResult('✅ Déjà sur ' + pt[p]); return; }
-            if (typeof window.posCart !== 'undefined' && window.posCart.length > 0 && window.posStep === 1 && p !== 'pos') {
-                if (!confirm('⚠️ Panier non vide. Vider ?')) { showVoiceResult('↩️ Annulé'); return; }
-                if (typeof window.posResetCart === 'function') window.posResetCart();
-            }
-            showVoiceResult('📋 ' + pt[p]);
-            if (typeof navigateTo === 'function') navigateTo(p);
-            if (p === 'credits') {
-                setTimeout(function() {
-                    window.creditSelectionMode = true;
-                    window.creditSelectedIndex = -1;
-                    window.creditPaymentStep = 'idle';
-                    if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
-                }, 800);
-            }
+            if (typeof window.posCart !== 'undefined' && window.posCart.length > 0 && window.posStep === 1 && p !== 'pos') { if (!confirm('⚠️ Panier non vide. Vider ?')) { showVoiceResult('↩️ Annulé'); return; } if (typeof window.posResetCart === 'function') window.posResetCart(); }
+            showVoiceResult('📋 ' + pt[p]); if (typeof navigateTo === 'function') navigateTo(p);
+            if (p === 'credits') { setTimeout(function() { window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); }, 800); }
             break;
         case 'payment_mode':
-            var m = cmd.mode;
-            if ((m === 'credit' || m === 'partiel') && (!window.posCurrentClient || !window.posCurrentClient.id)) { alert('Client requis'); showVoiceResult('⚠️ Client requis'); return; }
+            var m = cmd.mode; if ((m === 'credit' || m === 'partiel') && (!window.posCurrentClient || !window.posCurrentClient.id)) { alert('Client requis'); showVoiceResult('⚠️ Client requis'); return; }
             if (typeof window.posSetPaymentMethod === 'function') { window.posSetPaymentMethod(m); showVoiceResult('✅ ' + m); if (typeof window.renderPOS === 'function') window.renderPOS(); if (m === 'espece') setTimeout(function() { var ai = document.getElementById('posAmountGiven'); if (ai) ai.focus(); }, 200); }
             break;
         case 'product':
@@ -446,11 +337,10 @@ function handleVoiceCommand(cmd) {
         case 'finalize': if (window.posStep === 2 && typeof window.posFinalizeSale === 'function') window.posFinalizeSale(); break;
         case 'clear': if (typeof window.posResetCart === 'function') { window.posResetCart(); showVoiceResult('🗑️ Panier vidé'); if (typeof window.renderPOS === 'function') window.renderPOS(); } break;
         case 'cancel': if (voiceMode !== 'search') { setVoiceMode('search', '🎤 Recherche vocale active', null); showVoiceResult('↩️ Recherche'); if (typeof window.renderPOS === 'function') window.renderPOS(); } break;
-        default:
-            if (cmd.text) {
-                var q = cmd.text.toLowerCase().trim(), found = false;
-                if (window.posStep === 2) { if (window.posAllClients) { var fc5 = fastFindClient(q); if (fc5.length > 0) { var b5 = fc5[0]; for (var j = 0; j < fc5.length; j++) { if ((fc5[j].nom + ' ' + fc5[j].prenom).toLowerCase().indexOf(q) !== -1) { b5 = fc5[j]; break; } } window.posCurrentClient = { id: b5.id, name: b5.nom + ' ' + b5.prenom }; window.posCurrentTable = ''; var ci2 = document.getElementById('posClientSearchInput'); if (ci2) ci2.value = window.posCurrentClient.name; if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons(); if (typeof window.renderPOS === 'function') window.renderPOS(); showVoiceResult('👤 ' + window.posCurrentClient.name); found = true; } } if (!found && typeof window.posSearchProducts === 'function') window.posSearchProducts(q); } else { if (typeof window.posSearchProducts === 'function') window.posSearchProducts(q); if (window.posAllClients) { var fc6 = fastFindClient(q); if (fc6.length > 0) { var b6 = fc6[0]; for (var j = 0; j < fc6.length; j++) { if ((fc6[j].nom + ' ' + fc6[j].prenom).toLowerCase().indexOf(q) !== -1) { b6 = fc6[j]; break; } } window.posCurrentClient = { id: b6.id, name: b6.nom + ' ' + b6.prenom }; window.posCurrentTable = ''; var ci3 = document.getElementById('posClientSearchInput'); if (ci3) ci3.value = window.posCurrentClient.name; if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons(); if (typeof window.renderPOS === 'function') window.renderPOS(); showVoiceResult('👤 ' + window.posCurrentClient.name); } } } }
-            break;
+        default: if (cmd.text) { var q = cmd.text.toLowerCase().trim(), found = false;
+            if (window.posStep === 2) { if (window.posAllClients) { var fc5 = fastFindClient(q); if (fc5.length > 0) { var b5 = fc5[0]; for (var j = 0; j < fc5.length; j++) { if ((fc5[j].nom + ' ' + fc5[j].prenom).toLowerCase().indexOf(q) !== -1) { b5 = fc5[j]; break; } } window.posCurrentClient = { id: b5.id, name: b5.nom + ' ' + b5.prenom }; window.posCurrentTable = ''; var ci2 = document.getElementById('posClientSearchInput'); if (ci2) ci2.value = window.posCurrentClient.name; if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons(); if (typeof window.renderPOS === 'function') window.renderPOS(); showVoiceResult('👤 ' + window.posCurrentClient.name); found = true; } } if (!found && typeof window.posSearchProducts === 'function') window.posSearchProducts(q); }
+            else { if (typeof window.posSearchProducts === 'function') window.posSearchProducts(q); if (window.posAllClients) { var fc6 = fastFindClient(q); if (fc6.length > 0) { var b6 = fc6[0]; for (var j = 0; j < fc6.length; j++) { if ((fc6[j].nom + ' ' + fc6[j].prenom).toLowerCase().indexOf(q) !== -1) { b6 = fc6[j]; break; } } window.posCurrentClient = { id: b6.id, name: b6.nom + ' ' + b6.prenom }; window.posCurrentTable = ''; var ci3 = document.getElementById('posClientSearchInput'); if (ci3) ci3.value = window.posCurrentClient.name; if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons(); if (typeof window.renderPOS === 'function') window.renderPOS(); showVoiceResult('👤 ' + window.posCurrentClient.name); } } } }
+        break;
     }
 }
 
@@ -461,96 +351,39 @@ function setVoiceMode(m, msg, pid) { voiceMode = m; if (msg) voiceModeMessage = 
 function posToggleVoiceSearch() { var s = checkVoiceSupport(); if (!s.supported) { alert('⚠️ ' + s.reason); return; } if (!navigator.onLine) { alert('⚠️ Connexion internet requise.'); return; } var mb = document.getElementById('posMicBtn'); if (isRecording) { posStopVoiceSearch(); return; } requestMicrophonePermission().then(function(p) { if (!p) { alert('❌ Micro refusé.'); return; } posStartVoiceRecording(); }); }
 
 function posStartVoiceRecording() {
-    var mb = document.getElementById('posMicBtn');
-    if (voiceRecognition) { try { voiceRecognition.abort(); } catch (e) {} voiceRecognition = null; }
-    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert('❌ Reconnaissance vocale non disponible.'); return; }
-    voiceRecognition = new SR();
-    voiceRecognition.lang = 'fr-FR';
-    voiceRecognition.continuous = true;
-    voiceRecognition.interimResults = true;
-    voiceRecognition.maxAlternatives = 1;
-    
-    if (mb) {
-        mb.classList.add('recording');
-        mb.innerHTML = '<i class="fas fa-circle" style="color:#ef4444;animation:pulse 0.5s ease-in-out infinite;"></i>';
-        mb.style.background = '#fee2e2'; mb.style.borderColor = '#ef4444';
-        mb.style.boxShadow = '0 0 0 4px rgba(239,68,68,0.3)'; mb.style.transform = 'scale(0.95)'; mb.style.border = '3px solid #ef4444';
-    }
-    var style = document.getElementById('voiceStyle');
-    if (!style) { style = document.createElement('style'); style.id = 'voiceStyle'; document.head.appendChild(style); }
-    style.textContent = '@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.2;transform:scale(1.3)}}.recording .fa-circle{animation:pulse 0.5s ease-in-out infinite !important}';
-    
+    var mb = document.getElementById('posMicBtn'); if (voiceRecognition) { try { voiceRecognition.abort(); } catch (e) {} voiceRecognition = null; }
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) { alert('❌ Reconnaissance vocale non disponible.'); return; }
+    voiceRecognition = new SR(); voiceRecognition.lang = 'fr-FR'; voiceRecognition.continuous = true; voiceRecognition.interimResults = true; voiceRecognition.maxAlternatives = 1;
+    if (mb) { mb.classList.add('recording'); mb.innerHTML = '<i class="fas fa-circle" style="color:#ef4444;animation:pulse 0.5s ease-in-out infinite;"></i>'; mb.style.background = '#fee2e2'; mb.style.borderColor = '#ef4444'; mb.style.boxShadow = '0 0 0 4px rgba(239,68,68,0.3)'; mb.style.transform = 'scale(0.95)'; mb.style.border = '3px solid #ef4444'; }
+    var style = document.getElementById('voiceStyle'); if (!style) { style = document.createElement('style'); style.id = 'voiceStyle'; document.head.appendChild(style); } style.textContent = '@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.2;transform:scale(1.3)}}.recording .fa-circle{animation:pulse 0.5s ease-in-out infinite !important}';
     var ft = '', li = '', proc = false, vdt = null;
-    
     voiceRecognition.onresult = function(e) {
-        var it = '', ftt = '';
-        for (var i = e.resultIndex; i < e.results.length; i++) {
-            var t = e.results[i][0].transcript;
-            if (e.results[i].isFinal) ftt += t; else it += t;
-        }
-        var cp = document.getElementById('pageTitle')?.textContent || '';
-        var debounceDelay = (voiceMode === 'quantity' || voiceMode === 'payment' || window.posStep === 2) ? 50 : 80;
-        
-        if (cp === 'Crédits') {
-            var vd = document.getElementById('creditsVoiceDisplay');
-            if (vd) {
-                if (ftt) { vd.value = ftt; clearTimeout(vdt); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); }
-                else if (it) { vd.value = it + ' ✍️'; }
-            }
-        } else if (cp === 'Ventes') {
-            var vd2 = document.getElementById('ventesVoiceDisplay');
-            if (vd2) {
-                if (ftt) { vd2.value = ftt; clearTimeout(vdt); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); }
-                else if (it) { vd2.value = it + ' ✍️'; }
-            }
-        } else {
-            var si = document.getElementById('posSearchInput');
-            if (si) {
-                if (ftt) { si.value = ftt; clearTimeout(vdt); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); }
-                else if (it && it !== li) { si.value = it + ' ✍️'; li = it; }
-            }
-        }
+        var it = '', ftt = ''; for (var i = e.resultIndex; i < e.results.length; i++) { var t = e.results[i][0].transcript; if (e.results[i].isFinal) ftt += t; else it += t; }
+        var cp = document.getElementById('pageTitle')?.textContent || ''; var debounceDelay = (voiceMode === 'quantity' || voiceMode === 'payment' || window.posStep === 2) ? 50 : 80;
+        if (cp === 'Crédits') { var vd = document.getElementById('creditsVoiceDisplay'); if (vd) { if (ftt) { vd.value = ftt; clearTimeout(vdt); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd.value = it + ' ✍️'; } } }
+        else if (cp === 'Ventes') { var vd2 = document.getElementById('ventesVoiceDisplay'); if (vd2) { if (ftt) { vd2.value = ftt; clearTimeout(vdt); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd2.value = it + ' ✍️'; } } }
+        else { var si = document.getElementById('posSearchInput'); if (si) { if (ftt) { si.value = ftt; clearTimeout(vdt); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it && it !== li) { si.value = it + ' ✍️'; li = it; } } }
     };
-    
     voiceRecognition.onend = function() { if (isRecording) { setTimeout(function() { try { voiceRecognition.start(); } catch (e) { posStopVoiceSearch(); } }, 50); } };
     voiceRecognition.onerror = function(e) { if (e.error === 'aborted' || e.error === 'no-speech') return; if (e.error === 'network') showVoiceResult('❌ Erreur réseau'); posStopVoiceSearch(); };
-    
-    try { voiceRecognition.start(); isRecording = true; showVoiceModeIndicator(); showVoiceResult('🎤 Écoute...'); }
-    catch (e) { isRecording = false; if (mb) { mb.classList.remove('recording'); mb.innerHTML = '<i class="fas fa-microphone"></i>'; mb.style.background = '#dcfce7'; mb.style.borderColor = '#16a34a'; mb.style.boxShadow = 'none'; mb.style.transform = 'scale(1)'; mb.style.border = '3px solid #16a34a'; } }
+    try { voiceRecognition.start(); isRecording = true; showVoiceModeIndicator(); showVoiceResult('🎤 Écoute...'); } catch (e) { isRecording = false; if (mb) { mb.classList.remove('recording'); mb.innerHTML = '<i class="fas fa-microphone"></i>'; mb.style.background = '#dcfce7'; mb.style.borderColor = '#16a34a'; mb.style.boxShadow = 'none'; mb.style.transform = 'scale(1)'; mb.style.border = '3px solid #16a34a'; } }
 }
 
-function posStopVoiceSearch() {
-    if (voiceRecognition) { try { voiceRecognition.abort(); } catch (e) {} voiceRecognition = null; } isRecording = false;
-    var mb = document.getElementById('posMicBtn'), si = document.getElementById('posSearchInput');
-    if (mb) { mb.classList.remove('recording'); mb.innerHTML = '<i class="fas fa-microphone"></i>'; mb.style.background = '#dcfce7'; mb.style.borderColor = '#16a34a'; mb.style.boxShadow = 'none'; mb.style.transform = 'scale(1)'; mb.style.border = '3px solid #16a34a'; }
-    if (si) { si.placeholder = '🔍 Rechercher...'; si.style.background = '#fff'; si.style.borderColor = '#e2e8f0'; si.style.boxShadow = 'none'; si.style.border = '2px solid #e2e8f0'; }
-    var se = document.getElementById('voiceStyle'); if (se) se.remove(); var ind = document.getElementById('voiceModeIndicator'); if (ind) ind.remove();
-    showVoiceResult('🎤 Micro désactivé');
-}
+function posStopVoiceSearch() { if (voiceRecognition) { try { voiceRecognition.abort(); } catch (e) {} voiceRecognition = null; } isRecording = false; var mb = document.getElementById('posMicBtn'), si = document.getElementById('posSearchInput'); if (mb) { mb.classList.remove('recording'); mb.innerHTML = '<i class="fas fa-microphone"></i>'; mb.style.background = '#dcfce7'; mb.style.borderColor = '#16a34a'; mb.style.boxShadow = 'none'; mb.style.transform = 'scale(1)'; mb.style.border = '3px solid #16a34a'; } if (si) { si.placeholder = '🔍 Rechercher...'; si.style.background = '#fff'; si.style.borderColor = '#e2e8f0'; si.style.boxShadow = 'none'; si.style.border = '2px solid #e2e8f0'; } var se = document.getElementById('voiceStyle'); if (se) se.remove(); var ind = document.getElementById('voiceModeIndicator'); if (ind) ind.remove(); showVoiceResult('🎤 Micro désactivé'); }
 
 // ==================== RECONSTRUCTION INDEX ====================
 var originalLoadPosPage = window.loadPosPage;
 if (typeof originalLoadPosPage === 'function') { window.loadPosPage = async function(c) { await originalLoadPosPage(c); setTimeout(function() { invalidateClientIndex(); }, 500); }; }
 
 // ==================== EXPORTS ====================
-window.posToggleVoiceSearch = posToggleVoiceSearch;
-window.showVoiceResult = showVoiceResult;
-window.setVoiceMode = setVoiceMode;
-window.showVoiceModeIndicator = showVoiceModeIndicator;
-window.activateCreditSelection = activateCreditSelection;
-window.selectCreditLine = selectCreditLine;
-window.markCreditForPayment = markCreditForPayment;
-window.setCreditPaymentAmount = setCreditPaymentAmount;
-window.validateCreditPayment = validateCreditPayment;
-window.closeCreditSelection = closeCreditSelection;
-window.parseVoiceCommand = parseVoiceCommand;
-window.handleVoiceCommand = handleVoiceCommand;
-window.invalidateClientIndex = invalidateClientIndex;
-window.deleteCreditByVoice = deleteCreditByVoice;
-window.deleteSelectedCredit = deleteSelectedCredit;
-window.confirmDeleteCredit = confirmDeleteCredit;
-window.cancelDeleteCredit = cancelDeleteCredit;
+window.posToggleVoiceSearch = posToggleVoiceSearch; window.showVoiceResult = showVoiceResult; window.setVoiceMode = setVoiceMode;
+window.showVoiceModeIndicator = showVoiceModeIndicator; window.activateCreditSelection = activateCreditSelection;
+window.selectCreditLine = selectCreditLine; window.markCreditForPayment = markCreditForPayment;
+window.setCreditPaymentAmount = setCreditPaymentAmount; window.validateCreditPayment = validateCreditPayment;
+window.closeCreditSelection = closeCreditSelection; window.parseVoiceCommand = parseVoiceCommand;
+window.handleVoiceCommand = handleVoiceCommand; window.invalidateClientIndex = invalidateClientIndex;
+window.deleteCreditByVoice = deleteCreditByVoice; window.deleteSelectedCredit = deleteSelectedCredit;
+window.confirmDeleteCredit = confirmDeleteCredit; window.cancelDeleteCredit = cancelDeleteCredit;
 window.onProductAdded = function(pid) { lastAddedProductId = pid; setVoiceMode('quantity', '🎤 Dites un nombre, "passe" ou "valide"', pid); showVoiceModeIndicator(); };
 
 console.log('🎤 Mixmax Minimarket - Module vocal v6.4 FINAL (Ventes complètes)');
