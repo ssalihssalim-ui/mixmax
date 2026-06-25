@@ -1,7 +1,7 @@
 // ==================== ADMIN-VENTES.JS - MIXMAX MINIMARKET ====================
 // Contient : Commandes en ligne, Ventes
 // Dépend de : admin.js (variables globales, fonctions utilitaires)
-// Version corrigée FINALE : window. pour toutes les variables + input vocal ventes
+// Version FINALE : window. pour toutes les variables + input vocal + mode sélection ventes
 
 // ========== VARIABLES GLOBALES ==========
 window.commandesSearch = window.commandesSearch || '';
@@ -12,6 +12,8 @@ window.allVentesData = window.allVentesData || [];
 window.allCommandesData = window.allCommandesData || [];
 window.filteredVentes = window.filteredVentes || null;
 window.filteredCommandes = window.filteredCommandes || null;
+window.venteSelectionMode = window.venteSelectionMode || false;
+window.venteSelectedIndex = window.venteSelectedIndex || -1;
 
 // ==================== COMMANDES EN LIGNE ====================
 function loadCommandesPage(c) {
@@ -147,13 +149,16 @@ function cancelCommande(cid) {
 function loadVentesPage(c) {
     window.ventesPeriod = 'all'; 
     window.ventesSearch = '';
+    window.venteSelectionMode = false;
+    window.venteSelectedIndex = -1;
     if (!window.sortOrders.ventes) window.sortOrders.ventes = {}; 
     if (!window.sortOrders.ventes.createdAt) { window.sortOrders.ventes.createdAt = 'desc'; }
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-shopping-cart"></i> Ventes</h3><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
         '<input type="text" id="ventesSearchInput" placeholder="🔍 Rechercher (client, produit)..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:250px;" onkeyup="window.ventesSearch = this.value; window.currentPages.ventes=1; applyVentesFilters();">' +
         '<input type="text" id="ventesVoiceDisplay" placeholder="🎤 Audio..." style="padding:8px 12px; border:2px solid #16a34a; border-radius:8px; width:180px; background:#f0fdf4; color:#14532d; font-weight:600;" readonly>' +
         '<select id="ventesPeriodSelect" style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px;" onchange="window.ventesPeriod = this.value; window.currentPages.ventes=1; applyVentesFilters();">' + getPeriodOptions('all') + '</select>' +
-        '<button class="btn-add" onclick="loadVentes()"><i class="fas fa-sync"></i> Actualiser</button></div></div><div id="ventesTableContainer"></div><div id="ventesPagination" style="margin-top:10px;"></div></div>';
+        '<button class="btn-add" onclick="loadVentes()"><i class="fas fa-sync"></i> Actualiser</button>' +
+        '</div></div><div id="ventesTableContainer"></div><div id="ventesPagination" style="margin-top:10px;"></div></div>';
     loadVentes();
 }
 
@@ -241,8 +246,14 @@ function renderVentesTable() {
         makeSortableHeader('ventes', 'vendeur', 'Vendeur', 'renderVentesTable') + 
         makeSortableHeader('ventes', 'paymentMethod', 'Paiement', 'renderVentesTable') +
         makeSortableHeader('ventes', 'statutPaiement', 'Statut', 'renderVentesTable') + 
-        '<th>Actions</th></thead><tbody>';
-    pageData.forEach(function(d) {
+        '<th>Actions</th>';
+    // ✅ Colonne sélection si mode actif
+    if (window.venteSelectionMode) {
+        h += '<th style="width:40px;">✅</th>';
+    }
+    h += '</thead><tbody>';
+    
+    pageData.forEach(function(d, index) {
         var dt = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleString('fr-FR') : '';
         var cl = d.clientName || d.table || '-';
         var arts = d.items ? d.items.map(function(it) { return '<strong>' + it.quantite + 'x</strong> ' + escapeHtml(it.nom); }).join('<br>') : '-';
@@ -262,9 +273,20 @@ function renderVentesTable() {
         var actions = '<button class="btn-edit" onclick="printFacture(\'' + d.id + '\')"><i class="fas fa-print"></i></button> ';
         if (!d.paid) actions += '<button class="btn-add" style="padding:4px 6px;font-size:0.65rem;" onclick="payerVente(\'' + d.id + '\')"><i class="fas fa-check"></i> Payer</button> ';
         if (isAdmin) actions += '<button class="btn-edit" onclick="editVente(\'' + d.id + '\')"><i class="fas fa-edit"></i></button> <button class="btn-delete" onclick="deleteVente(\'' + d.id + '\')"><i class="fas fa-trash"></i></button>';
-        h += '<tr><td><strong>' + (d.factureNum || d.id.substring(0, 8)) + '</strong></td><td>' + dt + '</td><td>' + cl + '</td><td>' + arts + '</td><td>' + opts + '</td>' +
+        
+        var isSelected = (window.venteSelectionMode && window.venteSelectedIndex === index);
+        var rowClass = isSelected ? ' style="background:#fef3c7; border-left:4px solid #d97706;"' : '';
+        
+        h += '<tr' + rowClass + '><td><strong>' + (d.factureNum || d.id.substring(0, 8)) + '</strong></td><td>' + dt + '</td><td>' + cl + '</td><td>' + arts + '</td><td>' + opts + '</td>' +
             (isAdmin ? '<td>' + d.achat.toFixed(2) + '</td><td style="color:#2E7D32;">' + d.profit.toFixed(2) + '</td>' : '') +
-            '<td><strong>' + (d.total || 0).toFixed(2) + '</strong></td><td>' + (d.discountMAD || 0).toFixed(2) + '</td><td>' + amountGiven.toFixed(2) + '</td><td>' + change.toFixed(2) + '</td><td>' + (d.vendeur || '-') + '</td><td>' + (d.paymentMethod || '-') + '</td><td><span style="color:' + statutColor + ';font-weight:600;">' + statutLabel + '</span></td><td>' + actions + '</td></tr>';
+            '<td><strong>' + (d.total || 0).toFixed(2) + '</strong></td><td>' + (d.discountMAD || 0).toFixed(2) + '</td><td>' + amountGiven.toFixed(2) + '</td><td>' + change.toFixed(2) + '</td><td>' + (d.vendeur || '-') + '</td><td>' + (d.paymentMethod || '-') + '</td><td><span style="color:' + statutColor + ';font-weight:600;">' + statutLabel + '</span></td><td>' + actions + '</td>';
+        
+        // ✅ Colonne sélection
+        if (window.venteSelectionMode) {
+            var checked = isSelected ? 'checked' : '';
+            h += '<td><input type="checkbox" ' + checked + ' onclick="window.venteSelectedIndex=' + index + ';renderVentesTable();"></td>';
+        }
+        h += '</tr>';
     });
     h += '</tbody></div><div style="margin-top:15px;padding:15px;background:#E8F5E9;border-radius:12px;text-align:center;"><strong>Total: ' + tv.toFixed(2) + ' MAD</strong></div>';
     cont.innerHTML = h; 
@@ -379,4 +401,4 @@ window.payerVente = payerVente;
 window.printFacture = printFacture;
 window.imprimerFacture = imprimerFacture;
 
-console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL corrigé)');
+console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec mode sélection)');
