@@ -1,7 +1,7 @@
 // ==================== ADMIN-VENTES.JS - MIXMAX MINIMARKET ====================
 // Contient : Commandes en ligne, Ventes
 // Dépend de : admin.js (variables globales, fonctions utilitaires)
-// Version corrigée : window. pour toutes les variables globales
+// Version corrigée FINALE : window. pour toutes les variables + input vocal ventes
 
 // ========== VARIABLES GLOBALES ==========
 window.commandesSearch = window.commandesSearch || '';
@@ -151,6 +151,7 @@ function loadVentesPage(c) {
     if (!window.sortOrders.ventes.createdAt) { window.sortOrders.ventes.createdAt = 'desc'; }
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-shopping-cart"></i> Ventes</h3><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
         '<input type="text" id="ventesSearchInput" placeholder="🔍 Rechercher (client, produit)..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:250px;" onkeyup="window.ventesSearch = this.value; window.currentPages.ventes=1; applyVentesFilters();">' +
+        '<input type="text" id="ventesVoiceDisplay" placeholder="🎤 Audio..." style="padding:8px 12px; border:2px solid #16a34a; border-radius:8px; width:180px; background:#f0fdf4; color:#14532d; font-weight:600;" readonly>' +
         '<select id="ventesPeriodSelect" style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px;" onchange="window.ventesPeriod = this.value; window.currentPages.ventes=1; applyVentesFilters();">' + getPeriodOptions('all') + '</select>' +
         '<button class="btn-add" onclick="loadVentes()"><i class="fas fa-sync"></i> Actualiser</button></div></div><div id="ventesTableContainer"></div><div id="ventesPagination" style="margin-top:10px;"></div></div>';
     loadVentes();
@@ -378,4 +379,4 @@ window.payerVente = payerVente;
 window.printFacture = printFacture;
 window.imprimerFacture = imprimerFacture;
 
-console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (corrigé)');
+console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL corrigé)');
