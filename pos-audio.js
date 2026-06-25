@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v6.1 FINAL - RECONNAISSANCE VOCALE COMPLÈTE ====================
-// Mixmax Minimarket - Dictionnaire enrichi + confirmation vocale + mode sélection auto
+// ==================== POS-AUDIO.JS v6.2 FINAL - RECONNAISSANCE VOCALE COMPLÈTE ====================
+// Mixmax Minimarket - Bloc Ventes corrigé + dictionnaire enrichi + confirmation vocale
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -18,7 +18,7 @@ var paymentKeywords = {
 };
 
 var numberMap = {
-    'wahed': 1,'Ouais': 1,'ouais': 1,'wad': 1, 'un': 1, 'une': 1,'juge': 2,'joue': 2,'souche': 2,'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
+    'Wahed': 1,'Ouais': 1,'Wad': 1, 'un': 1, 'une': 1,'juge': 2,'Joue': 2,'Souche': 2,'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5,
     'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
     'onze': 11, 'douze': 12, 'douz': 12, 'treize': 13, 'quatorze': 14,
     'quinze': 15, 'seize': 16, 'vingt': 20, 'trente': 30, 'quarante': 40,
@@ -122,7 +122,7 @@ function cancelDeleteCredit() { if (creditDeletePending) { creditDeletePending =
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL v6.1 (dictionnaire enrichi) ====================
+// ==================== PARSER VOCAL v6.2 ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
@@ -130,29 +130,36 @@ function parseVoiceCommand(transcript) {
     lastVoiceCommandTime = now;
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
 
-    // ===================================================================
-    // BLOC VENTES
-    // ===================================================================
     if (currentPage === 'Ventes') {
-        if (transcript.includes('point de vente') || transcript.includes('point vente') || transcript.includes('pos') || transcript.includes('caisse') || transcript.includes('retour pos') || transcript.includes('aller au pos')) return { type: 'navigate', page: 'pos' };
-        if (transcript.includes('crédits') || transcript.includes('impayés') || transcript.includes('liste des crédits') || transcript.includes('liste de crédit')) return { type: 'navigate', page: 'credits' };
-        if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) return { type: 'navigate', page: 'dashboard' };
-        if (transcript.includes('commandes')) return { type: 'navigate', page: 'commandes' };
-        if (transcript.includes('produits') || transcript.includes('catalogue')) return { type: 'navigate', page: 'products' };
-        if (transcript.includes('clients') || transcript.includes('clientèle')) return { type: 'navigate', page: 'clients' };
-        if (transcript.includes('ventes') || transcript.includes('vente')) { showVoiceResult('✅ Déjà sur Ventes'); return { type: 'ignore' }; }
+        if (transcript.includes('point de vente') || transcript.includes('point vente') || transcript.includes('pos') || transcript.includes('caisse') || transcript.includes('retour pos') || transcript.includes('aller au pos')) {
+            return { type: 'navigate', page: 'pos' };
+        }
+        if (transcript.includes('crédits') || transcript.includes('impayés') || transcript.includes('liste des crédits') || transcript.includes('liste de crédit')) {
+            return { type: 'navigate', page: 'credits' };
+        }
+        if (transcript.includes('dashboard') || transcript.includes('accueil') || transcript.includes('home')) {
+            return { type: 'navigate', page: 'dashboard' };
+        }
+        if (transcript.includes('commandes')) {
+            return { type: 'navigate', page: 'commandes' };
+        }
+        if (transcript.includes('produits') || transcript.includes('catalogue')) {
+            return { type: 'navigate', page: 'products' };
+        }
+        if (transcript.includes('clients') || transcript.includes('clientèle')) {
+            return { type: 'navigate', page: 'clients' };
+        }
+        if (transcript.includes('ventes') || transcript.includes('vente')) {
+            showVoiceResult('✅ Déjà sur Ventes');
+            return { type: 'ignore' };
+        }
         var cn=null,fc=fastFindClient(transcript);
         if(fc.length===1)cn=fc[0].nom+' '+fc[0].prenom;
         else if(fc.length>1){ for(var j=0;j<fc.length;j++){ if((fc[j].nom+' '+fc[j].prenom).toLowerCase().indexOf(transcript)!==-1){ cn=fc[j].nom+' '+fc[j].prenom;break; } } if(!cn)cn=fc[0].nom+' '+fc[0].prenom; }
         if(cn)return{type:'search_client_in_ventes',clientName:cn};
     }
 
-    // ===================================================================
-    // BLOC CRÉDITS v6.1 (dictionnaire enrichi)
-    // ===================================================================
     if (currentPage === 'Crédits') {
-        
-        // ✅ CONFIRMATION / ANNULATION DE SUPPRESSION (PRIORITAIRE ABSOLU)
         if (creditDeletePending) {
             if (transcript.includes('valide') || transcript.includes('validé') || transcript.includes('valider') || transcript.includes('oui') || transcript.includes('confirmer') || transcript.includes('ok')) {
                 return { type: 'confirm_delete_credit' };
@@ -163,8 +170,6 @@ function parseVoiceCommand(transcript) {
             showVoiceResult('⚠️ Dites "valide" pour confirmer ou "annule" pour annuler');
             return { type: 'ignore' };
         }
-        
-        // Navigation depuis Crédits (ignorée si en mode paiement)
         if (window.creditPaymentStep !== 'payment' && window.creditPaymentStep !== 'amount') {
             if (transcript.includes('point de vente') || transcript.includes('point vente') || transcript.includes('pos') || transcript.includes('caisse') || transcript.includes('retour pos') || transcript.includes('aller au pos')) return { type: 'navigate', page: 'pos' };
             if (transcript.includes('ventes') || transcript.includes('vente')) return { type: 'navigate', page: 'ventes' };
@@ -174,65 +179,35 @@ function parseVoiceCommand(transcript) {
             if (transcript.includes('clients') || transcript.includes('clientèle')) return { type: 'navigate', page: 'clients' };
             if (transcript.includes('crédits') || transcript.includes('impayés') || transcript.includes('liste des crédits') || transcript.includes('liste de crédit')) { showVoiceResult('✅ Déjà sur Crédits'); return { type: 'ignore' }; }
         }
-
-        // ✅ SUPPRESSION SIMPLE (ligne sélectionnée) - Demande confirmation
-        if ((transcript === 'supprimer' || transcript === 'supprime' || transcript === 'effacer' || transcript === 'enlever' || transcript === 'retirer') && 
-            window.creditSelectedIndex >= 0 && window.creditSelectionMode) {
+        if ((transcript === 'supprimer' || transcript === 'supprime' || transcript === 'effacer' || transcript === 'enlever' || transcript === 'retirer') && window.creditSelectedIndex >= 0 && window.creditSelectionMode) {
             return { type: 'delete_selected_credit' };
         }
-        
-        // ✅ SUPPRESSION sans ligne sélectionnée
         if (transcript === 'supprimer' || transcript === 'supprime' || transcript === 'effacer' || transcript === 'enlever' || transcript === 'retirer') {
-            if (!window.creditSelectionMode) {
-                window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle';
-                if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
-                showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne');
-                return { type: 'ignore' };
-            }
+            if (!window.creditSelectionMode) { window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); showVoiceResult('📋 Mode sélection activé. Dites le numéro de la ligne'); return { type: 'ignore' }; }
             if (window.creditSelectedIndex < 0) { showVoiceResult('⚠️ Dites d\'abord le numéro de la ligne à supprimer'); return { type: 'ignore' }; }
             return { type: 'delete_selected_credit' };
         }
-
-        // Recherche client
         var cn2=null,fc2=fastFindClient(transcript);
         if(fc2.length===1)cn2=fc2[0].nom+' '+fc2[0].prenom;
         else if(fc2.length>1){ for(var j2=0;j2<fc2.length;j2++){ if((fc2[j2].nom+' '+fc2[j2].prenom).toLowerCase().indexOf(transcript)!==-1){ cn2=fc2[j2].nom+' '+fc2[j2].prenom;break; } } if(!cn2)cn2=fc2[0].nom+' '+fc2[0].prenom; }
         if(cn2)return{type:'search_client_in_credits',clientName:cn2};
-
-        // Validation du paiement (PRIORITAIRE)
         if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
-            var amtNum = transcript.match(/\b(\d+[.,]?\d*)\b/);
-            if (amtNum) { var amt = parseFloat(amtNum[1].replace(',', '.')); if (!isNaN(amt) && amt > 0) return { type: 'set_credit_amount', amount: amt }; }
-            var foundAmt = null;
-            for (var w in numberMap) { if (transcript.includes(w)) { foundAmt = numberMap[w]; break; } }
-            if (foundAmt !== null && foundAmt > 0) return { type: 'set_credit_amount', amount: foundAmt };
-            if (transcript.includes('valide') || transcript.includes('validé') || transcript.includes('valider') || transcript.includes('confirmer') || transcript.includes('ok') || transcript.includes('oui')) {
-                return { type: 'validate_credit_payment' };
-            }
+            var amtNum = transcript.match(/\b(\d+[.,]?\d*)\b/); if (amtNum) { var amt = parseFloat(amtNum[1].replace(',', '.')); if (!isNaN(amt) && amt > 0) return { type: 'set_credit_amount', amount: amt }; }
+            var foundAmt = null; for (var w in numberMap) { if (transcript.includes(w)) { foundAmt = numberMap[w]; break; } } if (foundAmt !== null && foundAmt > 0) return { type: 'set_credit_amount', amount: foundAmt };
+            if (transcript.includes('valide') || transcript.includes('validé') || transcript.includes('valider') || transcript.includes('confirmer') || transcript.includes('ok') || transcript.includes('oui')) return { type: 'validate_credit_payment' };
             return { type: 'unknown', text: transcript };
         }
-
-        // ✅ SUPPRESSION PAR LIGNE
         var deleteMatch = transcript.match(/(?:supprimer|supprime|effacer|enlever|retirer)\s+(?:ligne\s+)?(\d+|[a-z]+)/i);
-        if (deleteMatch) {
-            var delNum = parseInt(deleteMatch[1]);
-            if (isNaN(delNum)) { for (var w in numberMap) { if (deleteMatch[1].toLowerCase() === w) { delNum = numberMap[w]; break; } } }
-            if (!isNaN(delNum) && delNum > 0) return { type: 'delete_credit_line', lineNumber: delNum };
-        }
-
-        // Commandes crédits
+        if (deleteMatch) { var delNum = parseInt(deleteMatch[1]); if (isNaN(delNum)) { for (var w in numberMap) { if (deleteMatch[1].toLowerCase() === w) { delNum = numberMap[w]; break; } } } if (!isNaN(delNum) && delNum > 0) return { type: 'delete_credit_line', lineNumber: delNum }; }
         if (transcript.includes('sélectionner') || transcript.includes('sélectionne') || transcript.includes('select') || transcript.includes('choisir') || transcript.includes('cocher')) return { type: 'activate_credit_selection' };
-        var lm=transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
-        if(lm){ var ns=lm[1],num=parseInt(ns); if(isNaN(num)){ for(var w in numberMap){ if(ns.toLowerCase()===w){ num=numberMap[w];break; } } } if(!isNaN(num)&&num>0)return{type:'select_credit_line',lineNumber:num}; }
+        var lm=transcript.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i); if(lm){ var ns=lm[1],num=parseInt(ns); if(isNaN(num)){ for(var w in numberMap){ if(ns.toLowerCase()===w){ num=numberMap[w];break; } } } if(!isNaN(num)&&num>0)return{type:'select_credit_line',lineNumber:num}; }
         if(window.creditSelectionMode&&(window.creditPaymentStep!=='payment'&&window.creditPaymentStep!=='amount')){ var an=transcript.match(/\b(\d+)\b/),num=null; if(an){ num=parseInt(an[1]); }else{ for(var w in numberMap){ if(transcript.includes(w)){ num=numberMap[w];break; } } } if(num!==null&&!isNaN(num)&&num>0)return{type:'select_credit_line',lineNumber:num}; }
         if(transcript.includes('marquer payé')||transcript.includes('payer')||transcript.includes('régler'))return{type:'mark_credit_paid'};
-        var am=transcript.match(/montant\s+(\d+[.,]?\d*)/i);
-        if(am){ var a=parseFloat(am[1].replace(',','.')); if(!isNaN(a)&&a>0)return{type:'set_credit_amount',amount:a}; }
+        var am=transcript.match(/montant\s+(\d+[.,]?\d*)/i); if(am){ var a=parseFloat(am[1].replace(',','.')); if(!isNaN(a)&&a>0)return{type:'set_credit_amount',amount:a}; }
         if(transcript.includes('fermer')||transcript.includes('retour'))return{type:'close_credit_list'};
         return{type:'unknown',text:transcript};
     }
 
-    // === NAVIGATION (depuis autres pages) ===
     if(transcript.includes('crédits')||transcript.includes('impayés')||transcript.includes('liste des crédits')||transcript.includes('liste de crédit'))return{type:'navigate',page:'credits'};
     if(transcript.includes('ventes')||transcript.includes('vente'))return{type:'navigate',page:'ventes'};
     if(transcript.includes('dashboard')||transcript.includes('accueil')||transcript.includes('home'))return{type:'navigate',page:'dashboard'};
@@ -358,4 +333,4 @@ window.deleteCreditByVoice=deleteCreditByVoice;window.deleteSelectedCredit=delet
 window.confirmDeleteCredit=confirmDeleteCredit;window.cancelDeleteCredit=cancelDeleteCredit;
 window.onProductAdded=function(pid){lastAddedProductId=pid;setVoiceMode('quantity','🎤 Dites un nombre, "passe" ou "valide"',pid);showVoiceModeIndicator();};
 
-console.log('🎤 Mixmax Minimarket - Module vocal v6.1 FINAL (dictionnaire enrichi)');
+console.log('🎤 Mixmax Minimarket - Module vocal v6.2 FINAL (bloc Ventes corrigé)');
