@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v7.2 FINAL - RECONNAISSANCE VOCALE COMPLÈTE ====================
-// Mixmax Minimarket - Délais extrêmes (80ms/20ms) + indicateurs de phase courts + navigation optimisée
+// ==================== POS-AUDIO.JS v7.3 FINAL - RECONNAISSANCE VOCALE OPTIMISÉE ====================
+// Mixmax Minimarket - Anti-doublon 80ms + index avancé + cache permission micro
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -13,6 +13,9 @@ var lastVoiceCommandTime = 0;
 
 var voiceFlowPhase = 'idle';
 var voiceFlowIndicator = null;
+
+// ✅ Cache permission micro
+var micPermissionGranted = false;
 
 var paymentKeywords = {
     'espece': ['espèces', 'espece', 'argent', 'cash', 'comptant', 'liquide', 'espèce'],
@@ -37,7 +40,7 @@ var creditDeletePending = null;
 window.venteSelectionMode = false;
 window.venteSelectedIndex = -1;
 
-// ========== INDEX DE RECHERCHE CLIENT ==========
+// ========== INDEX DE RECHERCHE CLIENT (AVANCÉ) ==========
 var clientSearchIndex = {};
 var clientIndexBuilt = false;
 
@@ -46,14 +49,22 @@ function buildClientIndex() {
     clientSearchIndex = {};
     window.posAllClients.forEach(function(c) {
         if (!c || !c.id) return;
-        var mots = ((c.nom || '') + ' ' + (c.prenom || '') + ' ' + (c.description || '') + ' ' + (c.telephone || '')).toLowerCase().split(/[\s,;.]+/);
+        // ✅ Indexer nom, prénom, téléphone ET description - mots dès 1 lettre
+        var allText = (c.nom + ' ' + c.prenom + ' ' + c.telephone + ' ' + (c.description || '')).toLowerCase();
+        var mots = allText.split(/[\s,;.]+/);
         mots.forEach(function(mot) {
             mot = mot.trim();
-            if (mot.length >= 2) {
+            if (mot.length >= 1) {
                 if (!clientSearchIndex[mot]) clientSearchIndex[mot] = [];
                 if (clientSearchIndex[mot].indexOf(c) === -1) clientSearchIndex[mot].push(c);
             }
         });
+        // ✅ Indexer le nom complet exact
+        var fullName = (c.nom + ' ' + c.prenom).toLowerCase().trim();
+        if (fullName.length >= 2) {
+            if (!clientSearchIndex[fullName]) clientSearchIndex[fullName] = [];
+            if (clientSearchIndex[fullName].indexOf(c) === -1) clientSearchIndex[fullName].push(c);
+        }
     });
     clientIndexBuilt = true;
 }
@@ -61,12 +72,12 @@ function buildClientIndex() {
 function fastFindClient(query) {
     buildClientIndex();
     var q = query.toLowerCase().trim();
-    if (!q || q.length < 2) return window.posAllClients ? window.posAllClients.slice() : [];
+    if (!q || q.length < 1) return window.posAllClients ? window.posAllClients.slice() : [];
     var mots = q.split(/[\s,;.]+/);
     var seen = {}, results = [];
     mots.forEach(function(mot) {
         mot = mot.trim();
-        if (mot.length < 2) return;
+        if (mot.length < 1) return;
         (clientSearchIndex[mot] || []).forEach(function(c) {
             if (!seen[c.id]) { seen[c.id] = true; results.push(c); }
         });
@@ -121,7 +132,19 @@ function hideVoiceFlowIndicator() {
 // ==================== UTILITAIRES ====================
 function isIOSStandalone(){ return /iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream&&(window.navigator.standalone===true||window.matchMedia('(display-mode: standalone)').matches); }
 function checkVoiceSupport(){ var i=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream; if(i&&isIOSStandalone()) return{supported:false,reason:'Ouvrez dans Safari pour le micro'}; if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)) return{supported:false,reason:'Navigateur non supporté'}; return{supported:true}; }
-async function requestMicrophonePermission(){ try{ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return false; const s=await navigator.mediaDevices.getUserMedia({audio:true}); s.getTracks().forEach(t=>t.stop()); return true; }catch(e){ return false; } }
+
+// ✅ Permission micro avec cache
+async function requestMicrophonePermission() {
+    if (micPermissionGranted) return true;
+    try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+        s.getTracks().forEach(t => t.stop());
+        micPermissionGranted = true;
+        return true;
+    } catch (e) { return false; }
+}
+
 function showSafariBanner(){ if(!isIOSStandalone()) return; if(document.getElementById('iosPwaBanner')) return; var c=document.getElementById('dynamicContent'); if(!c) return; var b=document.createElement('div'); b.id='iosPwaBanner'; b.style.cssText='background:#fef3c7;border:2px solid #f59e0b;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;'; b.innerHTML='<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-exclamation-triangle" style="color:#d97706;"></i><span style="font-size:0.8rem;color:#92400e;"><strong>📱 Microphone</strong><br><span style="font-size:0.7rem;">Ouvrez dans Safari pour le micro.</span></span></div><button onclick="window.open(window.location.href.split(\'?\')[0],\'_blank\')" style="background:#f59e0b;border:none;padding:6px 14px;border-radius:6px;color:#fff;font-weight:600;cursor:pointer;">🌐 Ouvrir</button>'; c.insertBefore(b,c.firstChild); }
 function showVoiceModeIndicator(){ var ind=document.getElementById('voiceModeIndicator'); if(!ind){ var cont=document.querySelector('.pos-products-panel'); if(!cont) return; ind=document.createElement('div'); ind.id='voiceModeIndicator'; ind.style.cssText='background:#f0fdf4;border:2px solid #16a34a;border-radius:8px;padding:6px 12px;margin-bottom:8px;font-size:0.8rem;display:flex;align-items:center;gap:8px;color:#14532d;'; cont.insertBefore(ind,cont.firstChild); } var icon=voiceMode==='search'?'fa-microphone':(voiceMode==='quantity'?'fa-hashtag':(voiceMode==='client'?'fa-user':'fa-money-bill-wave')); var color=voiceMode==='search'?'#16a34a':(voiceMode==='quantity'?'#f59e0b':(voiceMode==='client'?'#4f46e5':'#dc2626')); ind.innerHTML='<i class="fas '+icon+'" style="color:'+color+';"></i> '+(voiceModeMessage||'🎤 Recherche vocale active')+' <span style="font-size:0.6rem;color:#94a3b8;margin-left:auto;">'+voiceMode+'</span>'; ind.style.borderColor=color; ind.style.background=voiceMode==='search'?'#f0fdf4':'#fefce8'; }
 function showVoiceResult(msg){ var div=document.getElementById('voiceResultDisplay'); if(!div){ div=document.createElement('div'); div.id='voiceResultDisplay'; div.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#2E7D32;color:#fff;padding:8px 16px;border-radius:12px;font-weight:600;font-size:0.85rem;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);display:none;max-width:90%;text-align:center;'; document.body.appendChild(div); } var isErr=msg.indexOf('⚠️')!==-1||msg.indexOf('❌')!==-1; div.style.background=isErr?'#ef4444':'#2E7D32'; div.textContent=msg; div.style.display='block'; clearTimeout(window._voiceResultTimeout); window._voiceResultTimeout=setTimeout(function(){ div.style.display='none'; },1200); }
@@ -144,10 +167,11 @@ function cancelDeleteCredit(){ if(creditDeletePending){creditDeletePending=null;
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL v7.2 (80ms anti-doublon) ====================
+// ==================== PARSER VOCAL v7.3 (80ms anti-doublon) ====================
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
+    // ✅ Anti-doublon 80ms (meilleur équilibre)
     if (now - lastVoiceCommandTime < 80) return { type: 'ignore' };
     lastVoiceCommandTime = now;
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
@@ -285,7 +309,7 @@ function handleVoiceCommand(cmd) {
 // ==================== MODE VOCAL ====================
 function setVoiceMode(m, msg, pid) { voiceMode = m; if (msg) voiceModeMessage = msg; if (pid !== undefined) lastAddedProductId = pid; showVoiceModeIndicator(); }
 
-// ==================== TOGGLE MICRO (EXTRÊME) ====================
+// ==================== TOGGLE MICRO (RAPIDE AVEC CACHE PERMISSION) ====================
 function posToggleVoiceSearch() { var s = checkVoiceSupport(); if (!s.supported) { alert('⚠️ ' + s.reason); return; } if (!navigator.onLine) { alert('⚠️ Connexion internet requise.'); return; } var mb = document.getElementById('posMicBtn'); if (isRecording) { posStopVoiceSearch(); return; } requestMicrophonePermission().then(function(p) { if (!p) { alert('❌ Micro refusé.'); return; } posStartVoiceRecording(); }); }
 
 function posStartVoiceRecording() {
@@ -298,7 +322,7 @@ function posStartVoiceRecording() {
     voiceRecognition.onresult = function(e) {
         var it = '', ftt = ''; for (var i = e.resultIndex; i < e.results.length; i++) { var t = e.results[i][0].transcript; if (e.results[i].isFinal) ftt += t; else it += t; }
         var cp = document.getElementById('pageTitle')?.textContent || '';
-        var debounceDelay = (voiceMode === 'quantity' || voiceMode === 'payment' || window.posStep === 2) ? 20 : 40;
+        var debounceDelay = (voiceMode === 'quantity' || voiceMode === 'payment' || window.posStep === 2) ? 15 : 30;
         if (cp === 'Crédits') { var vd = document.getElementById('creditsVoiceDisplay'); if (vd) { if (ftt) { vd.value = ftt; clearTimeout(vdt); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd.value = it + ' ✍️'; } } }
         else if (cp === 'Ventes') { var vd2 = document.getElementById('ventesVoiceDisplay'); if (vd2) { if (ftt) { vd2.value = ftt; clearTimeout(vdt); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd2.value = it + ' ✍️'; } } }
         else { var si = document.getElementById('posSearchInput'); if (si) { if (ftt) { si.value = ftt; clearTimeout(vdt); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it && it !== li) { si.value = it + ' ✍️'; li = it; } } }
@@ -326,4 +350,4 @@ window.confirmDeleteCredit = confirmDeleteCredit; window.cancelDeleteCredit = ca
 window.showVoiceFlowIndicator = showVoiceFlowIndicator; window.hideVoiceFlowIndicator = hideVoiceFlowIndicator;
 window.onProductAdded = function(pid) { lastAddedProductId = pid; setVoiceMode('quantity', '🔢 Qté', pid); showVoiceModeIndicator(); showVoiceFlowIndicator('quantity'); };
 
-console.log('🎤 Mixmax Minimarket - Module vocal v7.2 FINAL (navigation optimisée 500ms)');
+console.log('🎤 Mixmax Minimarket - Module vocal v7.3 FINAL (80ms + index avancé + cache micro)');
