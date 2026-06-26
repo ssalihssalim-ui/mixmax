@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v7.2 EXTRÊME - RECONNAISSANCE VOCALE ULTRA-RAPIDE ====================
-// Mixmax Minimarket - Délais extrêmes (80ms/20ms) + indicateurs de phase courts
+// ==================== POS-AUDIO.JS v7.2 FINAL - RECONNAISSANCE VOCALE COMPLÈTE ====================
+// Mixmax Minimarket - Délais extrêmes (80ms/20ms) + indicateurs de phase courts + navigation optimisée
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -255,7 +255,7 @@ function handleVoiceCommand(cmd) {
             if (cp === pt[p]) { showVoiceResult('✅ ' + pt[p]); return; }
             if (typeof window.posCart !== 'undefined' && window.posCart.length > 0 && window.posStep === 1 && p !== 'pos') { if (!confirm('⚠️ Panier non vide. Vider ?')) { showVoiceResult('↩️ Annulé'); return; } if (typeof window.posResetCart === 'function') window.posResetCart(); }
             showVoiceResult('📋 ' + pt[p]); if (typeof navigateTo === 'function') navigateTo(p);
-            if (p === 'credits') { setTimeout(function() { window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); }, 800); }
+            if (p === 'credits') { setTimeout(function() { window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); }, 500); }
             break;
         case 'payment_mode':
             var m = cmd.mode; if ((m === 'credit' || m === 'partiel') && (!window.posCurrentClient || !window.posCurrentClient.id)) { alert('Client requis'); showVoiceResult('⚠️ Client requis'); return; }
@@ -326,4 +326,4 @@ window.confirmDeleteCredit = confirmDeleteCredit; window.cancelDeleteCredit = ca
 window.showVoiceFlowIndicator = showVoiceFlowIndicator; window.hideVoiceFlowIndicator = hideVoiceFlowIndicator;
 window.onProductAdded = function(pid) { lastAddedProductId = pid; setVoiceMode('quantity', '🔢 Qté', pid); showVoiceModeIndicator(); showVoiceFlowIndicator('quantity'); };
 
-console.log('🎤 Mixmax Minimarket - Module vocal v7.2 EXTRÊME (80ms/20ms)');
+console.log('🎤 Mixmax Minimarket - Module vocal v7.2 FINAL (navigation optimisée 500ms)');
