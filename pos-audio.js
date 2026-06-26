@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v8.1.1 FINAL - RECONNAISSANCE VOCALE AVEC INDICATEUR TRAITEMENT ====================
-// Mixmax Minimarket - Barres de phase 200ms + barre "Traitement..." rouge + recherche locale
+// ==================== POS-AUDIO.JS v8.1.2 FINAL - RECONNAISSANCE VOCALE CORRIGÉE ====================
+// Mixmax Minimarket - Barre traitement disparaît + micro redémarre auto + 200ms inter-phase
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -23,7 +23,7 @@ var paymentKeywords = {
 };
 
 var numberMap = {
-    'wahed': 1, 'ouais': 1,'wad': 1, 'un': 1, 'une': 1, 'juge': 2, 'joue': 2, 'george': 2, 'souche': 2, 'deux': 2, 'trois': 3, 'clé': 3, 'clair': 3, 'clea': 3, 'quatre': 4, 'rabah': 4, 'rabat': 4, 'rabats': 4, 'cinq': 5,
+    'wahed': 1, 'ouais': 1,'wad': 1, 'un': 1, 'une': 1, 'juge': 2, 'joue': 2, 'george': 2, 'souche': 2, 'deux': 2, 'trois': 3, 'clé': 3, 'clea': 3, 'quatre': 4, 'rabah': 4, 'rabat': 4, 'rabats': 4, 'cinq': 5,
     'hamza': 5, 'rama': 5,
     'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
     'onze': 11, 'douze': 12, 'douz': 12, 'treize': 13, 'quatorze': 14,
@@ -137,7 +137,7 @@ function hideVoiceFlowIndicator() {
     voiceFlowPhase = 'idle';
 }
 
-// ✅ NOUVEAU : Barre rouge "Traitement..." quand le micro analyse
+// ✅ Barre rouge "Traitement..."
 function showProcessingIndicator() {
     if (voiceFlowIndicator) {
         voiceFlowIndicator.style.opacity = '0';
@@ -277,39 +277,40 @@ function parseVoiceCommand(transcript) {
 function searchClientInVentes(n) { if (!n) return; var s = document.getElementById('ventesSearchInput'); if (s) { s.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); } else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); } }, 200); } } }
 function searchClientInCredits(n) { if (!n) return; if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); if (typeof selectCreditClient === 'function') selectCreditClient(n); }, 400); } }
 
-// ==================== GESTIONNAIRE DE COMMANDES ====================
+// ==================== GESTIONNAIRE DE COMMANDES (barre disparaît + micro redémarre) ====================
 function handleVoiceCommand(cmd) {
     console.log('🎤', cmd.type); var cp = document.getElementById('pageTitle')?.textContent || '';
     switch (cmd.type) {
-        case 'search_client_in_ventes': searchClientInVentes(cmd.clientName); break;
-        case 'search_client_in_credits': searchClientInCredits(cmd.clientName); break;
-        case 'activate_credit_selection': activateCreditSelection(); break;
-        case 'select_credit_line': selectCreditLine(cmd.lineNumber); break;
-        case 'mark_credit_paid': markCreditForPayment(); break;
-        case 'set_credit_amount': setCreditPaymentAmount(cmd.amount); break;
-        case 'validate_credit_payment': validateCreditPayment(); break;
-        case 'close_credit_list': closeCreditSelection(); break;
-        case 'delete_credit_line': deleteCreditByVoice(cmd.lineNumber); break;
-        case 'delete_selected_credit': deleteSelectedCredit(); break;
-        case 'confirm_delete_credit': confirmDeleteCredit(); break;
-        case 'cancel_delete_credit': cancelDeleteCredit(); break;
+        case 'search_client_in_ventes': searchClientInVentes(cmd.clientName); hideVoiceFlowIndicator(); break;
+        case 'search_client_in_credits': searchClientInCredits(cmd.clientName); hideVoiceFlowIndicator(); break;
+        case 'activate_credit_selection': activateCreditSelection(); hideVoiceFlowIndicator(); break;
+        case 'select_credit_line': selectCreditLine(cmd.lineNumber); hideVoiceFlowIndicator(); break;
+        case 'mark_credit_paid': markCreditForPayment(); hideVoiceFlowIndicator(); break;
+        case 'set_credit_amount': setCreditPaymentAmount(cmd.amount); hideVoiceFlowIndicator(); break;
+        case 'validate_credit_payment': validateCreditPayment(); hideVoiceFlowIndicator(); break;
+        case 'close_credit_list': closeCreditSelection(); hideVoiceFlowIndicator(); break;
+        case 'delete_credit_line': deleteCreditByVoice(cmd.lineNumber); hideVoiceFlowIndicator(); break;
+        case 'delete_selected_credit': deleteSelectedCredit(); hideVoiceFlowIndicator(); break;
+        case 'confirm_delete_credit': confirmDeleteCredit(); hideVoiceFlowIndicator(); break;
+        case 'cancel_delete_credit': cancelDeleteCredit(); hideVoiceFlowIndicator(); break;
         case 'navigate':
             var p = cmd.page, pt = { 'credits': 'Crédits', 'ventes': 'Ventes', 'dashboard': 'Dashboard', 'products': 'Produits', 'clients': 'Clients', 'commandes': 'Commandes en ligne', 'categories': 'Catégories', 'pos': 'POS' };
-            if (cp === pt[p]) { showVoiceResult('✅ ' + pt[p]); return; }
-            if (typeof window.posCart !== 'undefined' && window.posCart.length > 0 && window.posStep === 1 && p !== 'pos') { if (!confirm('⚠️ Panier non vide. Vider ?')) { showVoiceResult('↩️ Annulé'); return; } if (typeof window.posResetCart === 'function') window.posResetCart(); }
+            if (cp === pt[p]) { showVoiceResult('✅ ' + pt[p]); hideVoiceFlowIndicator(); return; }
+            if (typeof window.posCart !== 'undefined' && window.posCart.length > 0 && window.posStep === 1 && p !== 'pos') { if (!confirm('⚠️ Panier non vide. Vider ?')) { showVoiceResult('↩️ Annulé'); hideVoiceFlowIndicator(); return; } if (typeof window.posResetCart === 'function') window.posResetCart(); }
             showVoiceResult('📋 ' + pt[p]); if (typeof navigateTo === 'function') navigateTo(p);
+            hideVoiceFlowIndicator();
             if (p === 'credits') { setTimeout(function() { window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); }, 500); }
             break;
         case 'payment_mode':
-            var m = cmd.mode; if ((m === 'credit' || m === 'partiel') && (!window.posCurrentClient || !window.posCurrentClient.id)) { alert('Client requis'); showVoiceResult('⚠️ Client requis'); return; }
+            var m = cmd.mode; if ((m === 'credit' || m === 'partiel') && (!window.posCurrentClient || !window.posCurrentClient.id)) { alert('Client requis'); showVoiceResult('⚠️ Client requis'); hideVoiceFlowIndicator(); return; }
             if (typeof window.posSetPaymentMethod === 'function') { window.posSetPaymentMethod(m); showVoiceResult('✅ ' + m); if (typeof window.renderPOS === 'function') window.renderPOS(); if (m === 'espece') { setTimeout(function() { var ai = document.getElementById('posAmountGiven'); if (ai) ai.focus(); }, 200); } }
             hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('payment_amount'); }, 200);
             break;
         case 'product':
             if (typeof window.posProductsList !== 'undefined' && window.posProductsList.length) {
                 var pr = window.posProductsList.find(function(x) { return x.id === cmd.product.id; });
-                if (!pr) break;
-                if (pr.stock !== undefined && pr.stock <= 0) { showVoiceResult('⚠️ Rupture: ' + pr.nom); return; }
+                if (!pr) { hideVoiceFlowIndicator(); break; }
+                if (pr.stock !== undefined && pr.stock <= 0) { showVoiceResult('⚠️ Rupture: ' + pr.nom); hideVoiceFlowIndicator(); return; }
                 if (typeof window.posAddToCartOrOpenOptions === 'function') window.posAddToCartOrOpenOptions(pr.id);
                 showVoiceResult('✅ ' + pr.nom + ' ajouté');
                 hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('quantity'); }, 200);
@@ -322,7 +323,7 @@ function handleVoiceCommand(cmd) {
                     var it = window.posCart.find(function(x) { return x.id === lastAddedProductId; });
                     if (it) {
                         var p2 = window.posProductsList.find(function(x) { return x.id === lastAddedProductId; });
-                        if (p2 && p2.stock !== undefined && qty > p2.stock) { showVoiceResult('⚠️ Stock max: ' + p2.stock); return; }
+                        if (p2 && p2.stock !== undefined && qty > p2.stock) { showVoiceResult('⚠️ Stock max: ' + p2.stock); hideVoiceFlowIndicator(); return; }
                         it.quantite = qty; lastAddedProductId = null;
                         setVoiceMode('search', '🎤 Recherche vocale active', null);
                         showVoiceResult('✅ Qté: ' + qty + ' - Autre produit ou "passe"');
@@ -350,11 +351,11 @@ function handleVoiceCommand(cmd) {
             hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('payment_mode'); }, 200);
             break;
         case 'amount': if (window.posStep === 2) { if (typeof window.posAmountGiven !== 'undefined') { window.posAmountGiven = cmd.value; var ce2 = document.getElementById('posChangeDisplay'); if (ce2) { var st2 = typeof window.posCalculateTotal === 'function' ? window.posCalculateTotal() : 0, t2 = st2 - (window.posDiscountMAD || 0), c2 = window.posAmountGiven - t2; ce2.innerHTML = c2 >= 0 ? '<div class="pos-change-positive"><span>Rendu</span><span>' + c2.toFixed(2) + ' MAD</span></div>' : '<div class="pos-change-negative"><span>Manquant</span><span>' + Math.abs(c2).toFixed(2) + ' MAD</span></div>'; } var ai2 = document.getElementById('posAmountGiven'); if (ai2) ai2.value = window.posAmountGiven; showVoiceResult('💰 ' + window.posAmountGiven.toFixed(2) + ' MAD'); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('confirm'); }, 200); } } break;
-        case 'next': if (isModalOpen()) break; if (voiceMode === 'quantity') { setVoiceMode('search', '🎤 Recherche vocale active', null); if (typeof window.updateCartOnly === 'function') window.updateCartOnly(); showVoiceModeIndicator(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('product'); }, 200); } else if (window.posStep === 2) { if (typeof window.posFinalizeSale === 'function') window.posFinalizeSale(); } else if (window.posCart && window.posCart.length > 0 && window.posStep === 1) { if (typeof window.posGoToStep2 === 'function') window.posGoToStep2(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('client'); }, 200); } break;
+        case 'next': if (isModalOpen()) break; if (voiceMode === 'quantity') { setVoiceMode('search', '🎤 Recherche vocale active', null); if (typeof window.updateCartOnly === 'function') window.updateCartOnly(); showVoiceModeIndicator(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('product'); }, 200); } else if (window.posStep === 2) { if (typeof window.posFinalizeSale === 'function') { window.posFinalizeSale(); hideVoiceFlowIndicator(); } } else if (window.posCart && window.posCart.length > 0 && window.posStep === 1) { if (typeof window.posGoToStep2 === 'function') window.posGoToStep2(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('client'); }, 200); } break;
         case 'validate': if (isModalOpen()) break; if (voiceMode === 'quantity') { setVoiceMode('search', '🎤 Recherche vocale active', null); if (typeof window.updateCartOnly === 'function') window.updateCartOnly(); showVoiceModeIndicator(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('product'); }, 200); } else if (window.posStep === 2) { if (typeof window.posFinalizeSale === 'function') { window.posFinalizeSale(); hideVoiceFlowIndicator(); } } else if (window.posStep === 1 && window.posCart && window.posCart.length > 0) { if (typeof window.posGoToStep2 === 'function') window.posGoToStep2(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('client'); }, 200); } break;
         case 'finalize': if (window.posStep === 2 && typeof window.posFinalizeSale === 'function') { window.posFinalizeSale(); hideVoiceFlowIndicator(); } break;
-        case 'clear': if (typeof window.posResetCart === 'function') { window.posResetCart(); showVoiceResult('🗑️ Panier vidé'); if (typeof window.renderPOS === 'function') window.renderPOS(); showVoiceFlowIndicator('product'); } break;
-        case 'cancel': if (voiceMode !== 'search') { setVoiceMode('search', '🎤 Recherche vocale active', null); showVoiceResult('↩️ Recherche'); if (typeof window.renderPOS === 'function') window.renderPOS(); showVoiceFlowIndicator('product'); } break;
+        case 'clear': if (typeof window.posResetCart === 'function') { window.posResetCart(); showVoiceResult('🗑️ Panier vidé'); if (typeof window.renderPOS === 'function') window.renderPOS(); hideVoiceFlowIndicator(); showVoiceFlowIndicator('product'); } break;
+        case 'cancel': if (voiceMode !== 'search') { setVoiceMode('search', '🎤 Recherche vocale active', null); showVoiceResult('↩️ Recherche'); if (typeof window.renderPOS === 'function') window.renderPOS(); hideVoiceFlowIndicator(); showVoiceFlowIndicator('product'); } break;
         default: if (cmd.text) { var q = cmd.text.toLowerCase().trim(), found = false;
             if (window.posStep === 2) { if (window.posAllClients) { var fc5 = fastFindClient(q); if (fc5.length > 0) { var b5 = fc5[0]; for (var j = 0; j < fc5.length; j++) { if ((fc5[j].nom + ' ' + fc5[j].prenom).toLowerCase().indexOf(q) !== -1) { b5 = fc5[j]; break; } } window.posCurrentClient = { id: b5.id, name: b5.nom + ' ' + b5.prenom }; window.posCurrentTable = ''; var ci2 = document.getElementById('posClientSearchInput'); if (ci2) ci2.value = window.posCurrentClient.name; if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons(); if (typeof window.renderPOS === 'function') window.renderPOS(); showVoiceResult('👤 ' + window.posCurrentClient.name); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('payment_mode'); }, 200); found = true; } } if (!found && typeof window.posSearchProducts === 'function') window.posSearchProducts(q); }
             else { if (typeof window.posSearchProducts === 'function') window.posSearchProducts(q); if (window.posAllClients) { var fc6 = fastFindClient(q); if (fc6.length > 0) { var b6 = fc6[0]; for (var j = 0; j < fc6.length; j++) { if ((fc6[j].nom + ' ' + fc6[j].prenom).toLowerCase().indexOf(q) !== -1) { b6 = fc6[j]; break; } } window.posCurrentClient = { id: b6.id, name: b6.nom + ' ' + b6.prenom }; window.posCurrentTable = ''; var ci3 = document.getElementById('posClientSearchInput'); if (ci3) ci3.value = window.posCurrentClient.name; if (typeof window.updatePaymentButtons === 'function') window.updatePaymentButtons(); if (typeof window.renderPOS === 'function') window.renderPOS(); showVoiceResult('👤 ' + window.posCurrentClient.name); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('payment_mode'); }, 200); } } } }
@@ -365,7 +366,7 @@ function handleVoiceCommand(cmd) {
 // ==================== MODE VOCAL ====================
 function setVoiceMode(m, msg, pid) { voiceMode = m; if (msg) voiceModeMessage = msg; if (pid !== undefined) lastAddedProductId = pid; showVoiceModeIndicator(); }
 
-// ==================== TOGGLE MICRO (AVEC BARRE TRAITEMENT) ====================
+// ==================== TOGGLE MICRO (barre disparaît + micro redémarre auto) ====================
 function posToggleVoiceSearch() { var s = checkVoiceSupport(); if (!s.supported) { alert('⚠️ ' + s.reason); return; } if (!navigator.onLine) { alert('⚠️ Connexion internet requise.'); return; } var mb = document.getElementById('posMicBtn'); if (isRecording) { posStopVoiceSearch(); return; } requestMicrophonePermission().then(function(p) { if (!p) { alert('❌ Micro refusé.'); return; } posStartVoiceRecording(); }); }
 
 function posStartVoiceRecording() {
@@ -379,10 +380,11 @@ function posStartVoiceRecording() {
         var it = '', ftt = ''; for (var i = e.resultIndex; i < e.results.length; i++) { var t = e.results[i][0].transcript; if (e.results[i].isFinal) ftt += t; else it += t; }
         var cp = document.getElementById('pageTitle')?.textContent || '';
         var debounceDelay = (voiceMode === 'quantity' || voiceMode === 'payment' || window.posStep === 2) ? 10 : 25;
-        if (cp === 'Crédits') { var vd = document.getElementById('creditsVoiceDisplay'); if (vd) { if (ftt) { vd.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd.value = it + ' ✍️'; } } }
-        else if (cp === 'Ventes') { var vd2 = document.getElementById('ventesVoiceDisplay'); if (vd2) { if (ftt) { vd2.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd2.value = it + ' ✍️'; } } }
-        else { var si = document.getElementById('posSearchInput'); if (si) { if (ftt) { si.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it && it !== li) { si.value = it + ' ✍️'; li = it; } } }
+        if (cp === 'Crédits') { var vd = document.getElementById('creditsVoiceDisplay'); if (vd) { if (ftt) { vd.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; hideVoiceFlowIndicator(); var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd.value = it + ' ✍️'; } } }
+        else if (cp === 'Ventes') { var vd2 = document.getElementById('ventesVoiceDisplay'); if (vd2) { if (ftt) { vd2.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; hideVoiceFlowIndicator(); var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd2.value = it + ' ✍️'; } } }
+        else { var si = document.getElementById('posSearchInput'); if (si) { if (ftt) { si.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; hideVoiceFlowIndicator(); var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it && it !== li) { si.value = it + ' ✍️'; li = it; } } }
     };
+    // ✅ Micro redémarre automatiquement en 8ms
     voiceRecognition.onend = function() { if (isRecording) { setTimeout(function() { try { voiceRecognition.start(); } catch (e) { posStopVoiceSearch(); } }, 8); } };
     voiceRecognition.onerror = function(e) { if (e.error === 'aborted' || e.error === 'no-speech') return; if (e.error === 'network') showVoiceResult('❌ Réseau'); posStopVoiceSearch(); };
     try { voiceRecognition.start(); isRecording = true; showVoiceModeIndicator(); showVoiceResult('🎤 Écoute...'); showVoiceFlowIndicator('product'); } catch (e) { isRecording = false; if (mb) { mb.classList.remove('recording'); mb.innerHTML = '<i class="fas fa-microphone"></i>'; mb.style.background = '#dcfce7'; mb.style.borderColor = '#16a34a'; mb.style.boxShadow = 'none'; mb.style.transform = 'scale(1)'; mb.style.border = '3px solid #16a34a'; } }
@@ -407,4 +409,4 @@ window.showVoiceFlowIndicator = showVoiceFlowIndicator; window.hideVoiceFlowIndi
 window.showProcessingIndicator = showProcessingIndicator;
 window.onProductAdded = function(pid) { lastAddedProductId = pid; setVoiceMode('quantity', '🔢 Qté', pid); showVoiceModeIndicator(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('quantity'); }, 200); };
 
-console.log('🎤 Mixmax Minimarket - Module vocal v8.1.1 FINAL (barre traitement rouge)');
+console.log('🎤 Mixmax Minimarket - Module vocal v8.1.2 FINAL (barre disparaît + micro redémarre auto)');
