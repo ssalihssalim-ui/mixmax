@@ -1,5 +1,6 @@
 // ==================== POS-AUDIO.JS v8.1.2 FINAL - RECONNAISSANCE VOCALE CORRIGÉE ====================
 // Mixmax Minimarket - Barre traitement disparaît + micro redémarre auto + 200ms inter-phase
+// Optimisé pour rapidité : debounceDelay = 5ms, anti-rebond 40ms
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -180,11 +181,11 @@ function cancelDeleteCredit(){ if(creditDeletePending){creditDeletePending=null;
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL v8.1 ====================
+// ==================== PARSER VOCAL v8.1 (optimisé rapidité) ====================
 function parseVoiceCommand(transcript) {
 transcript = transcript.toLowerCase().trim();
 var now = Date.now();
-if (now - lastVoiceCommandTime < 80) return { type: 'ignore' };
+if (now - lastVoiceCommandTime < 40) return { type: 'ignore' }; // ← réduit à 40ms pour réactivité
 lastVoiceCommandTime = now;
 var currentPage = document.getElementById('pageTitle')?.textContent || '';
 
@@ -379,7 +380,7 @@ var ft = '', li = '', proc = false, vdt = null;
 voiceRecognition.onresult = function(e) {
 var it = '', ftt = ''; for (var i = e.resultIndex; i < e.results.length; i++) { var t = e.results[i][0].transcript; if (e.results[i].isFinal) ftt += t; else it += t; }
 var cp = document.getElementById('pageTitle')?.textContent || '';
-var debounceDelay = (voiceMode === 'quantity' || voiceMode === 'payment' || window.posStep === 2) ? 10 : 25;
+var debounceDelay = 5; // ← OPTIMISÉ : traitement quasi instantané
 if (cp === 'Crédits') { var vd = document.getElementById('creditsVoiceDisplay'); if (vd) { if (ftt) { vd.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; hideVoiceFlowIndicator(); var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd.value = it + ' ✍️'; } } }
 else if (cp === 'Ventes') { var vd2 = document.getElementById('ventesVoiceDisplay'); if (vd2) { if (ftt) { vd2.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; hideVoiceFlowIndicator(); var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd2.value = it + ' ✍️'; } } }
 else { var si = document.getElementById('posSearchInput'); if (si) { if (ftt) { si.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; hideVoiceFlowIndicator(); var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it && it !== li) { si.value = it + ' ✍️'; li = it; } } }
@@ -409,4 +410,4 @@ window.showVoiceFlowIndicator = showVoiceFlowIndicator; window.hideVoiceFlowIndi
 window.showProcessingIndicator = showProcessingIndicator;
 window.onProductAdded = function(pid) { lastAddedProductId = pid; setVoiceMode('quantity', '🔢 Qté', pid); showVoiceModeIndicator(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('quantity'); }, 200); };
 
-console.log('🎤 Mixmax Minimarket - Module vocal v8.1.2 FINAL (barre disparaît + micro redémarre auto)');
+console.log('🎤 Mixmax Minimarket - Module vocal v8.1.2 FINAL (rapidité optimisée)');
