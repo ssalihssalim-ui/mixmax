@@ -1,5 +1,6 @@
 // ==================== POS-AUDIO.JS v8.1.2 FINAL – RECHERCHE CONTEXTUELLE STRICTE ====================
 // Mixmax Minimarket – Traitement ultra‑rapide, uniquement ce qui est nécessaire à chaque étape
+// CORRIGÉ : grammaire enrichie avec mots de filtrage période pour Crédits et Ventes
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -199,24 +200,21 @@ function parseVoiceCommand(transcript) {
 
     // ----- 1. Mode QUANTITY (attente d'un nombre) -----
     if (voiceMode === 'quantity') {
-        // Cherche d'abord un nombre
         var nm = transcript.match(/\b(\d+)\b/);
         if (nm) return { type: 'number', value: parseInt(nm[1]) };
         for (var w in numberMap) {
             if (transcript.indexOf(w) !== -1) return { type: 'number', value: numberMap[w] };
         }
-        // Commandes autorisées même en mode quantity
         if (transcript.includes('passe') || transcript.includes('passer') || transcript.includes('suivant')) return { type: 'next' };
         if (transcript.includes('valide') || transcript.includes('validé') || transcript.includes('valider') || transcript.includes('confirmer') || transcript.includes('ok')) return { type: 'validate' };
         if (transcript.includes('annule') || transcript.includes('annuler')) return { type: 'cancel' };
         if (transcript.includes('efface') || transcript.includes('vider')) return { type: 'clear' };
         if (transcript.includes('termine') || transcript.includes('terminer') || transcript.includes('fin')) return { type: 'finalize' };
-        return { type: 'unknown', text: transcript }; // rien trouvé
+        return { type: 'unknown', text: transcript };
     }
 
     // ----- 2. Mode PAYMENT (étape 2) -----
     if (voiceMode === 'payment' || window.posStep === 2) {
-        // a. Client si pas encore défini
         if (!window.posCurrentClient && window.posAllClients) {
             var fc = fastFindClient(transcript);
             if (fc.length === 1) {
@@ -231,16 +229,13 @@ function parseVoiceCommand(transcript) {
                 return { type: 'client', client: bestClient };
             }
         }
-        // b. Mode de paiement
         var pm = detectPaymentMode(transcript);
         if (pm) return { type: 'payment_mode', mode: pm };
-        // c. Montant (nombre)
         var nm2 = transcript.match(/\b(\d+)\b/);
         if (nm2) return { type: 'number', value: parseInt(nm2[1]) };
         for (var w2 in numberMap) {
             if (transcript.indexOf(w2) !== -1) return { type: 'number', value: numberMap[w2] };
         }
-        // d. Commandes de contrôle
         if (transcript.includes('retour') || transcript.includes('revenir')) return { type: 'cancel' };
         if (transcript.includes('valide') || transcript.includes('validé') || transcript.includes('valider') || transcript.includes('confirmer') || transcript.includes('ok')) return { type: 'validate' };
         if (transcript.includes('termine') || transcript.includes('terminer') || transcript.includes('fin')) return { type: 'finalize' };
@@ -251,7 +246,6 @@ function parseVoiceCommand(transcript) {
 
     // ----- 3. Mode SEARCH (étape 1, recherche de produits) -----
     if (voiceMode === 'search' && window.posStep === 1) {
-        // a. Recherche produit (nom + description)
         if (window.posProductsList && window.posProductsList.length) {
             var bestMatch = null, bestLen = 0;
             for (var i = 0; i < window.posProductsList.length; i++) {
@@ -269,7 +263,6 @@ function parseVoiceCommand(transcript) {
                 return { type: 'product', product: bestMatch };
             }
         }
-        // b. Commandes d'action
         if (transcript.includes('passe') || transcript.includes('passer') || transcript.includes('suivant')) return { type: 'next' };
         if (transcript.includes('valide') || transcript.includes('validé') || transcript.includes('valider') || transcript.includes('confirmer') || transcript.includes('ok')) return { type: 'validate' };
         if (transcript.includes('annule') || transcript.includes('annuler')) return { type: 'cancel' };
@@ -387,7 +380,6 @@ function parseVoiceCommand(transcript) {
             }
             showVoiceResult('⚠️ Valide/Annule ?'); return { type: 'ignore' };
         }
-        // Navigation interdite pendant un paiement
         if (window.creditPaymentStep !== 'payment' && window.creditPaymentStep !== 'amount') {
             if (transcript.includes('point de vente') || transcript.includes('point vente') || transcript.includes('pos') || transcript.includes('caisse') || transcript.includes('retour pos') || transcript.includes('aller au pos')) return { type: 'navigate', page: 'pos' };
             if (transcript.includes('ventes') || transcript.includes('vente')) return { type: 'navigate', page: 'ventes' };
@@ -399,7 +391,6 @@ function parseVoiceCommand(transcript) {
                 showVoiceResult('✅ Déjà sur Crédits'); return { type: 'ignore' };
             }
         }
-        // Suppression
         if ((transcript === 'supprimer' || transcript === 'supprime' || transcript === 'effacer' || transcript === 'enlever' || transcript === 'retirer') && window.creditSelectedIndex >= 0 && window.creditSelectionMode) {
             return { type: 'delete_selected_credit' };
         }
@@ -453,7 +444,7 @@ function parseVoiceCommand(transcript) {
         return { type: 'unknown', text: transcript };
     }
 
-    // ----- 6. Fallback (ne devrait pas arriver souvent) -----
+    // ----- 6. Fallback -----
     return { type: 'unknown', text: transcript };
 }
 
@@ -573,8 +564,11 @@ function posStartVoiceRecording() {
                 clientText.toLowerCase().split(/[\s,;.]+/).forEach(function(m) { if (m.length >= 2) allWords.push(m); });
             });
         }
-        // Commandes courantes et nombres
+        // Commandes courantes, nombres, et mots-clés de filtrage période / sélection
         var commands = 'passe valide efface vider annule terminer crédits ventes dashboard produits clients commandes catégories pos un deux trois quatre cinq six sept huit neuf dix';
+        // Ajout des mots de filtrage période (pour Ventes et Crédits)
+        var periodWords = "aujourd'hui ce jour du jour cette semaine 7 jours semaine ce mois 30 jours mensuel mois tout historique global complet sélectionner sélectionne select choisir cocher";
+        commands += ' ' + periodWords;
         commands.split(' ').forEach(function(w) { allWords.push(w); });
         // Supprimer les doublons
         var uniqueWords = allWords.filter(function(w, i, arr) { return arr.indexOf(w) === i; });
@@ -619,4 +613,4 @@ window.showVoiceFlowIndicator = showVoiceFlowIndicator; window.hideVoiceFlowIndi
 window.showProcessingIndicator = showProcessingIndicator;
 window.onProductAdded = function(pid) { lastAddedProductId = pid; setVoiceMode('quantity', '🔢 Qté', pid); showVoiceModeIndicator(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('quantity'); }, 200); };
 
-console.log('🎤 Mixmax Minimarket - Module vocal v8.1.2 contextuel strict chargé');
+console.log('🎤 Mixmax Minimarket - Module vocal v8.1.2 contextuel strict chargé (grammaire enrichie)');
