@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v8.1.2 FINAL – CORRECTIONS CRÉDITS ====================
-// Mixmax Minimarket – Recherche client, sélection simplifiée, suppression tout
+// ==================== POS-AUDIO.JS v8.1.2 FINAL – COMMANDES CRÉDITS COMPLÈTES ====================
+// Mixmax Minimarket – Sélection, paiement avec montant vocal, validation
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -165,12 +165,12 @@ function showVoiceModeIndicator(){ var ind=document.getElementById('voiceModeInd
 function showVoiceResult(msg){ var div=document.getElementById('voiceResultDisplay'); if(!div){ div=document.createElement('div'); div.id='voiceResultDisplay'; div.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#2E7D32;color:#fff;padding:8px 16px;border-radius:12px;font-weight:600;font-size:0.85rem;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);display:none;max-width:90%;text-align:center;'; document.body.appendChild(div); } var isErr=msg.indexOf('⚠️')!==-1||msg.indexOf('❌')!==-1; div.style.background=isErr?'#ef4444':'#2E7D32'; div.textContent=msg; div.style.display='block'; clearTimeout(window._voiceResultTimeout); window._voiceResultTimeout=setTimeout(function(){ div.style.display='none'; },1200); }
 function isModalOpen(){ var m=document.getElementById('modalOverlay'); return m&&!m.classList.contains('hidden'); }
 
-// ==================== GESTION CRÉDITS ====================
+// ==================== GESTION CRÉDITS (INCHANGÉE) ====================
 function activateCreditSelection(){ creditDeletePending=null; window.creditSelectionMode=true; window.creditSelectedIndex=-1; window.creditSelectAll=false; window.creditPaymentStep='idle'; if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); showVoiceResult('📋 Mode sélection'); }
 function selectCreditLine(n){ creditDeletePending=null; var d=window.filteredCredits||window.allCreditsData||[]; var i=n-1; if(i<0||i>=d.length){ showVoiceResult('❌ Ligne '+n); return; } if(!window.creditSelectionMode){ showVoiceResult('⚠️ Sélectionnez d\'abord'); return; } window.creditSelectedIndex=i; window.creditSelectAll=false; window.creditPaymentStep='selection'; window.creditPaymentAmount=0; if(typeof window.renderCreditsTable==='function') window.renderCreditsTable(); var c=d[i]; showVoiceResult('✅ Ligne '+n+' - '+(c.clientName||'')+' - '+(c.remainingAmount||c.total||0).toFixed(2)+' MAD'); }
-function markCreditForPayment(){ creditDeletePending=null; if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucune ligne'); return; } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Introuvable'); return; } if(c.paid){ showVoiceResult('⚠️ Déjà payé'); return; } window.creditPaymentStep='payment'; var r=c.remainingAmount||c.total||0; showVoiceResult('💳 Restant: '+r.toFixed(2)+' MAD'); var z=document.getElementById('creditPaymentZone'); if(z){ z.style.display='block'; var info=document.getElementById('creditPaymentInfo'); if(info) info.textContent='Client: '+(c.clientName||'Inconnu')+' | Restant: '+r.toFixed(2)+' MAD'; var inp=document.getElementById('creditPaymentAmountInput'); if(inp){ inp.value=''; inp.focus(); inp.select(); } } }
+function markCreditForPayment(){ creditDeletePending=null; if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucune ligne'); return; } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Introuvable'); return; } if(c.paid){ showVoiceResult('⚠️ Déjà payé'); return; } window.creditPaymentStep='payment'; window.creditPaymentAmount=0; var r=c.remainingAmount||c.total||0; showVoiceResult('💳 Restant: '+r.toFixed(2)+' MAD'); var z=document.getElementById('creditPaymentZone'); if(z){ z.style.display='block'; var info=document.getElementById('creditPaymentInfo'); if(info) info.textContent='Client: '+(c.clientName||'Inconnu')+' | Restant: '+r.toFixed(2)+' MAD'; var inp=document.getElementById('creditPaymentAmountInput'); if(inp){ inp.value=''; inp.focus(); inp.select(); } } }
 function setCreditPaymentAmount(a){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucun crédit'); return; } if(a<=0){ showVoiceResult('❌ Montant invalide'); return; } window.creditPaymentAmount=a; window.creditPaymentStep='amount'; var inp=document.getElementById('creditPaymentAmountInput'); if(inp) inp.value=a; showVoiceResult('💰 '+a.toFixed(2)+' MAD'); }
-function validateCreditPayment(){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucun crédit'); return; } var inp=document.getElementById('creditPaymentAmountInput'); var a=parseFloat(inp?inp.value:window.creditPaymentAmount); if(isNaN(a)||a<=0){ showVoiceResult('❌ Montant invalide'); return; } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Introuvable'); return; } var r=c.remainingAmount||c.total||0; if(a>r){ showVoiceResult('⚠️ > reste'); return; } var nr=r-a; var p=nr<=0.01; CacheDB.write('credits',c.id,{paid:p,remainingAmount:Math.max(0,nr),amountGiven:(c.amountGiven||0)+a,paidAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},'update').then(function(){ showVoiceResult(p?'✅ Soldé !':'✅ Payé. Reste: '+nr.toFixed(2)+' MAD'); window.creditPaymentStep='idle'; window.creditSelectedIndex=-1; window.creditPaymentAmount=0; window.creditSelectionMode=false; var z=document.getElementById('creditPaymentZone'); if(z) z.style.display='none'; if(typeof window.loadCredits==='function') window.loadCredits(); CacheDB.sync(); }).catch(function(e){ showVoiceResult('❌ Erreur'); }); }
+function validateCreditPayment(){ if(window.creditSelectedIndex<0){ showVoiceResult('⚠️ Aucun crédit'); return; } var inp=document.getElementById('creditPaymentAmountInput'); var a=parseFloat(inp?inp.value:window.creditPaymentAmount) || window.creditPaymentAmount || 0; if(isNaN(a)||a<=0){ a = (window.filteredCredits||window.allCreditsData)[window.creditSelectedIndex]?.remainingAmount || (window.filteredCredits||window.allCreditsData)[window.creditSelectedIndex]?.total || 0; if(a<=0){ showVoiceResult('❌ Montant invalide'); return; } } var d=window.filteredCredits||window.allCreditsData||[]; var c=d[window.creditSelectedIndex]; if(!c){ showVoiceResult('❌ Introuvable'); return; } var r=c.remainingAmount||c.total||0; if(a>r){ showVoiceResult('⚠️ > reste'); return; } var nr=r-a; var p=nr<=0.01; CacheDB.write('credits',c.id,{paid:p,remainingAmount:Math.max(0,nr),amountGiven:(c.amountGiven||0)+a,paidAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},'update').then(function(){ showVoiceResult(p?'✅ Soldé !':'✅ Payé. Reste: '+nr.toFixed(2)+' MAD'); window.creditPaymentStep='idle'; window.creditSelectedIndex=-1; window.creditPaymentAmount=0; window.creditSelectionMode=false; var z=document.getElementById('creditPaymentZone'); if(z) z.style.display='none'; if(typeof window.loadCredits==='function') window.loadCredits(); CacheDB.sync(); }).catch(function(e){ showVoiceResult('❌ Erreur'); }); }
 function closeCreditSelection(){ creditDeletePending=null; window.creditSelectionMode=false; window.creditSelectedIndex=-1; window.creditSelectAll=false; window.creditPaymentAmount=0; window.creditPaymentStep='idle'; var z=document.getElementById('creditPaymentZone'); if(z) z.style.display='none'; if(typeof window.applyCreditsFilters==='function'){ window.creditsSearch=''; window.currentPages.credits=1; window.filteredCredits=null; window.applyCreditsFilters(); } showVoiceResult('📋 Liste complète'); }
 
 // ==================== SÉLECTION MULTIPLE / SUPPRESSION ====================
@@ -209,7 +209,7 @@ function cancelDeleteCredit(){ if(creditDeletePending){creditDeletePending=null;
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL – STRICTEMENT PAR PAGE (CORRIGÉ) ====================
+// ==================== PARSER VOCAL – CRÉDITS OPTIMISÉ ====================
 function parseVoiceCommand(transcript) {
     var cleaned = transcript.toLowerCase().replace(/['’]/g, ' ').replace(/\s+/g, ' ').trim();
     var now = Date.now();
@@ -231,7 +231,7 @@ function parseVoiceCommand(transcript) {
     if (cleaned.includes('catégories')) return { type: 'navigate', page: 'categories' };
     if (cleaned.includes('point de vente') || cleaned.includes('pos') || cleaned.includes('caisse')) return { type: 'navigate', page: 'pos' };
 
-    // ----- PAGE POS -----
+    // ----- PAGE POS (inchangée) -----
     if (currentPage === 'POS' || currentPage === 'Dashboard') {
         if (voiceMode === 'quantity') {
             var nm = cleaned.match(/\b(\d+)\b/);
@@ -295,10 +295,17 @@ function parseVoiceCommand(transcript) {
         }
     }
 
-    // ----- PAGE CRÉDITS -----
+    // ----- PAGE CRÉDITS (COMMANDES ENRICHIES) -----
     if (currentPage === 'Crédits') {
-        // 1. Si en mode sélection
+        // 1. Si en mode sélection (cases à cocher visibles)
         if (window.creditSelectionMode) {
+            // Permettre de sortir du mode sélection pour marquer payé
+            if (cleaned.includes('marquer payé') || cleaned.includes('payer')) {
+                // On quitte le mode sélection et on active le paiement
+                window.creditSelectionMode = false; // pour éviter toute interférence
+                if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
+                return { type: 'mark_credit_paid' };
+            }
             if (cleaned === 'tout' || cleaned === 'tous' || cleaned.includes('sélectionner tout') || cleaned.includes('tout sélectionner')) {
                 return { type: 'select_all_credits' };
             }
@@ -321,11 +328,45 @@ function parseVoiceCommand(transcript) {
             for (var nw in numberMap) {
                 if (cleaned === nw) return { type: 'select_credit_line', lineNumber: numberMap[nw] };
             }
-            showVoiceResult('⚠️ Dites un numéro, "tout" ou "supprimer"');
+            showVoiceResult('⚠️ Dites un numéro, "tout", "supprimer" ou "marquer payé"');
             return { type: 'ignore' };
         }
 
-        // 2. Filtres de période
+        // 2. Si un paiement est en cours (creditPaymentStep = 'payment' ou 'amount')
+        if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
+            // Détection d'un montant (nombre)
+            var numAmount = cleaned.match(/^\d+([.,]\d+)?$/); // nombre avec éventuelle décimale
+            if (numAmount) {
+                var val = parseFloat(numAmount[0].replace(',', '.'));
+                if (val > 0) return { type: 'set_credit_amount', amount: val };
+            }
+            // Vérifier aussi dans numberMap
+            for (var nw2 in numberMap) {
+                if (cleaned === nw2) {
+                    return { type: 'set_credit_amount', amount: numberMap[nw2] };
+                }
+            }
+            // Validation
+            if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('confirmer') || cleaned.includes('ok') || cleaned.includes('oui')) {
+                return { type: 'validate_credit_payment' };
+            }
+            // Commande annuler / retour
+            if (cleaned.includes('annule') || cleaned.includes('annuler') || cleaned.includes('retour')) {
+                // Annuler le paiement, revenir à la liste
+                window.creditPaymentStep = 'idle';
+                window.creditSelectedIndex = -1;
+                var z = document.getElementById('creditPaymentZone');
+                if (z) z.style.display = 'none';
+                if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
+                showVoiceResult('↩️ Paiement annulé');
+                return { type: 'ignore' };
+            }
+            // Si rien reconnu, message d'aide
+            showVoiceResult('💰 Dites un montant puis "valider"');
+            return { type: 'ignore' };
+        }
+
+        // 3. Filtres de période
         if (cleaned.includes('aujourd hui') || cleaned.includes('aujourdhui') || cleaned.includes('ce jour') || cleaned.includes('du jour')) {
             window.creditsPeriod = 'today'; window.currentPages.credits = 1;
             if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
@@ -347,12 +388,23 @@ function parseVoiceCommand(transcript) {
             showVoiceResult('📅 Tout'); return { type: 'ignore' };
         }
 
-        // 3. Activer mode sélection
+        // 4. Activer mode sélection
         if (cleaned.includes('sélectionner') || cleaned.includes('select') || cleaned.includes('choisir') || cleaned.includes('cocher')) {
             return { type: 'activate_credit_selection' };
         }
 
-        // 4. Suppression directe
+        // 5. Marquer payé (depuis la liste sans être en mode sélection)
+        if (cleaned.includes('marquer payé') || cleaned.includes('payer')) {
+            // Si une ligne est déjà sélectionnée (par exemple via un clic précédent), on lance le paiement
+            if (window.creditSelectedIndex >= 0) {
+                return { type: 'mark_credit_paid' };
+            } else {
+                showVoiceResult('⚠️ Sélectionnez d\'abord une ligne');
+                return { type: 'ignore' };
+            }
+        }
+
+        // 6. Suppression directe (si pas en mode sélection, on y entre)
         if (cleaned === 'supprimer' || cleaned === 'supprime' || cleaned === 'effacer' || cleaned === 'enlever' || cleaned === 'retirer') {
             if (!window.creditSelectionMode) {
                 window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditSelectAll = false; window.creditPaymentStep = 'idle';
@@ -363,14 +415,14 @@ function parseVoiceCommand(transcript) {
             return { type: 'delete_selected_credit' };
         }
 
-        // 5. Confirmation suppression
+        // 7. Confirmation de suppression
         if (creditDeletePending) {
             if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('oui') || cleaned.includes('confirmer') || cleaned.includes('ok')) return { type: 'confirm_delete_credit' };
             if (cleaned.includes('annule') || cleaned.includes('annuler') || cleaned.includes('non')) return { type: 'cancel_delete_credit' };
             showVoiceResult('⚠️ Valide/Annule ?'); return { type: 'ignore' };
         }
 
-        // 6. Recherche client (nom/prénom)
+        // 8. Recherche client (nom/prénom)
         var cn2 = null, fc2 = fastFindClient(cleaned);
         if (fc2.length === 1) cn2 = fc2[0].nom + ' ' + fc2[0].prenom;
         else if (fc2.length > 1) {
@@ -384,13 +436,7 @@ function parseVoiceCommand(transcript) {
         }
         if (cn2) return { type: 'search_client_in_credits', clientName: cn2 };
 
-        // 7. Paiement en cours
-        if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
-            if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('confirmer') || cleaned.includes('ok') || cleaned.includes('oui')) return { type: 'validate_credit_payment' };
-            return { type: 'unknown', text: transcript };
-        }
-
-        // 8. Sélection par "ligne X"
+        // 9. Sélection par "ligne X"
         var lm2 = cleaned.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if (lm2) {
             var ns2 = lm2[1], num2 = parseInt(ns2);
@@ -398,16 +444,13 @@ function parseVoiceCommand(transcript) {
             if (!isNaN(num2) && num2 > 0) return { type: 'select_credit_line', lineNumber: num2 };
         }
 
-        // 9. Marquer payé, montant, fermer
-        if (cleaned.includes('marquer payé') || cleaned.includes('payer') || cleaned.includes('régler')) return { type: 'mark_credit_paid' };
-        var am = cleaned.match(/montant\s+(\d+[.,]?\d*)/i);
-        if (am) { var a = parseFloat(am[1].replace(',', '.')); if (!isNaN(a) && a > 0) return { type: 'set_credit_amount', amount: a }; }
+        // 10. Montant seul (pas en mode paiement) : ignoré
         if (cleaned.includes('fermer') || cleaned.includes('retour')) return { type: 'close_credit_list' };
 
         return { type: 'unknown', text: transcript };
     }
 
-    // ----- PAGE VENTES -----
+    // ----- PAGE VENTES (inchangée) -----
     if (currentPage === 'Ventes') {
         if (cleaned.includes('aujourd hui') || cleaned.includes('aujourdhui') || cleaned.includes('ce jour') || cleaned.includes('du jour')) {
             window.ventesPeriod = 'today'; window.currentPages.ventes = 1;
@@ -444,18 +487,15 @@ function parseVoiceCommand(transcript) {
     return { type: 'ignore' };
 }
 
-// ==================== RECHERCHE CLIENTS (CORRIGÉE) ====================
+// ==================== RECHERCHE CLIENTS (inchangée) ====================
 function searchClientInVentes(n) { if (!n) return; var s = document.getElementById('ventesSearchInput'); if (s) { s.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); } else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); } }, 200); } } }
-
 function searchClientInCredits(n) {
     if (!n) return;
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
-    // Si déjà sur la page Crédits, appliquer le filtre directement
     if (currentPage === 'Crédits') {
         if (typeof selectCreditClient === 'function') {
             selectCreditClient(n);
         } else {
-            // fallback manuel
             window.creditsSearch = n;
             if (typeof window.applyCreditsFilters === 'function') {
                 window.currentPages.credits = 1;
@@ -465,7 +505,6 @@ function searchClientInCredits(n) {
         showVoiceResult('🔍 ' + n);
         return;
     }
-    // Sinon, naviguer vers Crédits puis appliquer le filtre après chargement
     if (typeof navigateTo === 'function') {
         navigateTo('credits');
         var checkReady = setInterval(function() {
@@ -476,12 +515,11 @@ function searchClientInCredits(n) {
                 showVoiceResult('🔍 ' + n);
             }
         }, 200);
-        // sécurité : arrêter après 5 secondes
         setTimeout(function() { clearInterval(checkReady); }, 5000);
     }
 }
 
-// ==================== GESTIONNAIRE DE COMMANDES (inchangé) ====================
+// ==================== GESTIONNAIRE DE COMMANDES ====================
 function handleVoiceCommand(cmd) {
     console.log('🎤', cmd.type); var cp = document.getElementById('pageTitle')?.textContent || '';
     switch (cmd.type) {
@@ -627,4 +665,4 @@ window.selectAllCredits = selectAllCredits;
 window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
 
-console.log('🎤 Module vocal – crédits optimisé');
+console.log('🎤 Module vocal – crédits optimisé (paiement vocal)');
