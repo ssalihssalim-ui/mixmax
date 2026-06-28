@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v8.1.2 FINAL – COMMANDES STRICTEMENT SÉPARÉES ====================
-// Mixmax Minimarket – Scénario Crédits : filtres période, recherche client, sélection, suppression
+// ==================== POS-AUDIO.JS v8.1.2 FINAL – CORRECTIONS CRÉDITS ====================
+// Mixmax Minimarket – Recherche client + sélection simplifiée + suppression tout
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -72,6 +72,8 @@ function fastFindClient(query) {
     buildClientIndex();
     var q = query.toLowerCase().trim();
     if (!q || q.length < 1) return window.posAllClients ? window.posAllClients.slice() : [];
+    // Normalisation : supprimer les accents pour une correspondance plus tolérante
+    q = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     var mots = q.split(/[\s,;.]+/);
     var seen = {}, results = [];
     mots.forEach(function(mot) {
@@ -83,10 +85,11 @@ function fastFindClient(query) {
     });
     if (results.length === 0 && window.posAllClients) {
         results = window.posAllClients.filter(function(c) {
-            return (c.nom || '').toLowerCase().indexOf(q) !== -1 ||
-                (c.prenom || '').toLowerCase().indexOf(q) !== -1 ||
-                (c.description || '').toLowerCase().indexOf(q) !== -1 ||
-                (c.telephone || '').toLowerCase().indexOf(q) !== -1;
+            var nom = (c.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            var prenom = (c.prenom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            var description = (c.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            var telephone = (c.telephone || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            return nom.indexOf(q) !== -1 || prenom.indexOf(q) !== -1 || description.indexOf(q) !== -1 || telephone.indexOf(q) !== -1;
         });
     }
     return results;
@@ -94,7 +97,7 @@ function fastFindClient(query) {
 
 function invalidateClientIndex() { clientIndexBuilt = false; clientSearchIndex = {}; }
 
-// ==================== INDICATEUR DE PHASE ====================
+// ==================== INDICATEUR DE PHASE (inchangé) ====================
 function showVoiceFlowIndicator(phase) {
     voiceFlowPhase = phase;
     if (voiceFlowIndicator) {
@@ -207,9 +210,9 @@ function cancelDeleteCredit(){ if(creditDeletePending){creditDeletePending=null;
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL – STRICTEMENT PAR PAGE ====================
+// ==================== PARSER VOCAL – STRICTEMENT PAR PAGE (CORRIGÉ) ====================
 function parseVoiceCommand(transcript) {
-    // Nettoyage amélioré : apostrophe courbe et droite
+    // Nettoyage avancé : apostrophes courbes/droites, espaces multiples
     var cleaned = transcript.toLowerCase().replace(/['’]/g, ' ').replace(/\s+/g, ' ').trim();
     var now = Date.now();
     if (now - lastVoiceCommandTime < 40) return { type: 'ignore' };
@@ -299,27 +302,40 @@ function parseVoiceCommand(transcript) {
     if (currentPage === 'Crédits') {
         // 1. Si en mode sélection
         if (window.creditSelectionMode) {
-            // "tout"
+            // "tout" (sélectionner tout)
             if (cleaned === 'tout' || cleaned === 'tous' || cleaned.includes('sélectionner tout') || cleaned.includes('tout sélectionner')) {
                 return { type: 'select_all_credits' };
             }
-            // "rien"
+            // "rien" (annuler sélection)
             if (cleaned === 'rien' || cleaned === 'aucun' || cleaned.includes('désélectionner') || cleaned.includes('annuler sélection')) {
                 return { type: 'deselect_all_credits' };
             }
-            // fermer/retour
+            // "fermer" / "retour"
             if (cleaned.includes('fermer') || cleaned.includes('retour') || cleaned.includes('quitter')) {
                 return { type: 'close_credit_list' };
             }
-            // supprimer
+            // "supprimer tout" ou "tout supprimer"
+            if (cleaned.includes('supprimer tout') || cleaned.includes('tout supprimer')) {
+                return { type: 'delete_all_credits' };
+            }
+            // "supprimer" simple
             if (cleaned === 'supprimer' || cleaned === 'supprime' || cleaned === 'effacer' || cleaned === 'enlever' || cleaned === 'retirer') {
                 if (window.creditSelectAll) return { type: 'delete_all_credits' };
                 else if (window.creditSelectedIndex >= 0) return { type: 'delete_selected_credit' };
                 else { showVoiceResult('⚠️ Aucune ligne sélectionnée'); return { type: 'ignore' }; }
             }
-            // numéro
+            // Numéro en chiffres
             var numOnly = cleaned.match(/^\d+$/);
-            if (numOnly) return { type: 'select_credit_line', lineNumber: parseInt(numOnly[0]) };
+            if (numOnly) {
+                return { type: 'select_credit_line', lineNumber: parseInt(numOnly[0]) };
+            }
+            // Numéro en lettres (utilisation de numberMap)
+            for (var nw in numberMap) {
+                if (cleaned === nw) {
+                    return { type: 'select_credit_line', lineNumber: numberMap[nw] };
+                }
+            }
+            // Si rien reconnu, message d'aide
             showVoiceResult('⚠️ Dites un numéro, "tout" ou "supprimer"');
             return { type: 'ignore' };
         }
@@ -340,7 +356,7 @@ function parseVoiceCommand(transcript) {
             if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
             showVoiceResult('📅 30 jours'); return { type: 'ignore' };
         }
-        // "tout" pour la période (attention : pas en mode sélection)
+        // "tout" pour la période (attention : seulement si on n'est pas déjà en mode sélection)
         if (cleaned === 'tout' || cleaned.includes('historique') || cleaned.includes('global') || cleaned.includes('complet')) {
             window.creditsPeriod = 'all'; window.currentPages.credits = 1;
             if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
@@ -370,12 +386,16 @@ function parseVoiceCommand(transcript) {
             showVoiceResult('⚠️ Valide/Annule ?'); return { type: 'ignore' };
         }
 
-        // 6. Recherche client (nom ou prénom)
-        var cn2 = null, fc2 = fastFindClient(cleaned);
+        // 6. Recherche client (nom/prénom) – normalisation incluse
+        var cn2 = null, fc2 = fastFindClient(cleaned);  // fastFindClient normalise déjà
         if (fc2.length === 1) cn2 = fc2[0].nom + ' ' + fc2[0].prenom;
         else if (fc2.length > 1) {
             for (var j2 = 0; j2 < fc2.length; j2++) {
-                if ((fc2[j2].nom + ' ' + fc2[j2].prenom).toLowerCase().indexOf(cleaned) !== -1) { cn2 = fc2[j2].nom + ' ' + fc2[j2].prenom; break; }
+                // Comparaison simple sans accent
+                var nomPrenom = (fc2[j2].nom + ' ' + fc2[j2].prenom).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+                if (nomPrenom.indexOf(cleaned.normalize('NFD').replace(/[\u0300-\u036f]/g, '')) !== -1) {
+                    cn2 = fc2[j2].nom + ' ' + fc2[j2].prenom; break;
+                }
             }
             if (!cn2) cn2 = fc2[0].nom + ' ' + fc2[0].prenom;
         }
@@ -426,6 +446,7 @@ function parseVoiceCommand(transcript) {
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
             showVoiceResult('📅 Tout'); return { type: 'ignore' };
         }
+        // Recherche client dans ventes
         var cn = null, fc = fastFindClient(cleaned);
         if (fc.length === 1) cn = fc[0].nom + ' ' + fc[0].prenom;
         else if (fc.length > 1) {
@@ -438,6 +459,7 @@ function parseVoiceCommand(transcript) {
         return { type: 'unknown', text: transcript };
     }
 
+    // ----- AUTRES PAGES : ignoré -----
     return { type: 'ignore' };
 }
 
@@ -445,7 +467,7 @@ function parseVoiceCommand(transcript) {
 function searchClientInVentes(n) { if (!n) return; var s = document.getElementById('ventesSearchInput'); if (s) { s.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); } else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); } }, 200); } } }
 function searchClientInCredits(n) { if (!n) return; if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { window.creditSelectionMode = false; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); if (typeof selectCreditClient === 'function') selectCreditClient(n); }, 400); } }
 
-// ==================== GESTIONNAIRE DE COMMANDES (INCHANGÉ, sauf navigation crédits) ====================
+// ==================== GESTIONNAIRE DE COMMANDES (inchangé) ====================
 function handleVoiceCommand(cmd) {
     console.log('🎤', cmd.type); var cp = document.getElementById('pageTitle')?.textContent || '';
     switch (cmd.type) {
@@ -470,7 +492,7 @@ function handleVoiceCommand(cmd) {
             if (typeof window.posCart !== 'undefined' && window.posCart.length > 0 && window.posStep === 1 && p !== 'pos') { if (!confirm('⚠️ Panier non vide. Vider ?')) { showVoiceResult('↩️ Annulé'); hideVoiceFlowIndicator(); return; } if (typeof window.posResetCart === 'function') window.posResetCart(); }
             showVoiceResult('📋 ' + pt[p]); if (typeof navigateTo === 'function') navigateTo(p);
             hideVoiceFlowIndicator();
-            // 🛑 Ne plus forcer le mode sélection à l'arrivée sur Crédits
+            // Ne plus activer le mode sélection automatiquement sur Crédits
             break;
         case 'payment_mode':
             var m = cmd.mode; if ((m === 'credit' || m === 'partiel') && (!window.posCurrentClient || !window.posCurrentClient.id)) { alert('Client requis'); showVoiceResult('⚠️ Client requis'); hideVoiceFlowIndicator(); return; }
@@ -592,4 +614,4 @@ window.selectAllCredits = selectAllCredits;
 window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
 
-console.log('🎤 Module vocal – scénario crédits OK');
+console.log('🎤 Module vocal – crédits optimisé');
