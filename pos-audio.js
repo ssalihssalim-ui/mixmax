@@ -1,6 +1,5 @@
 // ==================== POS-AUDIO.JS v8.1.2 FINAL – RECHERCHE CONTEXTUELLE STRICTE ====================
 // Mixmax Minimarket – Traitement ultra‑rapide, uniquement ce qui est nécessaire à chaque étape
-// Optimisé : anti‑rebond 0ms, debounceDelay 0ms, pas de résultats intermédiaires, grammaire sur Chrome
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -184,7 +183,7 @@ function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKey
 function parseVoiceCommand(transcript) {
     transcript = transcript.toLowerCase().trim();
     var now = Date.now();
-    if (now - lastVoiceCommandTime < 0) return { type: 'ignore' }; // anti‑rebond désactivé (0ms)
+    if (now - lastVoiceCommandTime < 40) return { type: 'ignore' }; // anti‑rebond réduit à 40ms
     lastVoiceCommandTime = now;
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
 
@@ -382,18 +381,27 @@ function posToggleVoiceSearch() { var s = checkVoiceSupport(); if (!s.supported)
 function posStartVoiceRecording() {
     var mb = document.getElementById('posMicBtn'); if (voiceRecognition) { try { voiceRecognition.abort(); } catch (e) {} voiceRecognition = null; }
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) { alert('❌ Reconnaissance vocale non disponible.'); return; }
-    voiceRecognition = new SR(); voiceRecognition.lang = 'fr-FR'; voiceRecognition.continuous = true; voiceRecognition.interimResults = false; // plus de résultats intermédiaires
-    voiceRecognition.maxAlternatives = 1;
+    voiceRecognition = new SR(); voiceRecognition.lang = 'fr-FR'; voiceRecognition.continuous = true; voiceRecognition.interimResults = true; voiceRecognition.maxAlternatives = 1;
 
-    // Appliquer grammaire personnalisée (Chrome) pour réduire le vocabulaire
+    // Appliquer grammaire personnalisée (Chrome) pour restreindre le vocabulaire
     if (window.SpeechGrammarList && window.posProductsList && window.posProductsList.length) {
         var allWords = [];
+        // Mots des produits (nom + description)
         window.posProductsList.forEach(function(p) {
             var text = (p.nom || '') + ' ' + (p.description || '');
             text.toLowerCase().split(/[\s,;.]+/).forEach(function(m) { if (m.length >= 2) allWords.push(m); });
         });
+        // Mots des clients (nom, prénom, description, téléphone)
+        if (window.posAllClients && window.posAllClients.length) {
+            window.posAllClients.forEach(function(c) {
+                var clientText = (c.nom || '') + ' ' + (c.prenom || '') + ' ' + (c.description || '') + ' ' + (c.telephone || '');
+                clientText.toLowerCase().split(/[\s,;.]+/).forEach(function(m) { if (m.length >= 2) allWords.push(m); });
+            });
+        }
+        // Commandes courantes et nombres
         var commands = 'passe valide efface vider annule terminer crédits ventes dashboard produits clients commandes catégories pos un deux trois quatre cinq six sept huit neuf dix';
         commands.split(' ').forEach(function(w) { allWords.push(w); });
+        // Supprimer les doublons
         var uniqueWords = allWords.filter(function(w, i, arr) { return arr.indexOf(w) === i; });
         var grammarString = '#JSGF V1.0; grammar pos; public <all> = ' + uniqueWords.join(' | ') + ';';
         var speechRecognitionList = new window.SpeechGrammarList();
@@ -407,7 +415,7 @@ function posStartVoiceRecording() {
     voiceRecognition.onresult = function(e) {
         var it = '', ftt = ''; for (var i = e.resultIndex; i < e.results.length; i++) { var t = e.results[i][0].transcript; if (e.results[i].isFinal) ftt += t; else it += t; }
         var cp = document.getElementById('pageTitle')?.textContent || '';
-        var debounceDelay = 0; // traitement immédiat
+        var debounceDelay = 5; // traitement quasi instantané
         if (cp === 'Crédits') { var vd = document.getElementById('creditsVoiceDisplay'); if (vd) { if (ftt) { vd.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; hideVoiceFlowIndicator(); var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd.value = it + ' ✍️'; } } }
         else if (cp === 'Ventes') { var vd2 = document.getElementById('ventesVoiceDisplay'); if (vd2) { if (ftt) { vd2.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; hideVoiceFlowIndicator(); var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it) { vd2.value = it + ' ✍️'; } } }
         else { var si = document.getElementById('posSearchInput'); if (si) { if (ftt) { si.value = ftt; clearTimeout(vdt); showProcessingIndicator(); vdt = setTimeout(function() { if (!proc) { proc = true; hideVoiceFlowIndicator(); var cmd = parseVoiceCommand(ftt); if (cmd.type !== 'ignore') handleVoiceCommand(cmd); proc = false; } }, debounceDelay); } else if (it && it !== li) { si.value = it + ' ✍️'; li = it; } } }
@@ -436,4 +444,4 @@ window.showVoiceFlowIndicator = showVoiceFlowIndicator; window.hideVoiceFlowIndi
 window.showProcessingIndicator = showProcessingIndicator;
 window.onProductAdded = function(pid) { lastAddedProductId = pid; setVoiceMode('quantity', '🔢 Qté', pid); showVoiceModeIndicator(); hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('quantity'); }, 200); };
 
-console.log('🎤 Mixmax Minimarket - Module vocal v8.1.2 optimisé chargé');
+console.log('🎤 Mixmax Minimarket - Module vocal v8.1.2 contextuel strict chargé');
