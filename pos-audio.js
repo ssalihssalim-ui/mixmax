@@ -1,5 +1,5 @@
 // ==================== POS-AUDIO.JS v8.1.2 FINAL – CORRECTIONS CRÉDITS ====================
-// Mixmax Minimarket – Recherche client + sélection simplifiée + suppression tout
+// Mixmax Minimarket – Recherche client, sélection simplifiée, suppression tout
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -72,7 +72,6 @@ function fastFindClient(query) {
     buildClientIndex();
     var q = query.toLowerCase().trim();
     if (!q || q.length < 1) return window.posAllClients ? window.posAllClients.slice() : [];
-    // Normalisation : supprimer les accents pour une correspondance plus tolérante
     q = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     var mots = q.split(/[\s,;.]+/);
     var seen = {}, results = [];
@@ -212,19 +211,17 @@ function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKey
 
 // ==================== PARSER VOCAL – STRICTEMENT PAR PAGE (CORRIGÉ) ====================
 function parseVoiceCommand(transcript) {
-    // Nettoyage avancé : apostrophes courbes/droites, espaces multiples
     var cleaned = transcript.toLowerCase().replace(/['’]/g, ' ').replace(/\s+/g, ' ').trim();
     var now = Date.now();
     if (now - lastVoiceCommandTime < 40) return { type: 'ignore' };
     lastVoiceCommandTime = now;
     var currentPage = document.getElementById('pageTitle')?.textContent || '';
 
-    // Réinitialisation du mode hors POS
     if (currentPage !== 'POS' && currentPage !== 'Dashboard' && (voiceMode === 'quantity' || voiceMode === 'payment')) {
         setVoiceMode('search', '🎤 Recherche vocale active');
     }
 
-    // ----- NAVIGATION (commune) -----
+    // ----- NAVIGATION -----
     if (cleaned.includes('crédits') || cleaned.includes('impayés') || cleaned.includes('liste des crédits') || cleaned.includes('liste de crédit')) return { type: 'navigate', page: 'credits' };
     if (cleaned.includes('ventes') || cleaned.includes('vente')) return { type: 'navigate', page: 'ventes' };
     if (cleaned.includes('dashboard') || cleaned.includes('accueil') || cleaned.includes('home')) return { type: 'navigate', page: 'dashboard' };
@@ -302,45 +299,33 @@ function parseVoiceCommand(transcript) {
     if (currentPage === 'Crédits') {
         // 1. Si en mode sélection
         if (window.creditSelectionMode) {
-            // "tout" (sélectionner tout)
             if (cleaned === 'tout' || cleaned === 'tous' || cleaned.includes('sélectionner tout') || cleaned.includes('tout sélectionner')) {
                 return { type: 'select_all_credits' };
             }
-            // "rien" (annuler sélection)
             if (cleaned === 'rien' || cleaned === 'aucun' || cleaned.includes('désélectionner') || cleaned.includes('annuler sélection')) {
                 return { type: 'deselect_all_credits' };
             }
-            // "fermer" / "retour"
             if (cleaned.includes('fermer') || cleaned.includes('retour') || cleaned.includes('quitter')) {
                 return { type: 'close_credit_list' };
             }
-            // "supprimer tout" ou "tout supprimer"
             if (cleaned.includes('supprimer tout') || cleaned.includes('tout supprimer')) {
                 return { type: 'delete_all_credits' };
             }
-            // "supprimer" simple
             if (cleaned === 'supprimer' || cleaned === 'supprime' || cleaned === 'effacer' || cleaned === 'enlever' || cleaned === 'retirer') {
                 if (window.creditSelectAll) return { type: 'delete_all_credits' };
                 else if (window.creditSelectedIndex >= 0) return { type: 'delete_selected_credit' };
                 else { showVoiceResult('⚠️ Aucune ligne sélectionnée'); return { type: 'ignore' }; }
             }
-            // Numéro en chiffres
             var numOnly = cleaned.match(/^\d+$/);
-            if (numOnly) {
-                return { type: 'select_credit_line', lineNumber: parseInt(numOnly[0]) };
-            }
-            // Numéro en lettres (utilisation de numberMap)
+            if (numOnly) return { type: 'select_credit_line', lineNumber: parseInt(numOnly[0]) };
             for (var nw in numberMap) {
-                if (cleaned === nw) {
-                    return { type: 'select_credit_line', lineNumber: numberMap[nw] };
-                }
+                if (cleaned === nw) return { type: 'select_credit_line', lineNumber: numberMap[nw] };
             }
-            // Si rien reconnu, message d'aide
             showVoiceResult('⚠️ Dites un numéro, "tout" ou "supprimer"');
             return { type: 'ignore' };
         }
 
-        // 2. Filtres de période (avant toute autre commande)
+        // 2. Filtres de période
         if (cleaned.includes('aujourd hui') || cleaned.includes('aujourdhui') || cleaned.includes('ce jour') || cleaned.includes('du jour')) {
             window.creditsPeriod = 'today'; window.currentPages.credits = 1;
             if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
@@ -356,19 +341,18 @@ function parseVoiceCommand(transcript) {
             if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
             showVoiceResult('📅 30 jours'); return { type: 'ignore' };
         }
-        // "tout" pour la période (attention : seulement si on n'est pas déjà en mode sélection)
         if (cleaned === 'tout' || cleaned.includes('historique') || cleaned.includes('global') || cleaned.includes('complet')) {
             window.creditsPeriod = 'all'; window.currentPages.credits = 1;
             if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
             showVoiceResult('📅 Tout'); return { type: 'ignore' };
         }
 
-        // 3. Activer le mode sélection
+        // 3. Activer mode sélection
         if (cleaned.includes('sélectionner') || cleaned.includes('select') || cleaned.includes('choisir') || cleaned.includes('cocher')) {
             return { type: 'activate_credit_selection' };
         }
 
-        // 4. Suppression directe (si pas en mode sélection, on y entre)
+        // 4. Suppression directe
         if (cleaned === 'supprimer' || cleaned === 'supprime' || cleaned === 'effacer' || cleaned === 'enlever' || cleaned === 'retirer') {
             if (!window.creditSelectionMode) {
                 window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditSelectAll = false; window.creditPaymentStep = 'idle';
@@ -379,19 +363,18 @@ function parseVoiceCommand(transcript) {
             return { type: 'delete_selected_credit' };
         }
 
-        // 5. Confirmation de suppression
+        // 5. Confirmation suppression
         if (creditDeletePending) {
             if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('oui') || cleaned.includes('confirmer') || cleaned.includes('ok')) return { type: 'confirm_delete_credit' };
             if (cleaned.includes('annule') || cleaned.includes('annuler') || cleaned.includes('non')) return { type: 'cancel_delete_credit' };
             showVoiceResult('⚠️ Valide/Annule ?'); return { type: 'ignore' };
         }
 
-        // 6. Recherche client (nom/prénom) – normalisation incluse
-        var cn2 = null, fc2 = fastFindClient(cleaned);  // fastFindClient normalise déjà
+        // 6. Recherche client (nom/prénom)
+        var cn2 = null, fc2 = fastFindClient(cleaned);
         if (fc2.length === 1) cn2 = fc2[0].nom + ' ' + fc2[0].prenom;
         else if (fc2.length > 1) {
             for (var j2 = 0; j2 < fc2.length; j2++) {
-                // Comparaison simple sans accent
                 var nomPrenom = (fc2[j2].nom + ' ' + fc2[j2].prenom).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
                 if (nomPrenom.indexOf(cleaned.normalize('NFD').replace(/[\u0300-\u036f]/g, '')) !== -1) {
                     cn2 = fc2[j2].nom + ' ' + fc2[j2].prenom; break;
@@ -446,7 +429,6 @@ function parseVoiceCommand(transcript) {
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
             showVoiceResult('📅 Tout'); return { type: 'ignore' };
         }
-        // Recherche client dans ventes
         var cn = null, fc = fastFindClient(cleaned);
         if (fc.length === 1) cn = fc[0].nom + ' ' + fc[0].prenom;
         else if (fc.length > 1) {
@@ -459,13 +441,45 @@ function parseVoiceCommand(transcript) {
         return { type: 'unknown', text: transcript };
     }
 
-    // ----- AUTRES PAGES : ignoré -----
     return { type: 'ignore' };
 }
 
-// ==================== RECHERCHE CLIENTS ====================
+// ==================== RECHERCHE CLIENTS (CORRIGÉE) ====================
 function searchClientInVentes(n) { if (!n) return; var s = document.getElementById('ventesSearchInput'); if (s) { s.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); } else { if (typeof navigateTo === 'function') { navigateTo('ventes'); setTimeout(function() { var si = document.getElementById('ventesSearchInput'); if (si) { si.value = n; window.ventesSearch = n; window.currentPages.ventes = 1; if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters(); showVoiceResult('🔍 ' + n); } }, 200); } } }
-function searchClientInCredits(n) { if (!n) return; if (typeof navigateTo === 'function') { navigateTo('credits'); setTimeout(function() { window.creditSelectionMode = false; window.creditSelectedIndex = -1; window.creditPaymentStep = 'idle'; if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable(); if (typeof selectCreditClient === 'function') selectCreditClient(n); }, 400); } }
+
+function searchClientInCredits(n) {
+    if (!n) return;
+    var currentPage = document.getElementById('pageTitle')?.textContent || '';
+    // Si déjà sur la page Crédits, appliquer le filtre directement
+    if (currentPage === 'Crédits') {
+        if (typeof selectCreditClient === 'function') {
+            selectCreditClient(n);
+        } else {
+            // fallback manuel
+            window.creditsSearch = n;
+            if (typeof window.applyCreditsFilters === 'function') {
+                window.currentPages.credits = 1;
+                window.applyCreditsFilters();
+            }
+        }
+        showVoiceResult('🔍 ' + n);
+        return;
+    }
+    // Sinon, naviguer vers Crédits puis appliquer le filtre après chargement
+    if (typeof navigateTo === 'function') {
+        navigateTo('credits');
+        var checkReady = setInterval(function() {
+            var currentPageAfterNav = document.getElementById('pageTitle')?.textContent || '';
+            if (currentPageAfterNav === 'Crédits' && typeof selectCreditClient === 'function') {
+                clearInterval(checkReady);
+                selectCreditClient(n);
+                showVoiceResult('🔍 ' + n);
+            }
+        }, 200);
+        // sécurité : arrêter après 5 secondes
+        setTimeout(function() { clearInterval(checkReady); }, 5000);
+    }
+}
 
 // ==================== GESTIONNAIRE DE COMMANDES (inchangé) ====================
 function handleVoiceCommand(cmd) {
@@ -492,7 +506,6 @@ function handleVoiceCommand(cmd) {
             if (typeof window.posCart !== 'undefined' && window.posCart.length > 0 && window.posStep === 1 && p !== 'pos') { if (!confirm('⚠️ Panier non vide. Vider ?')) { showVoiceResult('↩️ Annulé'); hideVoiceFlowIndicator(); return; } if (typeof window.posResetCart === 'function') window.posResetCart(); }
             showVoiceResult('📋 ' + pt[p]); if (typeof navigateTo === 'function') navigateTo(p);
             hideVoiceFlowIndicator();
-            // Ne plus activer le mode sélection automatiquement sur Crédits
             break;
         case 'payment_mode':
             var m = cmd.mode; if ((m === 'credit' || m === 'partiel') && (!window.posCurrentClient || !window.posCurrentClient.id)) { alert('Client requis'); showVoiceResult('⚠️ Client requis'); hideVoiceFlowIndicator(); return; }
