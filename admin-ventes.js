@@ -247,7 +247,6 @@ function renderVentesTable() {
         makeSortableHeader('ventes', 'paymentMethod', 'Paiement', 'renderVentesTable') +
         makeSortableHeader('ventes', 'statutPaiement', 'Statut', 'renderVentesTable') +
         '<th>Actions</th>';
-    // ✅ Colonne sélection si mode actif
     if (window.venteSelectionMode) {
         h += '<th style="width:40px;">✅</th>';
     }
@@ -270,7 +269,6 @@ function renderVentesTable() {
         var change = d.change || 0;
         var statutLabel = d.statutPaiement || (d.paid ? 'payé' : 'impayé');
         var statutColor = statutLabel === 'payé' ? '#2E7D32' : (statutLabel === 'crédit' ? '#2E7D32' : (statutLabel === 'partiel' ? '#d97706' : '#ef4444'));
-        // Boutons d'action
         var actions = '<button class="btn-edit" onclick="printFacture(\'' + d.id + '\')" title="Imprimer"><i class="fas fa-print"></i></button> ' +
             '<button class="btn-edit" onclick="sendWhatsApp(\'' + d.id + '\')" style="color:#25D366;" title="Envoyer WhatsApp"><i class="fab fa-whatsapp"></i></button> ';
         if (!d.paid) actions += '<button class="btn-add" style="padding:4px 6px;font-size:0.65rem;" onclick="payerVente(\'' + d.id + '\')"><i class="fas fa-check"></i> Payer</button> ';
@@ -283,7 +281,6 @@ function renderVentesTable() {
             (isAdmin ? '<td>' + d.achat.toFixed(2) + '</td><td style="color:#2E7D32;">' + d.profit.toFixed(2) + '</td>' : '') +
             '<td><strong>' + (d.total || 0).toFixed(2) + '</strong></td><td>' + (d.discountMAD || 0).toFixed(2) + '</td><td>' + amountGiven.toFixed(2) + '</td><td>' + change.toFixed(2) + '</td><td>' + (d.vendeur || '-') + '</td><td>' + (d.paymentMethod || '-') + '</td><td><span style="color:' + statutColor + ';font-weight:600;">' + statutLabel + '</span></td><td>' + actions + '</td>';
 
-        // ✅ Colonne sélection
         if (window.venteSelectionMode) {
             var checked = isSelected ? 'checked' : '';
             h += '<td><input type="checkbox" ' + checked + ' onclick="window.venteSelectedIndex=' + index + ';renderVentesTable();"></td>';
@@ -384,41 +381,73 @@ function imprimerFacture(d, id) {
     setTimeout(function() { w.print(); }, 500);
 }
 
-// ==================== ENVOI WHATSAPP ====================
+// ==================== ENVOI WHATSAPP (CORRIGÉ) ====================
 async function sendWhatsApp(did) {
     try {
         const doc = await db.collection('ventes').doc(did).get();
         if (!doc.exists) { alert('Vente introuvable'); return; }
         const vente = doc.data();
 
-        // Chercher le téléphone
         let phone = '';
+        
+        // 1. Chercher dans le client lié à la vente
         if (vente.clientId) {
-            const clientDoc = await db.collection('clients').doc(vente.clientId).get();
-            if (clientDoc.exists) {
-                phone = clientDoc.data().telephone || '';
+            try {
+                const clientDoc = await db.collection('clients').doc(vente.clientId).get();
+                if (clientDoc.exists) {
+                    const cdata = clientDoc.data();
+                    phone = cdata.whatsapp || cdata.telephone || '';
+                }
+            } catch(e) {
+                console.error('Erreur recherche client:', e);
             }
         }
-        phone = phone.replace(/\s+/g, '').replace(/^0+/, '');
-        if (!phone) { alert('❌ Aucun numéro WhatsApp trouvé.'); return; }
+        
+        // 2. Si pas trouvé, chercher par nom dans posAllClients
+        if (!phone && vente.clientName && window.posAllClients && window.posAllClients.length) {
+            const client = window.posAllClients.find(function(c) {
+                return (c.nom + ' ' + c.prenom).toLowerCase() === (vente.clientName || '').toLowerCase();
+            });
+            if (client) {
+                phone = client.whatsapp || client.telephone || '';
+            }
+        }
+
+        phone = phone.replace(/[\s\-\(\)]/g, '').replace(/^0+/, '');
+
+        if (!phone) {
+            alert('❌ Aucun numéro WhatsApp trouvé pour ce client.\nVérifiez que le client a un champ "whatsapp" ou "telephone".');
+            return;
+        }
 
         // Construire le message
         var message = '🧾 *Facture Mixmax Minimarket*\n';
         message += '📄 N°: ' + (vente.factureNum || did.substring(0, 8)) + '\n';
         message += '📅 Date: ' + (vente.createdAt ? new Date(vente.createdAt.seconds * 1000).toLocaleString('fr-FR') : '') + '\n';
         message += '👤 Client: ' + (vente.clientName || '-') + '\n';
+        message += '👨‍💼 Vendeur: ' + (vente.vendeur || '-') + '\n';
+        message += '💳 Paiement: ' + (vente.paymentMethod || '-') + ' | ' + (vente.statutPaiement || (vente.paid ? 'Payé' : 'Impayé')) + '\n';
         message += '━━━━━━━━━━━━━━━━\n';
         if (vente.items) {
             vente.items.forEach(function(it) {
-                message += it.quantite + 'x ' + it.nom + ' — ' + (it.prixVente || 0).toFixed(2) + ' MAD\n';
+                var options = '';
+                if (it.interdits && it.interdits.length > 0) options += ' 🚫' + it.interdits.join(',');
+                if (it.epice && it.epice !== 'Normal') options += ' 🌶️' + it.epice;
+                if (it.sel && it.sel !== 'Normal') options += ' 🧂' + it.sel;
+                message += it.quantite + 'x ' + it.nom + options + ' — ' + (it.prixVente || 0).toFixed(2) + ' MAD\n';
             });
         }
+        if (vente.discountMAD > 0) message += 'Remise: -' + vente.discountMAD.toFixed(2) + ' MAD\n';
         message += '━━━━━━━━━━━━━━━━\n';
         message += '*💰 Total: ' + vente.total.toFixed(2) + ' MAD*';
+        if (vente.amountGiven > vente.total) message += '\n💵 Rendu: ' + (vente.amountGiven - vente.total).toFixed(2) + ' MAD';
+        if (vente.statutPaiement === 'crédit' || vente.statutPaiement === 'partiel') {
+            message += '\n📋 Reste à payer: ' + (vente.remainingAmount || 0).toFixed(2) + ' MAD';
+        }
 
-        var encodedMessage = encodeURIComponent(message);
-        var whatsappURL = 'https://wa.me/' + phone + '?text=' + encodedMessage;
+        var whatsappURL = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
         window.open(whatsappURL, '_blank');
+
     } catch (e) {
         console.error('Erreur WhatsApp:', e);
         alert('❌ Erreur: ' + e.message);
@@ -445,4 +474,4 @@ window.printFacture = printFacture;
 window.imprimerFacture = imprimerFacture;
 window.sendWhatsApp = sendWhatsApp;
 
-console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec WhatsApp)');
+console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec WhatsApp corrigé)');
