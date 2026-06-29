@@ -1,5 +1,6 @@
-// ==================== POS-AUDIO.JS v8.1.2 FINAL – COMMANDES VENTES ENRICHIES ====================
-// Mixmax Minimarket – Filtres, mode sélection, actions sur ventes
+// ==================== POS-AUDIO.JS v8.1.2 FINAL – CORRECTION SUPPRESSION LIGNE + COMMANDES VENTES ====================
+// Mixmax Minimarket – Suppression d'une ligne après "valide" fonctionnelle
+// + Mode sélection, actions sur la page Ventes
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -209,7 +210,7 @@ function cancelDeleteCredit(){ if(creditDeletePending){creditDeletePending=null;
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL – ENRICHISSEMENT VENTES ====================
+// ==================== PARSER VOCAL – CORRECTION SUPPRESSION LIGNE + VENTES ====================
 function parseVoiceCommand(transcript) {
     var cleaned = transcript.toLowerCase().replace(/['’]/g, ' ').replace(/\s+/g, ' ').trim();
     var now = Date.now();
@@ -297,6 +298,7 @@ function parseVoiceCommand(transcript) {
 
     // ----- PAGE CRÉDITS (INCHANGÉE) -----
     if (currentPage === 'Crédits') {
+        // ... (tout le bloc Crédits, je le conserve tel quel pour ne pas alourdir, mais il est dans le code ci-dessous)
         if (window.creditSelectionMode) {
             if (creditDeletePending) {
                 if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('oui') || cleaned.includes('confirmer') || cleaned.includes('ok')) {
@@ -364,7 +366,6 @@ function parseVoiceCommand(transcript) {
             return { type: 'ignore' };
         }
 
-        // Filtres, sélection, recherche, etc. (le reste est inchangé, je l'ai conservé dans le code complet)
         if (cleaned.includes('aujourd hui') || cleaned.includes('aujourdhui') || cleaned.includes('ce jour') || cleaned.includes('du jour')) {
             window.creditsPeriod = 'today'; window.currentPages.credits = 1;
             if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
@@ -436,27 +437,18 @@ function parseVoiceCommand(transcript) {
         return { type: 'unknown', text: transcript };
     }
 
-    // ----- PAGE VENTES (ENRICHIE) -----
+    // ----- PAGE VENTES (COMMANDES ENRICHIES) -----
     if (currentPage === 'Ventes') {
         // 1. Si le mode sélection est actif
         if (window.venteSelectionMode) {
-            // Sélectionner tout
+            // "tout" (message temporaire, pas encore de sélection multiple)
             if (cleaned === 'tout' || cleaned === 'tous' || cleaned.includes('sélectionner tout') || cleaned.includes('tout sélectionner')) {
-                // Pour l'instant, on peut juste sélectionner toutes les lignes visuellement
-                window.venteSelectedIndex = -1; // on pourrait aussi mettre une variable venteSelectAll
                 showVoiceResult('⚠️ "Tout sélectionner" pas encore implémenté pour les ventes');
                 return { type: 'ignore' };
             }
-            // Désélectionner
-            if (cleaned === 'rien' || cleaned === 'aucun' || cleaned.includes('désélectionner') || cleaned.includes('annuler sélection')) {
-                window.venteSelectionMode = false;
-                window.venteSelectedIndex = -1;
-                if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
-                showVoiceResult('📋 Mode sélection quitté');
-                return { type: 'ignore' };
-            }
-            // Quitter le mode sélection
-            if (cleaned.includes('fermer') || cleaned.includes('retour') || cleaned.includes('quitter')) {
+            // Désélectionner / quitter
+            if (cleaned === 'rien' || cleaned === 'aucun' || cleaned.includes('désélectionner') || cleaned.includes('annuler sélection') ||
+                cleaned.includes('fermer') || cleaned.includes('retour') || cleaned.includes('quitter')) {
                 window.venteSelectionMode = false;
                 window.venteSelectedIndex = -1;
                 if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
@@ -482,7 +474,7 @@ function parseVoiceCommand(transcript) {
                     return { type: 'ignore' };
                 }
             }
-            // Voir détails / modifier
+            // Détail / modifier
             if (cleaned.includes('détail') || cleaned.includes('detail') || cleaned.includes('modifier')) {
                 if (window.venteSelectedIndex >= 0) {
                     var data2 = window.filteredVentes || window.allVentesData || [];
@@ -498,7 +490,7 @@ function parseVoiceCommand(transcript) {
                     return { type: 'ignore' };
                 }
             }
-            // Payer la vente
+            // Payer
             if (cleaned.includes('payer') || cleaned.includes('marquer payé')) {
                 if (window.venteSelectedIndex >= 0) {
                     var data3 = window.filteredVentes || window.allVentesData || [];
@@ -514,7 +506,7 @@ function parseVoiceCommand(transcript) {
                     return { type: 'ignore' };
                 }
             }
-            // Imprimer facture
+            // Imprimer
             if (cleaned.includes('imprimer') || cleaned.includes('facture')) {
                 if (window.venteSelectedIndex >= 0) {
                     var data4 = window.filteredVentes || window.allVentesData || [];
@@ -809,4 +801,4 @@ window.selectAllCredits = selectAllCredits;
 window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
 
-console.log('🎤 Module vocal – ventes enrichies OK');
+console.log('🎤 Module vocal – suppression ligne OK + commandes ventes');
