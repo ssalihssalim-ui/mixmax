@@ -1,7 +1,7 @@
 // ==================== ADMIN-VENTES.JS - MIXMAX MINIMARKET ====================
 // Contient : Commandes en ligne, Ventes
 // Dépend de : admin.js (variables globales, fonctions utilitaires)
-// Version FINALE : window. pour toutes les variables + input vocal + mode sélection ventes + WhatsApp
+// Version FINALE : window. pour toutes les variables + input vocal + mode sélection ventes + WhatsApp compatible iPhone
 
 // ========== VARIABLES GLOBALES ==========
 window.commandesSearch = window.commandesSearch || '';
@@ -381,7 +381,7 @@ function imprimerFacture(d, id) {
     setTimeout(function() { w.print(); }, 500);
 }
 
-// ==================== ENVOI WHATSAPP (CORRIGÉ) ====================
+// ==================== ENVOI WHATSAPP (COMPATIBLE iPHONE) ====================
 async function sendWhatsApp(did) {
     try {
         const doc = await db.collection('ventes').doc(did).get();
@@ -390,7 +390,6 @@ async function sendWhatsApp(did) {
 
         let phone = '';
         
-        // 1. Chercher dans le client lié à la vente
         if (vente.clientId) {
             try {
                 const clientDoc = await db.collection('clients').doc(vente.clientId).get();
@@ -403,7 +402,6 @@ async function sendWhatsApp(did) {
             }
         }
         
-        // 2. Si pas trouvé, chercher par nom dans posAllClients
         if (!phone && vente.clientName && window.posAllClients && window.posAllClients.length) {
             const client = window.posAllClients.find(function(c) {
                 return (c.nom + ' ' + c.prenom).toLowerCase() === (vente.clientName || '').toLowerCase();
@@ -416,37 +414,40 @@ async function sendWhatsApp(did) {
         phone = phone.replace(/[\s\-\(\)]/g, '').replace(/^0+/, '');
 
         if (!phone) {
-            alert('❌ Aucun numéro WhatsApp trouvé pour ce client.\nVérifiez que le client a un champ "whatsapp" ou "telephone".');
+            alert('❌ Aucun numéro WhatsApp trouvé.\nVérifiez le champ "whatsapp" ou "telephone" du client.');
             return;
         }
 
-        // Construire le message
         var message = '🧾 *Facture Mixmax Minimarket*\n';
         message += '📄 N°: ' + (vente.factureNum || did.substring(0, 8)) + '\n';
         message += '📅 Date: ' + (vente.createdAt ? new Date(vente.createdAt.seconds * 1000).toLocaleString('fr-FR') : '') + '\n';
         message += '👤 Client: ' + (vente.clientName || '-') + '\n';
-        message += '👨‍💼 Vendeur: ' + (vente.vendeur || '-') + '\n';
-        message += '💳 Paiement: ' + (vente.paymentMethod || '-') + ' | ' + (vente.statutPaiement || (vente.paid ? 'Payé' : 'Impayé')) + '\n';
         message += '━━━━━━━━━━━━━━━━\n';
         if (vente.items) {
             vente.items.forEach(function(it) {
-                var options = '';
-                if (it.interdits && it.interdits.length > 0) options += ' 🚫' + it.interdits.join(',');
-                if (it.epice && it.epice !== 'Normal') options += ' 🌶️' + it.epice;
-                if (it.sel && it.sel !== 'Normal') options += ' 🧂' + it.sel;
-                message += it.quantite + 'x ' + it.nom + options + ' — ' + (it.prixVente || 0).toFixed(2) + ' MAD\n';
+                message += it.quantite + 'x ' + it.nom + ' — ' + (it.prixVente || 0).toFixed(2) + ' MAD\n';
             });
         }
-        if (vente.discountMAD > 0) message += 'Remise: -' + vente.discountMAD.toFixed(2) + ' MAD\n';
         message += '━━━━━━━━━━━━━━━━\n';
         message += '*💰 Total: ' + vente.total.toFixed(2) + ' MAD*';
-        if (vente.amountGiven > vente.total) message += '\n💵 Rendu: ' + (vente.amountGiven - vente.total).toFixed(2) + ' MAD';
-        if (vente.statutPaiement === 'crédit' || vente.statutPaiement === 'partiel') {
-            message += '\n📋 Reste à payer: ' + (vente.remainingAmount || 0).toFixed(2) + ' MAD';
-        }
 
         var whatsappURL = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
-        window.open(whatsappURL, '_blank');
+        
+        // ✅ Méthode compatible iPhone + tous navigateurs
+        var newWindow = window.open(whatsappURL, '_blank');
+        if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
+            var link = document.createElement('a');
+            link.href = whatsappURL;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(function() {
+                alert('📱 Si WhatsApp ne s\'ouvre pas, copiez ce lien :\n\n' + whatsappURL);
+            }, 1000);
+        }
 
     } catch (e) {
         console.error('Erreur WhatsApp:', e);
@@ -474,4 +475,4 @@ window.printFacture = printFacture;
 window.imprimerFacture = imprimerFacture;
 window.sendWhatsApp = sendWhatsApp;
 
-console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec WhatsApp corrigé)');
+console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec WhatsApp iPhone compatible)');
