@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v8.1.2 FINAL – CORRECTION SUPPRESSION LIGNE ====================
-// Mixmax Minimarket – Suppression d'une ligne après "valide" fonctionnelle
+// ==================== POS-AUDIO.JS v8.1.2 FINAL – COMMANDES VENTES ENRICHIES ====================
+// Mixmax Minimarket – Filtres, mode sélection, actions sur ventes
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -209,7 +209,7 @@ function cancelDeleteCredit(){ if(creditDeletePending){creditDeletePending=null;
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL – CORRECTION SUPPRESSION LIGNE ====================
+// ==================== PARSER VOCAL – ENRICHISSEMENT VENTES ====================
 function parseVoiceCommand(transcript) {
     var cleaned = transcript.toLowerCase().replace(/['’]/g, ' ').replace(/\s+/g, ' ').trim();
     var now = Date.now();
@@ -295,11 +295,9 @@ function parseVoiceCommand(transcript) {
         }
     }
 
-    // ----- PAGE CRÉDITS (COMMANDES ENRICHIES) -----
+    // ----- PAGE CRÉDITS (INCHANGÉE) -----
     if (currentPage === 'Crédits') {
-        // 1. Si en mode sélection (cases à cocher visibles)
         if (window.creditSelectionMode) {
-            // PRIORITÉ ABSOLUE : confirmation de suppression en attente
             if (creditDeletePending) {
                 if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('oui') || cleaned.includes('confirmer') || cleaned.includes('ok')) {
                     return { type: 'confirm_delete_credit' };
@@ -310,8 +308,6 @@ function parseVoiceCommand(transcript) {
                 showVoiceResult('⚠️ Valide/Annule ?');
                 return { type: 'ignore' };
             }
-
-            // Permettre de sortir du mode sélection pour marquer payé
             if (cleaned.includes('marquer payé') || cleaned.includes('payer')) {
                 window.creditSelectionMode = false;
                 if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
@@ -343,7 +339,6 @@ function parseVoiceCommand(transcript) {
             return { type: 'ignore' };
         }
 
-        // 2. Si un paiement est en cours
         if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
             var numAmount = cleaned.match(/^\d+([.,]\d+)?$/);
             if (numAmount) {
@@ -369,7 +364,7 @@ function parseVoiceCommand(transcript) {
             return { type: 'ignore' };
         }
 
-        // 3. Filtres de période
+        // Filtres, sélection, recherche, etc. (le reste est inchangé, je l'ai conservé dans le code complet)
         if (cleaned.includes('aujourd hui') || cleaned.includes('aujourdhui') || cleaned.includes('ce jour') || cleaned.includes('du jour')) {
             window.creditsPeriod = 'today'; window.currentPages.credits = 1;
             if (typeof window.applyCreditsFilters === 'function') window.applyCreditsFilters();
@@ -391,18 +386,15 @@ function parseVoiceCommand(transcript) {
             showVoiceResult('📅 Tout'); return { type: 'ignore' };
         }
 
-        // 4. Activer mode sélection
         if (cleaned.includes('sélectionner') || cleaned.includes('select') || cleaned.includes('choisir') || cleaned.includes('cocher')) {
             return { type: 'activate_credit_selection' };
         }
 
-        // 5. Marquer payé (depuis la liste sans être en mode sélection)
         if (cleaned.includes('marquer payé') || cleaned.includes('payer')) {
             if (window.creditSelectedIndex >= 0) return { type: 'mark_credit_paid' };
             else { showVoiceResult('⚠️ Sélectionnez d\'abord une ligne'); return { type: 'ignore' }; }
         }
 
-        // 6. Suppression directe (si pas en mode sélection, on y entre)
         if (cleaned === 'supprimer' || cleaned === 'supprime' || cleaned === 'effacer' || cleaned === 'enlever' || cleaned === 'retirer') {
             if (!window.creditSelectionMode) {
                 window.creditSelectionMode = true; window.creditSelectedIndex = -1; window.creditSelectAll = false; window.creditPaymentStep = 'idle';
@@ -413,14 +405,12 @@ function parseVoiceCommand(transcript) {
             return { type: 'delete_selected_credit' };
         }
 
-        // 7. Confirmation de suppression (déplacée plus haut, mais on laisse le fallback ici si on n'est pas en mode sélection)
         if (creditDeletePending) {
             if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('oui') || cleaned.includes('confirmer') || cleaned.includes('ok')) return { type: 'confirm_delete_credit' };
             if (cleaned.includes('annule') || cleaned.includes('annuler') || cleaned.includes('non')) return { type: 'cancel_delete_credit' };
             showVoiceResult('⚠️ Valide/Annule ?'); return { type: 'ignore' };
         }
 
-        // 8. Recherche client
         var cn2 = null, fc2 = fastFindClient(cleaned);
         if (fc2.length === 1) cn2 = fc2[0].nom + ' ' + fc2[0].prenom;
         else if (fc2.length > 1) {
@@ -434,7 +424,6 @@ function parseVoiceCommand(transcript) {
         }
         if (cn2) return { type: 'search_client_in_credits', clientName: cn2 };
 
-        // 9. Sélection par "ligne X"
         var lm2 = cleaned.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
         if (lm2) {
             var ns2 = lm2[1], num2 = parseInt(ns2);
@@ -442,14 +431,159 @@ function parseVoiceCommand(transcript) {
             if (!isNaN(num2) && num2 > 0) return { type: 'select_credit_line', lineNumber: num2 };
         }
 
-        // 10. Montant seul : ignoré
         if (cleaned.includes('fermer') || cleaned.includes('retour')) return { type: 'close_credit_list' };
 
         return { type: 'unknown', text: transcript };
     }
 
-    // ----- PAGE VENTES (inchangée) -----
+    // ----- PAGE VENTES (ENRICHIE) -----
     if (currentPage === 'Ventes') {
+        // 1. Si le mode sélection est actif
+        if (window.venteSelectionMode) {
+            // Sélectionner tout
+            if (cleaned === 'tout' || cleaned === 'tous' || cleaned.includes('sélectionner tout') || cleaned.includes('tout sélectionner')) {
+                // Pour l'instant, on peut juste sélectionner toutes les lignes visuellement
+                window.venteSelectedIndex = -1; // on pourrait aussi mettre une variable venteSelectAll
+                showVoiceResult('⚠️ "Tout sélectionner" pas encore implémenté pour les ventes');
+                return { type: 'ignore' };
+            }
+            // Désélectionner
+            if (cleaned === 'rien' || cleaned === 'aucun' || cleaned.includes('désélectionner') || cleaned.includes('annuler sélection')) {
+                window.venteSelectionMode = false;
+                window.venteSelectedIndex = -1;
+                if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                showVoiceResult('📋 Mode sélection quitté');
+                return { type: 'ignore' };
+            }
+            // Quitter le mode sélection
+            if (cleaned.includes('fermer') || cleaned.includes('retour') || cleaned.includes('quitter')) {
+                window.venteSelectionMode = false;
+                window.venteSelectedIndex = -1;
+                if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                showVoiceResult('📋 Mode sélection quitté');
+                return { type: 'ignore' };
+            }
+            // Supprimer la vente sélectionnée
+            if (cleaned === 'supprimer' || cleaned === 'supprime' || cleaned === 'effacer' || cleaned === 'enlever' || cleaned === 'retirer') {
+                if (window.venteSelectedIndex >= 0) {
+                    var data = window.filteredVentes || window.allVentesData || [];
+                    var vente = data[window.venteSelectedIndex];
+                    if (vente && typeof window.deleteVente === 'function') {
+                        window.deleteVente(vente.id);
+                    } else {
+                        showVoiceResult('❌ Impossible de supprimer');
+                    }
+                    window.venteSelectionMode = false;
+                    window.venteSelectedIndex = -1;
+                    if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                    return { type: 'ignore' };
+                } else {
+                    showVoiceResult('⚠️ Aucune ligne sélectionnée');
+                    return { type: 'ignore' };
+                }
+            }
+            // Voir détails / modifier
+            if (cleaned.includes('détail') || cleaned.includes('detail') || cleaned.includes('modifier')) {
+                if (window.venteSelectedIndex >= 0) {
+                    var data2 = window.filteredVentes || window.allVentesData || [];
+                    var vente2 = data2[window.venteSelectedIndex];
+                    if (vente2 && typeof window.editVente === 'function') {
+                        window.editVente(vente2.id);
+                    } else {
+                        showVoiceResult('📋 Détail non disponible');
+                    }
+                    return { type: 'ignore' };
+                } else {
+                    showVoiceResult('⚠️ Sélectionnez une ligne');
+                    return { type: 'ignore' };
+                }
+            }
+            // Payer la vente
+            if (cleaned.includes('payer') || cleaned.includes('marquer payé')) {
+                if (window.venteSelectedIndex >= 0) {
+                    var data3 = window.filteredVentes || window.allVentesData || [];
+                    var vente3 = data3[window.venteSelectedIndex];
+                    if (vente3 && typeof window.payerVente === 'function') {
+                        window.payerVente(vente3.id);
+                    } else {
+                        showVoiceResult('⚠️ Paiement impossible');
+                    }
+                    return { type: 'ignore' };
+                } else {
+                    showVoiceResult('⚠️ Sélectionnez une ligne');
+                    return { type: 'ignore' };
+                }
+            }
+            // Imprimer facture
+            if (cleaned.includes('imprimer') || cleaned.includes('facture')) {
+                if (window.venteSelectedIndex >= 0) {
+                    var data4 = window.filteredVentes || window.allVentesData || [];
+                    var vente4 = data4[window.venteSelectedIndex];
+                    if (vente4 && typeof window.printFacture === 'function') {
+                        window.printFacture(vente4.id);
+                    } else {
+                        showVoiceResult('⚠️ Impression impossible');
+                    }
+                    return { type: 'ignore' };
+                } else {
+                    showVoiceResult('⚠️ Sélectionnez une ligne');
+                    return { type: 'ignore' };
+                }
+            }
+            // Sélection par numéro
+            var numOnlyV = cleaned.match(/^\d+$/);
+            if (numOnlyV) {
+                var num = parseInt(numOnlyV[0]);
+                var data5 = window.filteredVentes || window.allVentesData || [];
+                if (num > 0 && num <= data5.length) {
+                    window.venteSelectedIndex = num - 1;
+                    if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                    showVoiceResult('✅ Ligne ' + num + ' sélectionnée');
+                } else {
+                    showVoiceResult('❌ Numéro invalide');
+                }
+                return { type: 'ignore' };
+            }
+            // Numéro en lettres
+            for (var nwv in numberMap) {
+                if (cleaned === nwv) {
+                    var numLet = numberMap[nwv];
+                    var data6 = window.filteredVentes || window.allVentesData || [];
+                    if (numLet > 0 && numLet <= data6.length) {
+                        window.venteSelectedIndex = numLet - 1;
+                        if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                        showVoiceResult('✅ Ligne ' + numLet + ' sélectionnée');
+                    } else {
+                        showVoiceResult('❌ Numéro invalide');
+                    }
+                    return { type: 'ignore' };
+                }
+            }
+            // Commande "ligne X"
+            var lmV = cleaned.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
+            if (lmV) {
+                var ns = lmV[1], numLine = parseInt(ns);
+                if (isNaN(numLine)) {
+                    for (var wv in numberMap) { if (ns.toLowerCase() === wv) { numLine = numberMap[wv]; break; } }
+                }
+                if (!isNaN(numLine) && numLine > 0) {
+                    var data7 = window.filteredVentes || window.allVentesData || [];
+                    if (numLine <= data7.length) {
+                        window.venteSelectedIndex = numLine - 1;
+                        if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                        showVoiceResult('✅ Ligne ' + numLine + ' sélectionnée');
+                    } else {
+                        showVoiceResult('❌ Numéro invalide');
+                    }
+                }
+                return { type: 'ignore' };
+            }
+
+            showVoiceResult('⚠️ Dites un numéro, "détail", "payer", "imprimer" ou "supprimer"');
+            return { type: 'ignore' };
+        }
+
+        // 2. Filtres de période
         if (cleaned.includes('aujourd hui') || cleaned.includes('aujourdhui') || cleaned.includes('ce jour') || cleaned.includes('du jour')) {
             window.ventesPeriod = 'today'; window.currentPages.ventes = 1;
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
@@ -470,6 +604,17 @@ function parseVoiceCommand(transcript) {
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
             showVoiceResult('📅 Tout'); return { type: 'ignore' };
         }
+
+        // 3. Activer le mode sélection
+        if (cleaned.includes('sélectionner') || cleaned.includes('select') || cleaned.includes('choisir') || cleaned.includes('cocher')) {
+            window.venteSelectionMode = true;
+            window.venteSelectedIndex = -1;
+            if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+            showVoiceResult('📋 Mode sélection');
+            return { type: 'ignore' };
+        }
+
+        // 4. Recherche client
         var cn = null, fc = fastFindClient(cleaned);
         if (fc.length === 1) cn = fc[0].nom + ' ' + fc[0].prenom;
         else if (fc.length > 1) {
@@ -479,6 +624,7 @@ function parseVoiceCommand(transcript) {
             if (!cn) cn = fc[0].nom + ' ' + fc[0].prenom;
         }
         if (cn) return { type: 'search_client_in_ventes', clientName: cn };
+
         return { type: 'unknown', text: transcript };
     }
 
@@ -663,4 +809,4 @@ window.selectAllCredits = selectAllCredits;
 window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
 
-console.log('🎤 Module vocal – suppression ligne OK');
+console.log('🎤 Module vocal – ventes enrichies OK');
