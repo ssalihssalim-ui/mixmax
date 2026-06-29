@@ -1,7 +1,7 @@
 // ==================== ADMIN-VENTES.JS - MIXMAX MINIMARKET ====================
 // Contient : Commandes en ligne, Ventes
 // Dépend de : admin.js (variables globales, fonctions utilitaires)
-// Version FINALE : window. pour toutes les variables + input vocal + mode sélection ventes + WhatsApp compatible iPhone
+// Version FINALE : window. pour toutes les variables + input vocal + mode sélection ventes + WhatsApp complet
 
 // ========== VARIABLES GLOBALES ==========
 window.commandesSearch = window.commandesSearch || '';
@@ -381,7 +381,7 @@ function imprimerFacture(d, id) {
     setTimeout(function() { w.print(); }, 500);
 }
 
-// ==================== ENVOI WHATSAPP (COMPATIBLE iPHONE) ====================
+// ==================== ENVOI WHATSAPP (FACTURE COMPLÈTE, SILENCIEUX) ====================
 async function sendWhatsApp(did) {
     try {
         const doc = await db.collection('ventes').doc(did).get();
@@ -414,44 +414,75 @@ async function sendWhatsApp(did) {
         phone = phone.replace(/[\s\-\(\)]/g, '').replace(/^0+/, '');
 
         if (!phone) {
-            alert('❌ Aucun numéro WhatsApp trouvé.\nVérifiez le champ "whatsapp" ou "telephone" du client.');
+            alert('❌ Aucun numéro WhatsApp trouvé.');
             return;
         }
 
-        var message = '🧾 *Facture Mixmax Minimarket*\n';
-        message += '📄 N°: ' + (vente.factureNum || did.substring(0, 8)) + '\n';
-        message += '📅 Date: ' + (vente.createdAt ? new Date(vente.createdAt.seconds * 1000).toLocaleString('fr-FR') : '') + '\n';
-        message += '👤 Client: ' + (vente.clientName || '-') + '\n';
-        message += '━━━━━━━━━━━━━━━━\n';
-        if (vente.items) {
-            vente.items.forEach(function(it) {
-                message += it.quantite + 'x ' + it.nom + ' — ' + (it.prixVente || 0).toFixed(2) + ' MAD\n';
+        // Facture complète avec détails
+        var message = '🧾 *FACTURE MIXMAX MINIMARKET*\n\n';
+        message += '📄 *N° Facture :* ' + (vente.factureNum || did.substring(0, 8)) + '\n';
+        message += '📅 *Date :* ' + (vente.createdAt ? new Date(vente.createdAt.seconds * 1000).toLocaleString('fr-FR') : '') + '\n';
+        message += '👤 *Client :* ' + (vente.clientName || vente.table || '-') + '\n';
+        message += '👨‍💼 *Vendeur :* ' + (vente.vendeur || '-') + '\n';
+        message += '💳 *Paiement :* ' + (vente.paymentMethod || '-') + ' | ' + (vente.statutPaiement || (vente.paid ? 'Payé' : 'Impayé')) + '\n';
+        message += '━━━━━━━━━━━━━━━━━━━━\n\n';
+        
+        if (vente.items && vente.items.length > 0) {
+            message += '📋 *ARTICLES :*\n';
+            vente.items.forEach(function(it, index) {
+                message += (index + 1) + '. *' + it.quantite + 'x ' + it.nom + '*\n';
+                message += '   Prix unitaire : ' + ((it.prixVente || it.prixUnitaire || 0)).toFixed(2) + ' MAD\n';
+                message += '   Total article : ' + ((it.prixVente || it.prixUnitaire || 0) * it.quantite).toFixed(2) + ' MAD\n';
+                
+                var options = [];
+                if (it.interdits && it.interdits.length > 0) options.push('🚫 Sans : ' + it.interdits.join(', '));
+                if (it.sauces && it.sauces.length > 0) options.push('🥫 Sauces : ' + it.sauces.join(', '));
+                if (it.epice && it.epice !== 'Normal') options.push('🌶️ Épices : ' + it.epice);
+                if (it.sel && it.sel !== 'Normal') options.push('🧂 Sel : ' + it.sel);
+                
+                if (options.length > 0) {
+                    message += '   ' + options.join(' | ') + '\n';
+                }
+                message += '\n';
             });
         }
-        message += '━━━━━━━━━━━━━━━━\n';
-        message += '*💰 Total: ' + vente.total.toFixed(2) + ' MAD*';
+        
+        message += '━━━━━━━━━━━━━━━━━━━━\n';
+        if (vente.discountMAD > 0) {
+            message += '🏷️ *Remise :* -' + vente.discountMAD.toFixed(2) + ' MAD\n';
+        }
+        message += '\n💰 *TOTAL : ' + vente.total.toFixed(2) + ' MAD*\n';
+        
+        if (vente.amountGiven > 0 && vente.paymentMethod !== 'credit') {
+            message += '💵 *Montant donné :* ' + vente.amountGiven.toFixed(2) + ' MAD\n';
+            if (vente.amountGiven > vente.total) {
+                message += '🪙 *Rendu :* ' + (vente.amountGiven - vente.total).toFixed(2) + ' MAD\n';
+            }
+        }
+        
+        if (vente.statutPaiement === 'crédit' || vente.statutPaiement === 'partiel') {
+            message += '\n📋 *Reste à payer :* ' + (vente.remainingAmount || 0).toFixed(2) + ' MAD\n';
+        }
+        
+        message += '\n━━━━━━━━━━━━━━━━━━━━\n';
+        message += '🙏 *Merci pour votre confiance !*\n';
+        message += '🛒 *Mixmax Minimarket*';
 
         var whatsappURL = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
         
-        // ✅ Méthode compatible iPhone + tous navigateurs
         var newWindow = window.open(whatsappURL, '_blank');
         if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
             var link = document.createElement('a');
             link.href = whatsappURL;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
-            link.style.display = 'none';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            setTimeout(function() {
-                alert('📱 Si WhatsApp ne s\'ouvre pas, copiez ce lien :\n\n' + whatsappURL);
-            }, 1000);
         }
 
     } catch (e) {
         console.error('Erreur WhatsApp:', e);
-        alert('❌ Erreur: ' + e.message);
     }
 }
 
@@ -475,4 +506,4 @@ window.printFacture = printFacture;
 window.imprimerFacture = imprimerFacture;
 window.sendWhatsApp = sendWhatsApp;
 
-console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec WhatsApp iPhone compatible)');
+console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec WhatsApp complet)');
