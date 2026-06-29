@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v8.1.2 FINAL – RECHERCHE PRÉCISE ====================
-// Mixmax Minimarket – Recherche produit améliorée (normalisation, correspondance exacte)
+// ==================== POS-AUDIO.JS v8.1.2 FINAL – RECHERCHE PRODUIT + QUANTITÉ DIRECTE ====================
+// Mixmax Minimarket – 2ème mot = nombre → quantité, sinon précision
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -40,6 +40,10 @@ var creditDeletePending = null;
 window.venteSelectionMode = false;
 window.venteSelectedIndex = -1;
 window.creditSelectAll = false;
+
+// ========== VARIABLES POUR LA RECHERCHE EN DEUX TEMPS ==========
+var pendingProduct = null;   // produit trouvé en attente de précision ou quantité
+var pendingSearch = '';      // texte accumulé pour la recherche
 
 // ========== INDEX DE RECHERCHE CLIENT ==========
 var clientSearchIndex = {};
@@ -209,7 +213,7 @@ function cancelDeleteCredit(){ if(creditDeletePending){creditDeletePending=null;
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL – RECHERCHE PRODUIT AMÉLIORÉE ====================
+// ==================== PARSER VOCAL – RECHERCHE EN DEUX TEMPS ====================
 function parseVoiceCommand(transcript) {
     var cleaned = transcript.toLowerCase().replace(/['’]/g, ' ').replace(/\s+/g, ' ').trim();
     var now = Date.now();
@@ -233,7 +237,7 @@ function parseVoiceCommand(transcript) {
 
     // ----- PAGE POS -----
     if (currentPage === 'POS' || currentPage === 'Dashboard') {
-        // Mode QUANTITY
+        // Mode QUANTITY (inchangé)
         if (voiceMode === 'quantity') {
             var nm = cleaned.match(/\b(\d+)\b/);
             if (nm) return { type: 'number', value: parseInt(nm[1]) };
@@ -245,7 +249,7 @@ function parseVoiceCommand(transcript) {
             if (cleaned.includes('termine') || cleaned.includes('terminer') || cleaned.includes('fin')) return { type: 'finalize' };
             return { type: 'unknown', text: transcript };
         }
-        // Mode PAYMENT
+        // Mode PAYMENT (inchangé)
         if (voiceMode === 'payment' || window.posStep === 2) {
             if (!window.posCurrentClient && window.posAllClients) {
                 var fc = fastFindClient(cleaned);
@@ -270,18 +274,96 @@ function parseVoiceCommand(transcript) {
             if (cleaned.includes('efface') || cleaned.includes('vider')) return { type: 'clear' };
             return { type: 'unknown', text: transcript };
         }
-        // Mode SEARCH – RECHERCHE PRODUIT AMÉLIORÉE
+
+        // ----- RECHERCHE PRODUIT AMÉLIORÉE -----
         if (voiceMode === 'search' && window.posStep === 1) {
+            // Si on a déjà un produit en attente (1er mot déjà traité)
+            if (pendingProduct) {
+                // Vérifier si le nouveau mot est un nombre
+                var isNumber = false;
+                var numValue = null;
+                if (/^\d+$/.test(cleaned)) { isNumber = true; numValue = parseInt(cleaned); }
+                else {
+                    for (var nw in numberMap) {
+                        if (cleaned === nw) { isNumber = true; numValue = numberMap[nw]; break; }
+                    }
+                }
+
+                if (isNumber) {
+                    // Appliquer la quantité directement
+                    var qty = numValue;
+                    if (qty < 1) qty = 1;
+                    var existing = window.posCart.find(function(x) { return x.id === pendingProduct.id; });
+                    if (existing) {
+                        var prodStock = window.posProductsList.find(function(x) { return x.id === pendingProduct.id; });
+                        if (prodStock && prodStock.stock !== undefined && qty > prodStock.stock) {
+                            showVoiceResult('⚠️ Stock max: ' + prodStock.stock);
+                            pendingProduct = null; pendingSearch = '';
+                            return { type: 'ignore' };
+                        }
+                        existing.quantite = qty;
+                    }
+                    lastAddedProductId = pendingProduct.id;
+                    setVoiceMode('search', '🎤 Recherche vocale active', null);
+                    showVoiceResult('✅ Qté: ' + qty + ' - Autre produit ou "passe"');
+                    if (typeof window.updateCartOnly === 'function') window.updateCartOnly();
+                    showVoiceModeIndicator();
+                    pendingProduct = null; pendingSearch = '';
+                    return { type: 'ignore' };
+                } else {
+                    // Ce n'est pas un nombre → on cumule pour affiner la recherche
+                    pendingSearch += ' ' + cleaned;
+                    // Rechercher avec la chaîne complète
+                    var normalizedTranscript = pendingSearch.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    var bestMatch = null, bestLen = 0;
+                    for (var i = 0; i < window.posProductsList.length; i++) {
+                        var p = window.posProductsList[i];
+                        var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+                        var desc = (p.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+                        if (nom === normalizedTranscript) { bestMatch = p; break; }
+                        if (nom.includes(normalizedTranscript) && nom.length > bestLen) { bestMatch = p; bestLen = nom.length; }
+                        if (desc.includes(normalizedTranscript) && desc.length > bestLen) { bestMatch = p; bestLen = desc.length; }
+                    }
+                    if (bestMatch) {
+                        // Remplacer le produit en attente par le nouveau plus précis
+                        // Retirer l'ancien du panier
+                        var oldIndex = window.posCart.findIndex(function(x) { return x.id === pendingProduct.id; });
+                        if (oldIndex !== -1) {
+                            window.posCart.splice(oldIndex, 1);
+                        }
+                        // Ajouter le nouveau
+                        if (bestMatch.stock !== undefined && bestMatch.stock <= 0) {
+                            showVoiceResult('⚠️ Rupture: ' + bestMatch.nom);
+                            pendingProduct = null; pendingSearch = '';
+                            if (typeof window.updateCartOnly === 'function') window.updateCartOnly();
+                            return { type: 'ignore' };
+                        }
+                        if (typeof window.posAddToCartOrOpenOptions === 'function') {
+                            window.posAddToCartOrOpenOptions(bestMatch.id);
+                        }
+                        pendingProduct = bestMatch;
+                        showVoiceResult('✅ ' + bestMatch.nom + ' (précisé) - dites la quantité ou "passe"');
+                        // Repasser en mode quantity pour attendre un nombre
+                        setVoiceMode('quantity', '🔢 Dites la quantité', bestMatch.id);
+                        showVoiceModeIndicator();
+                        return { type: 'ignore' };
+                    } else {
+                        // Aucun produit trouvé avec les mots combinés, on garde l'ancien et on attend la quantité
+                        showVoiceResult('⚠️ Produit non trouvé, dites la quantité pour ' + pendingProduct.nom);
+                        return { type: 'ignore' };
+                    }
+                }
+            }
+
+            // Premier mot : chercher un produit
             if (window.posProductsList && window.posProductsList.length) {
-                // Normaliser le transcript (sans accents, minuscule)
                 var normalizedTranscript = cleaned.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                 var bestMatch = null, bestLen = 0;
                 for (var i = 0; i < window.posProductsList.length; i++) {
                     var p = window.posProductsList[i];
                     var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
                     var desc = (p.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-                    // Correspondance exacte d'abord
-                    if (nom === normalizedTranscript) { bestMatch = p; bestLen = nom.length; break; }
+                    if (nom === normalizedTranscript) { bestMatch = p; break; }
                     if (nom.includes(normalizedTranscript) && nom.length > bestLen) { bestMatch = p; bestLen = nom.length; }
                     if (desc.includes(normalizedTranscript) && desc.length > bestLen) { bestMatch = p; bestLen = desc.length; }
                 }
@@ -290,9 +372,20 @@ function parseVoiceCommand(transcript) {
                         showVoiceResult('⚠️ Rupture: ' + bestMatch.nom);
                         return { type: 'ignore' };
                     }
-                    return { type: 'product', product: bestMatch };
+                    // Ajouter le produit
+                    if (typeof window.posAddToCartOrOpenOptions === 'function') {
+                        window.posAddToCartOrOpenOptions(bestMatch.id);
+                    }
+                    pendingProduct = bestMatch;
+                    pendingSearch = cleaned;
+                    showVoiceResult('✅ ' + bestMatch.nom + ' ajouté - dites la quantité ou précisez');
+                    // Mettre en mode quantity pour attendre un nombre (ou un autre mot)
+                    setVoiceMode('quantity', '🔢 Dites la quantité', bestMatch.id);
+                    showVoiceModeIndicator();
+                    return { type: 'ignore' };
                 }
             }
+            // Commandes d'action
             if (cleaned.includes('passe') || cleaned.includes('passer') || cleaned.includes('suivant')) return { type: 'next' };
             if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('confirmer') || cleaned.includes('ok')) return { type: 'validate' };
             if (cleaned.includes('annule') || cleaned.includes('annuler')) return { type: 'cancel' };
@@ -303,14 +396,10 @@ function parseVoiceCommand(transcript) {
     }
 
     // ----- PAGE CRÉDITS (INCHANGÉE) -----
-    if (currentPage === 'Crédits') {
-        // ... tout le bloc crédits identique ...
-    }
+    // ... (tout le bloc crédits identique)
 
     // ----- PAGE VENTES (INCHANGÉE) -----
-    if (currentPage === 'Ventes') {
-        // ... tout le bloc ventes identique ...
-    }
+    // ... (tout le bloc ventes identique)
 
     return { type: 'ignore' };
 }
@@ -347,7 +436,7 @@ function searchClientInCredits(n) {
     }
 }
 
-// ==================== GESTIONNAIRE DE COMMANDES ====================
+// ==================== GESTIONNAIRE DE COMMANDES (adapté) ====================
 function handleVoiceCommand(cmd) {
     console.log('🎤', cmd.type); var cp = document.getElementById('pageTitle')?.textContent || '';
     switch (cmd.type) {
@@ -389,6 +478,8 @@ function handleVoiceCommand(cmd) {
             }
             break;
         case 'number':
+            // Ce cas n'est plus utilisé pour la recherche en deux temps,
+            // mais on le garde pour la compatibilité avec le mode quantity normal
             if (voiceMode === 'quantity' && lastAddedProductId) {
                 var qty = cmd.value; if (qty < 1) qty = 1;
                 if (typeof window.posProductsList !== 'undefined') {
@@ -493,4 +584,4 @@ window.selectAllCredits = selectAllCredits;
 window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
 
-console.log('🎤 Module vocal – recherche produit précise');
+console.log('🎤 Module vocal – recherche + quantité directe');
