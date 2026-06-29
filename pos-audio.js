@@ -1,5 +1,6 @@
-// ==================== POS-AUDIO.JS v8.1.2 FINAL – RECHERCHE PRODUIT DANS LA BARRE ====================
+// ==================== POS-AUDIO.JS v8.1.2 FINAL – RECHERCHE PRODUIT DANS LA BARRE + MODE SÉLECTION VENTES ====================
 // Mixmax Minimarket – La voix remplit la barre de recherche, l'utilisateur clique pour ajouter
+// + Mode sélection sur les ventes
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -233,7 +234,6 @@ function parseVoiceCommand(transcript) {
 
     // ----- PAGE POS -----
     if (currentPage === 'POS' || currentPage === 'Dashboard') {
-        // Mode QUANTITY (inchangé)
         if (voiceMode === 'quantity') {
             var nm = cleaned.match(/\b(\d+)\b/);
             if (nm) return { type: 'number', value: parseInt(nm[1]) };
@@ -245,7 +245,6 @@ function parseVoiceCommand(transcript) {
             if (cleaned.includes('termine') || cleaned.includes('terminer') || cleaned.includes('fin')) return { type: 'finalize' };
             return { type: 'unknown', text: transcript };
         }
-        // Mode PAYMENT (inchangé)
         if (voiceMode === 'payment' || window.posStep === 2) {
             if (!window.posCurrentClient && window.posAllClients) {
                 var fc = fastFindClient(cleaned);
@@ -289,11 +288,9 @@ function parseVoiceCommand(transcript) {
                         showVoiceResult('⚠️ Rupture: ' + bestMatch.nom);
                         return { type: 'ignore' };
                     }
-                    // ➜ On retourne le produit pour l'afficher dans la barre de recherche
                     return { type: 'search_product', product: bestMatch };
                 }
             }
-            // Commandes d'action
             if (cleaned.includes('passe') || cleaned.includes('passer') || cleaned.includes('suivant')) return { type: 'next' };
             if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('confirmer') || cleaned.includes('ok')) return { type: 'validate' };
             if (cleaned.includes('annule') || cleaned.includes('annuler')) return { type: 'cancel' };
@@ -443,8 +440,150 @@ function parseVoiceCommand(transcript) {
         return { type: 'unknown', text: transcript };
     }
 
-    // ----- PAGE VENTES (INCHANGÉE) -----
+    // ----- PAGE VENTES (MODE SÉLECTION AJOUTÉ) -----
     if (currentPage === 'Ventes') {
+        // 1. Si le mode sélection est actif
+        if (window.venteSelectionMode) {
+            if (cleaned === 'tout' || cleaned === 'tous' || cleaned.includes('sélectionner tout') || cleaned.includes('tout sélectionner')) {
+                showVoiceResult('⚠️ "Tout sélectionner" pas encore disponible pour les ventes');
+                return { type: 'ignore' };
+            }
+            if (cleaned === 'rien' || cleaned === 'aucun' || cleaned.includes('désélectionner') || cleaned.includes('annuler sélection') ||
+                cleaned.includes('fermer') || cleaned.includes('retour') || cleaned.includes('quitter')) {
+                window.venteSelectionMode = false;
+                window.venteSelectedIndex = -1;
+                if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                showVoiceResult('📋 Mode sélection quitté');
+                return { type: 'ignore' };
+            }
+            if (cleaned === 'supprimer' || cleaned === 'supprime' || cleaned === 'effacer' || cleaned === 'enlever' || cleaned === 'retirer') {
+                if (window.venteSelectedIndex >= 0) {
+                    var dataV = window.filteredVentes || window.allVentesData || [];
+                    var vente = dataV[window.venteSelectedIndex];
+                    if (vente && typeof window.deleteVente === 'function') {
+                        window.deleteVente(vente.id);
+                    } else {
+                        showVoiceResult('❌ Impossible de supprimer');
+                    }
+                    window.venteSelectionMode = false;
+                    window.venteSelectedIndex = -1;
+                    if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                    return { type: 'ignore' };
+                } else {
+                    showVoiceResult('⚠️ Aucune ligne sélectionnée');
+                    return { type: 'ignore' };
+                }
+            }
+            if (cleaned.includes('détail') || cleaned.includes('detail') || cleaned.includes('modifier')) {
+                if (window.venteSelectedIndex >= 0) {
+                    var dataV2 = window.filteredVentes || window.allVentesData || [];
+                    var vente2 = dataV2[window.venteSelectedIndex];
+                    if (vente2 && typeof window.editVente === 'function') {
+                        window.editVente(vente2.id);
+                    } else {
+                        showVoiceResult('📋 Détail non disponible');
+                    }
+                    return { type: 'ignore' };
+                } else {
+                    showVoiceResult('⚠️ Sélectionnez une ligne');
+                    return { type: 'ignore' };
+                }
+            }
+            if (cleaned.includes('payer') || cleaned.includes('marquer payé')) {
+                if (window.venteSelectedIndex >= 0) {
+                    var dataV3 = window.filteredVentes || window.allVentesData || [];
+                    var vente3 = dataV3[window.venteSelectedIndex];
+                    if (vente3 && typeof window.payerVente === 'function') {
+                        window.payerVente(vente3.id);
+                    } else {
+                        showVoiceResult('⚠️ Paiement impossible');
+                    }
+                    return { type: 'ignore' };
+                } else {
+                    showVoiceResult('⚠️ Sélectionnez une ligne');
+                    return { type: 'ignore' };
+                }
+            }
+            if (cleaned.includes('imprimer') || cleaned.includes('facture')) {
+                if (window.venteSelectedIndex >= 0) {
+                    var dataV4 = window.filteredVentes || window.allVentesData || [];
+                    var vente4 = dataV4[window.venteSelectedIndex];
+                    if (vente4 && typeof window.printFacture === 'function') {
+                        window.printFacture(vente4.id);
+                    } else {
+                        showVoiceResult('⚠️ Impression impossible');
+                    }
+                    return { type: 'ignore' };
+                } else {
+                    showVoiceResult('⚠️ Sélectionnez une ligne');
+                    return { type: 'ignore' };
+                }
+            }
+            if (cleaned.includes('whatsapp') || cleaned.includes('whats')) {
+                if (window.venteSelectedIndex >= 0) {
+                    var dataV5 = window.filteredVentes || window.allVentesData || [];
+                    var vente5 = dataV5[window.venteSelectedIndex];
+                    if (vente5 && typeof window.sendWhatsApp === 'function') {
+                        window.sendWhatsApp(vente5.id);
+                    } else {
+                        showVoiceResult('⚠️ WhatsApp impossible');
+                    }
+                    return { type: 'ignore' };
+                } else {
+                    showVoiceResult('⚠️ Sélectionnez une ligne');
+                    return { type: 'ignore' };
+                }
+            }
+            var numOnlyV = cleaned.match(/^\d+$/);
+            if (numOnlyV) {
+                var num = parseInt(numOnlyV[0]);
+                var dataV6 = window.filteredVentes || window.allVentesData || [];
+                if (num > 0 && num <= dataV6.length) {
+                    window.venteSelectedIndex = num - 1;
+                    if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                    showVoiceResult('✅ Ligne ' + num + ' sélectionnée');
+                } else {
+                    showVoiceResult('❌ Numéro invalide');
+                }
+                return { type: 'ignore' };
+            }
+            for (var nwv in numberMap) {
+                if (cleaned === nwv) {
+                    var numLet = numberMap[nwv];
+                    var dataV7 = window.filteredVentes || window.allVentesData || [];
+                    if (numLet > 0 && numLet <= dataV7.length) {
+                        window.venteSelectedIndex = numLet - 1;
+                        if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                        showVoiceResult('✅ Ligne ' + numLet + ' sélectionnée');
+                    } else {
+                        showVoiceResult('❌ Numéro invalide');
+                    }
+                    return { type: 'ignore' };
+                }
+            }
+            var lmV = cleaned.match(/(?:ligne|numéro)\s+([a-z0-9]+)/i);
+            if (lmV) {
+                var ns = lmV[1], numLine = parseInt(ns);
+                if (isNaN(numLine)) {
+                    for (var wv in numberMap) { if (ns.toLowerCase() === wv) { numLine = numberMap[wv]; break; } }
+                }
+                if (!isNaN(numLine) && numLine > 0) {
+                    var dataV8 = window.filteredVentes || window.allVentesData || [];
+                    if (numLine <= dataV8.length) {
+                        window.venteSelectedIndex = numLine - 1;
+                        if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+                        showVoiceResult('✅ Ligne ' + numLine + ' sélectionnée');
+                    } else {
+                        showVoiceResult('❌ Numéro invalide');
+                    }
+                }
+                return { type: 'ignore' };
+            }
+            showVoiceResult('⚠️ Dites un numéro, "détail", "payer", "imprimer", "whatsapp" ou "supprimer"');
+            return { type: 'ignore' };
+        }
+
+        // 2. Filtres de période
         if (cleaned.includes('aujourd hui') || cleaned.includes('aujourdhui') || cleaned.includes('ce jour') || cleaned.includes('du jour')) {
             window.ventesPeriod = 'today'; window.currentPages.ventes = 1;
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
@@ -465,6 +604,17 @@ function parseVoiceCommand(transcript) {
             if (typeof window.applyVentesFilters === 'function') window.applyVentesFilters();
             showVoiceResult('📅 Tout'); return { type: 'ignore' };
         }
+
+        // 3. Activer le mode sélection
+        if (cleaned.includes('sélectionner') || cleaned.includes('select') || cleaned.includes('choisir') || cleaned.includes('cocher')) {
+            window.venteSelectionMode = true;
+            window.venteSelectedIndex = -1;
+            if (typeof window.renderVentesTable === 'function') window.renderVentesTable();
+            showVoiceResult('📋 Mode sélection - dites un numéro');
+            return { type: 'ignore' };
+        }
+
+        // 4. Recherche client
         var cn = null, fc = fastFindClient(cleaned);
         if (fc.length === 1) cn = fc[0].nom + ' ' + fc[0].prenom;
         else if (fc.length > 1) {
@@ -474,6 +624,7 @@ function parseVoiceCommand(transcript) {
             if (!cn) cn = fc[0].nom + ' ' + fc[0].prenom;
         }
         if (cn) return { type: 'search_client_in_ventes', clientName: cn };
+
         return { type: 'unknown', text: transcript };
     }
 
@@ -544,12 +695,10 @@ function handleVoiceCommand(cmd) {
             hideVoiceFlowIndicator(); setTimeout(function() { showVoiceFlowIndicator('payment_amount'); }, 200);
             break;
         case 'search_product':
-            // Afficher le produit dans la barre de recherche sans l'ajouter au panier
             if (cmd.product) {
                 var searchInput = document.getElementById('posSearchInput');
                 if (searchInput) {
                     searchInput.value = cmd.product.nom;
-                    // Déclencher la recherche pour filtrer la grille
                     if (typeof window.posSearchProducts === 'function') {
                         window.posSearchProducts(cmd.product.nom);
                     }
@@ -673,4 +822,4 @@ window.selectAllCredits = selectAllCredits;
 window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
 
-console.log('🎤 Module vocal – recherche dans la barre OK');
+console.log('🎤 Module vocal – recherche dans la barre + mode sélection ventes OK');
