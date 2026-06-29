@@ -23,8 +23,8 @@ var paymentKeywords = {
 };
 
 var numberMap = {
-    'wahed': 1, 'ouais': 1,'wad': 1, 'un': 1, 'une': 1, 'juge': 2, 'joue': 2, 'george': 2, 'souche': 2, 'deux': 2, 'claud': 3, 'cl': 3, 'trois': 3, 'clé': 3, 'clea': 3, 'play': 3, 'rabah': 4, 'quatre': 4, 'arba': 4, 'abba': 4, 'rabat': 4, 'rabats': 4, 'cinq': 5,
-    'hamza': 5, 'rama': 5,
+    'wahed': 1, 'ouais': 1,'wad': 1, 'un': 1, 'une': 1, 'juge': 2, 'joue': 2, 'george': 2, 'souche': 2, 'deux': 2, 'claud': 3, 'cl': 3, 'trois': 3, 'clé': 3, 'clea': 3, 'play': 3, 'rabah': 4, 'quatre': 4, 'arba': 4, 'abba': 4, 'rabat': 4, 'rabats': 4, 'alba': 4, 'cinq': 5,
+    'hamza': 5, 'rama': 5, 'comme ça': 5,
     'six': 6, 'sept': 7, 'huit': 8, 'neuf': 9, 'dix': 10,
     'onze': 11, 'douze': 12, 'douz': 12, 'treize': 13, 'quatorze': 14,
     'quinze': 15, 'seize': 16, 'vingt': 20, 'trente': 30, 'quarante': 40,
