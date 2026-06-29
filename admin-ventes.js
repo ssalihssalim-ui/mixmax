@@ -247,7 +247,6 @@ function renderVentesTable() {
         makeSortableHeader('ventes', 'paymentMethod', 'Paiement', 'renderVentesTable') +
         makeSortableHeader('ventes', 'statutPaiement', 'Statut', 'renderVentesTable') +
         '<th>Actions</th>';
-    // ✅ Colonne sélection si mode actif
     if (window.venteSelectionMode) {
         h += '<th style="width:40px;">✅</th>';
     }
@@ -270,8 +269,8 @@ function renderVentesTable() {
         var change = d.change || 0;
         var statutLabel = d.statutPaiement || (d.paid ? 'payé' : 'impayé');
         var statutColor = statutLabel === 'payé' ? '#2E7D32' : (statutLabel === 'crédit' ? '#2E7D32' : (statutLabel === 'partiel' ? '#d97706' : '#ef4444'));
-        // ✅ Bouton WhatsApp ajouté dans les actions
-        var actions = '<button class="btn-edit" onclick="printFacture(\'' + d.id + '\')"><i class="fas fa-print"></i></button> ' +
+        // Boutons d'action : Imprimer, WhatsApp, Payer (si impayé), Modifier, Supprimer (si admin)
+        var actions = '<button class="btn-edit" onclick="printFacture(\'' + d.id + '\')" title="Imprimer"><i class="fas fa-print"></i></button> ' +
             '<button class="btn-edit" onclick="sendWhatsApp(\'' + d.id + '\')" style="color:#25D366;" title="Envoyer WhatsApp"><i class="fab fa-whatsapp"></i></button> ';
         if (!d.paid) actions += '<button class="btn-add" style="padding:4px 6px;font-size:0.65rem;" onclick="payerVente(\'' + d.id + '\')"><i class="fas fa-check"></i> Payer</button> ';
         if (isAdmin) actions += '<button class="btn-edit" onclick="editVente(\'' + d.id + '\')"><i class="fas fa-edit"></i></button> <button class="btn-delete" onclick="deleteVente(\'' + d.id + '\')"><i class="fas fa-trash"></i></button>';
@@ -283,7 +282,6 @@ function renderVentesTable() {
             (isAdmin ? '<td>' + d.achat.toFixed(2) + '</td><td style="color:#2E7D32;">' + d.profit.toFixed(2) + '</td>' : '') +
             '<td><strong>' + (d.total || 0).toFixed(2) + '</strong></td><td>' + (d.discountMAD || 0).toFixed(2) + '</td><td>' + amountGiven.toFixed(2) + '</td><td>' + change.toFixed(2) + '</td><td>' + (d.vendeur || '-') + '</td><td>' + (d.paymentMethod || '-') + '</td><td><span style="color:' + statutColor + ';font-weight:600;">' + statutLabel + '</span></td><td>' + actions + '</td>';
 
-        // ✅ Colonne sélection
         if (window.venteSelectionMode) {
             var checked = isSelected ? 'checked' : '';
             h += '<td><input type="checkbox" ' + checked + ' onclick="window.venteSelectedIndex=' + index + ';renderVentesTable();"></td>';
@@ -384,7 +382,7 @@ function imprimerFacture(d, id) {
     setTimeout(function() { w.print(); }, 500);
 }
 
-// ==================== ENVOI WHATSAPP ====================
+// ==================== ENVOI WHATSAPP (CORRIGÉ) ====================
 async function sendWhatsApp(did) {
     try {
         // 1. Récupérer la vente
@@ -394,12 +392,30 @@ async function sendWhatsApp(did) {
 
         // 2. Récupérer le téléphone WhatsApp du client
         let phone = '';
-        if (vente.clientId && window.posAllClients) {
-            const client = window.posAllClients.find(c => c.id === vente.clientId);
-            if (client && client.telephone) {
-                phone = client.telephone.replace(/\s+/g, '').replace(/^0+/, '');
+        if (vente.clientId) {
+            // Chercher d'abord dans posAllClients (s'il est chargé)
+            if (window.posAllClients && window.posAllClients.length) {
+                const client = window.posAllClients.find(c => c.id === vente.clientId);
+                if (client && client.telephone) {
+                    phone = client.telephone;
+                }
+            }
+            // Si pas trouvé, chercher directement dans Firestore
+            if (!phone) {
+                try {
+                    const clientDoc = await db.collection('clients').doc(vente.clientId).get();
+                    if (clientDoc.exists) {
+                        const clientData = clientDoc.data();
+                        phone = clientData.telephone || '';
+                    }
+                } catch (e) {
+                    console.error('Erreur recherche client:', e);
+                }
             }
         }
+
+        // Nettoyer le numéro
+        phone = phone.replace(/\s+/g, '').replace(/^0+/, '');
 
         if (!phone) {
             alert('❌ Aucun numéro WhatsApp trouvé pour ce client.');
@@ -462,4 +478,4 @@ window.printFacture = printFacture;
 window.imprimerFacture = imprimerFacture;
 window.sendWhatsApp = sendWhatsApp;
 
-console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec mode sélection + WhatsApp)');
+console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec mode sélection + WhatsApp corrigé)');
