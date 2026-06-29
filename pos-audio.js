@@ -1,5 +1,5 @@
-// ==================== POS-AUDIO.JS v8.1.2 FINAL – COMMANDES CRÉDITS COMPLÈTES ====================
-// Mixmax Minimarket – Sélection, paiement avec montant vocal, validation
+// ==================== POS-AUDIO.JS v8.1.2 FINAL – CORRECTION SUPPRESSION LIGNE ====================
+// Mixmax Minimarket – Suppression d'une ligne après "valide" fonctionnelle
 
 var voiceRecognition = null;
 var isRecording = false;
@@ -209,7 +209,7 @@ function cancelDeleteCredit(){ if(creditDeletePending){creditDeletePending=null;
 // ==================== DÉTECTION PAIEMENT ====================
 function detectPaymentMode(t){ t=t.toLowerCase().trim(); for(var m in paymentKeywords){ for(var i=0;i<paymentKeywords[m].length;i++){ if(t.indexOf(paymentKeywords[m][i])!==-1) return m; } } return null; }
 
-// ==================== PARSER VOCAL – CRÉDITS OPTIMISÉ ====================
+// ==================== PARSER VOCAL – CORRECTION SUPPRESSION LIGNE ====================
 function parseVoiceCommand(transcript) {
     var cleaned = transcript.toLowerCase().replace(/['’]/g, ' ').replace(/\s+/g, ' ').trim();
     var now = Date.now();
@@ -299,10 +299,21 @@ function parseVoiceCommand(transcript) {
     if (currentPage === 'Crédits') {
         // 1. Si en mode sélection (cases à cocher visibles)
         if (window.creditSelectionMode) {
+            // PRIORITÉ ABSOLUE : confirmation de suppression en attente
+            if (creditDeletePending) {
+                if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('oui') || cleaned.includes('confirmer') || cleaned.includes('ok')) {
+                    return { type: 'confirm_delete_credit' };
+                }
+                if (cleaned.includes('annule') || cleaned.includes('annuler') || cleaned.includes('non')) {
+                    return { type: 'cancel_delete_credit' };
+                }
+                showVoiceResult('⚠️ Valide/Annule ?');
+                return { type: 'ignore' };
+            }
+
             // Permettre de sortir du mode sélection pour marquer payé
             if (cleaned.includes('marquer payé') || cleaned.includes('payer')) {
-                // On quitte le mode sélection et on active le paiement
-                window.creditSelectionMode = false; // pour éviter toute interférence
+                window.creditSelectionMode = false;
                 if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
                 return { type: 'mark_credit_paid' };
             }
@@ -332,27 +343,20 @@ function parseVoiceCommand(transcript) {
             return { type: 'ignore' };
         }
 
-        // 2. Si un paiement est en cours (creditPaymentStep = 'payment' ou 'amount')
+        // 2. Si un paiement est en cours
         if (window.creditPaymentStep === 'payment' || window.creditPaymentStep === 'amount') {
-            // Détection d'un montant (nombre)
-            var numAmount = cleaned.match(/^\d+([.,]\d+)?$/); // nombre avec éventuelle décimale
+            var numAmount = cleaned.match(/^\d+([.,]\d+)?$/);
             if (numAmount) {
                 var val = parseFloat(numAmount[0].replace(',', '.'));
                 if (val > 0) return { type: 'set_credit_amount', amount: val };
             }
-            // Vérifier aussi dans numberMap
             for (var nw2 in numberMap) {
-                if (cleaned === nw2) {
-                    return { type: 'set_credit_amount', amount: numberMap[nw2] };
-                }
+                if (cleaned === nw2) return { type: 'set_credit_amount', amount: numberMap[nw2] };
             }
-            // Validation
             if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('confirmer') || cleaned.includes('ok') || cleaned.includes('oui')) {
                 return { type: 'validate_credit_payment' };
             }
-            // Commande annuler / retour
             if (cleaned.includes('annule') || cleaned.includes('annuler') || cleaned.includes('retour')) {
-                // Annuler le paiement, revenir à la liste
                 window.creditPaymentStep = 'idle';
                 window.creditSelectedIndex = -1;
                 var z = document.getElementById('creditPaymentZone');
@@ -361,7 +365,6 @@ function parseVoiceCommand(transcript) {
                 showVoiceResult('↩️ Paiement annulé');
                 return { type: 'ignore' };
             }
-            // Si rien reconnu, message d'aide
             showVoiceResult('💰 Dites un montant puis "valider"');
             return { type: 'ignore' };
         }
@@ -395,13 +398,8 @@ function parseVoiceCommand(transcript) {
 
         // 5. Marquer payé (depuis la liste sans être en mode sélection)
         if (cleaned.includes('marquer payé') || cleaned.includes('payer')) {
-            // Si une ligne est déjà sélectionnée (par exemple via un clic précédent), on lance le paiement
-            if (window.creditSelectedIndex >= 0) {
-                return { type: 'mark_credit_paid' };
-            } else {
-                showVoiceResult('⚠️ Sélectionnez d\'abord une ligne');
-                return { type: 'ignore' };
-            }
+            if (window.creditSelectedIndex >= 0) return { type: 'mark_credit_paid' };
+            else { showVoiceResult('⚠️ Sélectionnez d\'abord une ligne'); return { type: 'ignore' }; }
         }
 
         // 6. Suppression directe (si pas en mode sélection, on y entre)
@@ -415,14 +413,14 @@ function parseVoiceCommand(transcript) {
             return { type: 'delete_selected_credit' };
         }
 
-        // 7. Confirmation de suppression
+        // 7. Confirmation de suppression (déplacée plus haut, mais on laisse le fallback ici si on n'est pas en mode sélection)
         if (creditDeletePending) {
             if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('oui') || cleaned.includes('confirmer') || cleaned.includes('ok')) return { type: 'confirm_delete_credit' };
             if (cleaned.includes('annule') || cleaned.includes('annuler') || cleaned.includes('non')) return { type: 'cancel_delete_credit' };
             showVoiceResult('⚠️ Valide/Annule ?'); return { type: 'ignore' };
         }
 
-        // 8. Recherche client (nom/prénom)
+        // 8. Recherche client
         var cn2 = null, fc2 = fastFindClient(cleaned);
         if (fc2.length === 1) cn2 = fc2[0].nom + ' ' + fc2[0].prenom;
         else if (fc2.length > 1) {
@@ -444,7 +442,7 @@ function parseVoiceCommand(transcript) {
             if (!isNaN(num2) && num2 > 0) return { type: 'select_credit_line', lineNumber: num2 };
         }
 
-        // 10. Montant seul (pas en mode paiement) : ignoré
+        // 10. Montant seul : ignoré
         if (cleaned.includes('fermer') || cleaned.includes('retour')) return { type: 'close_credit_list' };
 
         return { type: 'unknown', text: transcript };
@@ -665,4 +663,4 @@ window.selectAllCredits = selectAllCredits;
 window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
 
-console.log('🎤 Module vocal – crédits optimisé (paiement vocal)');
+console.log('🎤 Module vocal – suppression ligne OK');
