@@ -1,5 +1,6 @@
 // ==================== POS.JS - LOGIQUE MÉTIER (FINAL OPTIMISÉ) ====================
 // Mixmax Minimarket - Point de vente complet avec virtualisation
+// Améliorations : client = Passager par défaut, montant donné = total par défaut
 
 var posCart = [];
 var posStep = 1;
@@ -179,28 +180,133 @@ function posCalculateChange(){ var ai=document.getElementById('posAmountGiven'),
 async function updateClientFidelityAsync(clientId,total,profitTotal){ try{ if(!fideliteSettingsCache){ var fDoc=await db.collection('settings').doc('fidelite').get(); fideliteSettingsCache=fDoc.exists?fDoc.data():{active:true,pointsParVente:1}; } if(!fideliteSettingsCache.active) return; var cr=await db.collection('clients').doc(clientId).get(); if(!cr.exists) return; var cd=cr.data(),points=parseInt(fideliteSettingsCache.pointsParVente)||1; await CacheDB.write('clients',clientId,{ca:(cd.ca||0)+total,profit:(cd.profit||0)+profitTotal,pointsFidelite:(cd.pointsFidelite||0)+points,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},'update'); }catch(e){ console.warn(e); } }
 
 async function posFinalizeSale(){
-    if(isFinalizing) return; var st=posCalculateTotal(),t=st-posDiscountMAD;
-    if(!posCurrentClient&&!posCurrentTable){ alert('Client ou table requis.'); return; }
-    if(posCurrentTable&&(posPaymentMethod==='credit'||posPaymentMethod==='partiel')){ alert('Table = espèces uniquement.'); return; }
-    if((posPaymentMethod==='credit'||posPaymentMethod==='partiel')&&!posCurrentClient){ alert('Client requis pour crédit/partiel.'); return; }
-    if(posPaymentMethod==='espece'){ posAmountGiven=parseFloat(document.getElementById('posAmountGiven').value)||0; if(posAmountGiven<t){ alert('Montant insuffisant.'); return; } }
-    isFinalizing=true; var fb=document.querySelector('.pos-finalize-btn'); if(fb){ fb.disabled=true; fb.textContent='⏳...'; }
+    if(isFinalizing) return; 
+    var st=posCalculateTotal(), t=st-posDiscountMAD;
+    
+    // ✅ 1. Si ni client ni table → client = Passager
+    if(!posCurrentClient && !posCurrentTable){ 
+        posCurrentClient = { id: null, name: 'Passager' };
+    }
+    
+    if(posCurrentTable && (posPaymentMethod==='credit'||posPaymentMethod==='partiel')){ 
+        alert('Table = espèces uniquement.'); return; 
+    }
+    if((posPaymentMethod==='credit'||posPaymentMethod==='partiel') && !posCurrentClient){ 
+        alert('Client requis pour crédit/partiel.'); return; 
+    }
+    
+    // ✅ 2. Si le montant donné n'est pas saisi → utiliser le total
+    if(posPaymentMethod==='espece' || posPaymentMethod==='partiel'){ 
+        var amountInput = document.getElementById('posAmountGiven');
+        var givenAmount = parseFloat(amountInput ? amountInput.value : 0) || 0;
+        if (givenAmount <= 0) {
+            posAmountGiven = t;
+            if (amountInput) amountInput.value = t.toFixed(2);
+        } else {
+            posAmountGiven = givenAmount;
+        }
+        if(posPaymentMethod==='espece' && posAmountGiven < t){ 
+            alert('Montant insuffisant.'); return; 
+        }
+    }
+    
+    isFinalizing=true; 
+    var fb=document.querySelector('.pos-finalize-btn'); 
+    if(fb){ fb.disabled=true; fb.textContent='⏳...'; }
+    
     var vendeur=document.getElementById('posVendeur').value.trim()||(window.currentUserData?window.currentUserData.userData.prenom+' '+window.currentUserData.userData.nom:'');
+    
     try{
-        var fn=getNextFactureNum(),remaining=0,paid=true,statutPaiement='payé',change=0;
-        if(posPaymentMethod==='credit'){ paid=false;remaining=t;statutPaiement='crédit'; }else if(posPaymentMethod==='partiel'){ posAmountGiven=parseFloat(document.getElementById('posAmountGiven').value)||0;remaining=t-posAmountGiven;paid=false;statutPaiement='partiel';change=Math.max(0,posAmountGiven-t); }else{ posAmountGiven=parseFloat(document.getElementById('posAmountGiven').value)||0;change=posAmountGiven-t; }
-        if(posCurrentTable&&!posCurrentClient){ paid=false;statutPaiement='en_attente';remaining=t; }
-        var profitTotal=0,itemsDetail=posCart.map(function(it){ var pa=it.prixAchat||0,pvn=it.prixVente||0,pp=it.prixPromo||0,pvr=pp>0?pp:pvn,prof=(pvr-pa)*it.quantite; profitTotal+=prof; return{id:it.id,nom:it.nom,quantite:it.quantite,prixVente:pvr,prixAchat:pa,prixPromo:pp,profit:prof,sauces:[],interdits:it.interdits||[],epice:it.epice||'Normal',sel:it.sel||'Normal'}; });
-        var sd={factureNum:fn,items:itemsDetail,subtotal:st,discountMAD:posDiscountMAD,total:t,clientId:posCurrentClient?posCurrentClient.id:null,clientName:posCurrentClient?posCurrentClient.name:null,table:posCurrentTable||null,vendeur:vendeur,paymentMethod:posPaymentMethod,statutPaiement:statutPaiement,amountGiven:posAmountGiven,change:change,paid:paid,remainingAmount:remaining,profitTotal:profitTotal,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
-        var batch=db.batch(),ventesRef=db.collection('ventes').doc(); batch.set(ventesRef,sd); if(!paid){ var creditsRef=db.collection('credits').doc(); batch.set(creditsRef,sd); }
-        if(window.posCommandeId){ batch.update(db.collection('commandes').doc(window.posCommandeId),{statut:'payé',paidAt:firebase.firestore.FieldValue.serverTimestamp(),factureNum:fn}); delete window.posCommandeId; }
-        if(window.posVenteId){ batch.update(db.collection('ventes').doc(window.posVenteId),{paid:true,statutPaiement:'payé',remainingAmount:0,paidAt:firebase.firestore.FieldValue.serverTimestamp()}); delete window.posVenteId; }
-        for(var i=0;i<posCart.length;i++){ var it=posCart[i]; batch.update(db.collection('products').doc(it.id),{stock:firebase.firestore.FieldValue.increment(-it.quantite),vendues:firebase.firestore.FieldValue.increment(it.quantite),ca:firebase.firestore.FieldValue.increment(it.prixUnitaire*it.quantite)}); }
-        await batch.commit(); if(posCurrentClient&&posCurrentClient.id&&paid) updateClientFidelityAsync(posCurrentClient.id,t,profitTotal);
-        var msg='✅ Vente: '+fn+'\n💰 Total: '+t.toFixed(2)+' MAD'; if(posPaymentMethod==='espece'&&posAmountGiven>t) msg+='\n💵 Rendu: '+change.toFixed(2)+' MAD'; if(statutPaiement==='crédit') msg+='\n📋 Crédit enregistré.'; if(statutPaiement==='partiel') msg+='\n📋 Reste: '+remaining.toFixed(2)+' MAD'; alert(msg);
-        posResetCart(); if(isOnPOSPage()) renderPOS(); if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
-    }catch(e){ alert('Erreur: '+e.message); }
-    finally{ isFinalizing=false; if(fb){ fb.disabled=false; fb.innerHTML='<i class="fas fa-check-circle"></i> Finaliser'; } }
+        var fn=getNextFactureNum(), remaining=0, paid=true, statutPaiement='payé', change=0;
+        
+        if(posPaymentMethod==='credit'){ 
+            paid=false; remaining=t; statutPaiement='crédit'; 
+        } else if(posPaymentMethod==='partiel'){ 
+            remaining = t - posAmountGiven;
+            paid = false; 
+            statutPaiement='partiel'; 
+            change = Math.max(0, posAmountGiven - t); 
+        } else { 
+            // espèces
+            change = posAmountGiven - t; 
+        }
+        
+        if(posCurrentTable && !posCurrentClient){ 
+            paid=false; statutPaiement='en_attente'; remaining=t; 
+        }
+        
+        var profitTotal=0, itemsDetail=posCart.map(function(it){ 
+            var pa=it.prixAchat||0, pvn=it.prixVente||0, pp=it.prixPromo||0, 
+                pvr=pp>0?pp:pvn, prof=(pvr-pa)*it.quantite; 
+            profitTotal+=prof; 
+            return {
+                id:it.id, nom:it.nom, quantite:it.quantite, 
+                prixVente:pvr, prixAchat:pa, prixPromo:pp, profit:prof,
+                sauces:[], interdits:it.interdits||[], 
+                epice:it.epice||'Normal', sel:it.sel||'Normal'
+            }; 
+        });
+        
+        var sd={
+            factureNum:fn, items:itemsDetail, subtotal:st, 
+            discountMAD:posDiscountMAD, total:t,
+            clientId:posCurrentClient ? posCurrentClient.id : null,
+            clientName:posCurrentClient ? posCurrentClient.name : 'Passager',
+            table:posCurrentTable || null,
+            vendeur:vendeur, paymentMethod:posPaymentMethod,
+            statutPaiement:statutPaiement,
+            amountGiven:posAmountGiven, change:change,
+            paid:paid, remainingAmount:remaining,
+            profitTotal:profitTotal,
+            createdAt:firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        var batch=db.batch(), ventesRef=db.collection('ventes').doc(); 
+        batch.set(ventesRef,sd); 
+        if(!paid){ var creditsRef=db.collection('credits').doc(); batch.set(creditsRef,sd); }
+        if(window.posCommandeId){ 
+            batch.update(db.collection('commandes').doc(window.posCommandeId), {
+                statut:'payé', 
+                paidAt:firebase.firestore.FieldValue.serverTimestamp(), 
+                factureNum:fn
+            }); 
+            delete window.posCommandeId; 
+        }
+        if(window.posVenteId){ 
+            batch.update(db.collection('ventes').doc(window.posVenteId), {
+                paid:true, statutPaiement:'payé', remainingAmount:0, 
+                paidAt:firebase.firestore.FieldValue.serverTimestamp()
+            }); 
+            delete window.posVenteId; 
+        }
+        for(var i=0;i<posCart.length;i++){ 
+            var it=posCart[i]; 
+            batch.update(db.collection('products').doc(it.id), {
+                stock:firebase.firestore.FieldValue.increment(-it.quantite),
+                vendues:firebase.firestore.FieldValue.increment(it.quantite),
+                ca:firebase.firestore.FieldValue.increment(it.prixUnitaire*it.quantite)
+            }); 
+        }
+        await batch.commit(); 
+        if(posCurrentClient && posCurrentClient.id && paid) 
+            updateClientFidelityAsync(posCurrentClient.id, t, profitTotal);
+        
+        var msg='✅ Vente: '+fn+'\n💰 Total: '+t.toFixed(2)+' MAD'; 
+        if(posPaymentMethod==='espece' && posAmountGiven > t) 
+            msg+='\n💵 Rendu: '+change.toFixed(2)+' MAD'; 
+        if(statutPaiement==='crédit') msg+='\n📋 Crédit enregistré.'; 
+        if(statutPaiement==='partiel') msg+='\n📋 Reste: '+remaining.toFixed(2)+' MAD'; 
+        alert(msg);
+        
+        posResetCart(); 
+        if(isOnPOSPage()) renderPOS(); 
+        if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
+    }catch(e){ 
+        alert('Erreur: '+e.message); 
+    } finally { 
+        isFinalizing=false; 
+        if(fb){ fb.disabled=false; fb.innerHTML='<i class="fas fa-check-circle"></i> Finaliser'; } 
+    }
 }
 function goBackToPOS(){ if(window.currentUserData&&(window.currentUserData.userData.role==='caissier'||window.currentUserData.userData.role==='admin')){ if(posCart.length>0&&posStep===1){ if(!confirm('⚠️ '+posCart.length+' article(s) dans le panier. Garder ?')) posResetCart(); } navigateTo('pos'); } }
 if(!window._posKeydownListenerAdded){ window._posKeydownListenerAdded=true; document.addEventListener('keydown',function(event){ if(event.key==='Escape'){ var cp=document.getElementById('pageTitle')?.textContent||''; if(cp!=='POS'&&cp!=='Dashboard'&&cp!=='') goBackToPOS(); } if(event.ctrlKey&&(event.key==='p'||event.key==='P')){ event.preventDefault(); if((document.getElementById('pageTitle')?.textContent||'')!=='POS') navigateTo('pos'); } }); }
