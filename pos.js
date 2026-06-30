@@ -291,16 +291,31 @@ async function posFinalizeSale(){
         if(posCurrentClient && posCurrentClient.id && paid) 
             updateClientFidelityAsync(posCurrentClient.id, t, profitTotal);
         
+        var venteId = ventesRef.id;  // 🔥 Garder l'ID pour WhatsApp
+
+        // --- Message de confirmation et proposition WhatsApp ---
         var msg='✅ Vente: '+fn+'\n💰 Total: '+t.toFixed(2)+' MAD'; 
         if(posPaymentMethod==='espece' && posAmountGiven > t) 
             msg+='\n💵 Rendu: '+change.toFixed(2)+' MAD'; 
         if(statutPaiement==='crédit') msg+='\n📋 Crédit enregistré.'; 
         if(statutPaiement==='partiel') msg+='\n📋 Reste: '+remaining.toFixed(2)+' MAD'; 
         alert(msg);
-        
-        posResetCart(); 
-        if(isOnPOSPage()) renderPOS(); 
-        if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
+
+        // Proposer l'envoi WhatsApp
+        if (typeof window.sendWhatsApp === 'function') {
+            // On construit une modale de confirmation
+            var modalHtml = '<p style="text-align:center;">Voulez-vous envoyer la facture par WhatsApp ?</p>';
+            modalHtml += '<div style="display:flex;justify-content:center;gap:10px;margin-top:15px;">';
+            modalHtml += '<button class="btn-save" onclick="window._whatsappConfirmYes(\'' + venteId + '\')">✅ Oui</button>';
+            modalHtml += '<button class="btn-cancel" onclick="closeModal(); window._whatsappConfirmNo()">❌ Non</button>';
+            modalHtml += '</div>';
+            openModal('📱 Envoyer la facture WhatsApp', modalHtml);
+        } else {
+            // Pas de fonction WhatsApp, on termine normalement
+            posResetCart(); 
+            if(isOnPOSPage()) renderPOS(); 
+            if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
+        }
     }catch(e){ 
         alert('Erreur: '+e.message); 
     } finally { 
@@ -308,6 +323,32 @@ async function posFinalizeSale(){
         if(fb){ fb.disabled=false; fb.innerHTML='<i class="fas fa-check-circle"></i> Finaliser'; } 
     }
 }
+
+// 🔥 Fonctions utilitaires pour la confirmation WhatsApp
+window._whatsappConfirmYes = function(venteId) {
+    closeModal(); // fermer la modale de confirmation
+    // Arrêter le micro avant l'envoi
+    if (typeof window.posStopVoiceSearch === 'function') {
+        window.posStopVoiceSearch();
+    }
+    // Envoyer WhatsApp (fonction corrigée dans admin-ventes.js)
+    window.sendWhatsApp(venteId);
+    // Réinitialiser le POS après un court délai pour laisser le temps à WhatsApp de s'ouvrir
+    setTimeout(function() {
+        posResetCart();
+        if(isOnPOSPage()) renderPOS();
+        if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
+    }, 500);
+};
+
+window._whatsappConfirmNo = function() {
+    // On ferme la modale (déjà fait par le bouton qui appelle closeModal())
+    // On réinitialise juste le POS
+    posResetCart();
+    if(isOnPOSPage()) renderPOS();
+    if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
+};
+
 function goBackToPOS(){ if(window.currentUserData&&(window.currentUserData.userData.role==='caissier'||window.currentUserData.userData.role==='admin')){ if(posCart.length>0&&posStep===1){ if(!confirm('⚠️ '+posCart.length+' article(s) dans le panier. Garder ?')) posResetCart(); } navigateTo('pos'); } }
 if(!window._posKeydownListenerAdded){ window._posKeydownListenerAdded=true; document.addEventListener('keydown',function(event){ if(event.key==='Escape'){ var cp=document.getElementById('pageTitle')?.textContent||''; if(cp!=='POS'&&cp!=='Dashboard'&&cp!=='') goBackToPOS(); } if(event.ctrlKey&&(event.key==='p'||event.key==='P')){ event.preventDefault(); if((document.getElementById('pageTitle')?.textContent||'')!=='POS') navigateTo('pos'); } }); }
 
