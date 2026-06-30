@@ -172,20 +172,36 @@ function posUpdateDiscountMAD(v){ posDiscountMAD=parseFloat(v)||0; if(posDiscoun
 function posUpdateQty(i,ch){ var it=posCart[i]; if(!it) return; var p=posProductsList.find(function(x){ return x.id===it.id; }),nq=it.quantite+ch; if(nq<=0) posCart.splice(i,1); else{ if(p&&p.stock!==undefined&&nq>p.stock){ alert('Max: '+p.stock); return; } it.quantite=nq; } updateCartOnly(); }
 function posRemoveItem(i){ posCart.splice(i,1); updateCartOnly(); }
 function posCalculateTotal(){ var t=0; for(var i=0;i<posCart.length;i++) t+=posCart[i].prixUnitaire*posCart[i].quantite; return t; }
-function posGoToStep2(){ if(posCart.length===0){ alert('Panier vide'); return; } posStep=2; if(isOnPOSPage()) renderPOS(); 
-    // Si le micro est actif, passer automatiquement en mode paiement
-    var micBtn = document.getElementById('posMicBtn');
-    if (micBtn && micBtn.classList.contains('recording')) {
-        if (typeof window.setVoiceMode === 'function') {
-            window.setVoiceMode('payment', '🎤 Mode paiement', null);
+
+// ✅ CORRECTION ICI : forcer le mode paiement au clic sur Valider
+function posGoToStep2(){
+    if(posCart.length===0){ alert('Panier vide'); return; }
+    posStep = 2;
+    window.posStep = 2;
+
+    // Annuler le mode quantité et forcer le mode paiement
+    if (typeof window.setVoiceMode === 'function') {
+        if (typeof window.lastAddedProductId !== 'undefined') {
+            window.lastAddedProductId = null; // Sortir du mode quantité
         }
+        window.setVoiceMode('payment', '🎤 Mode paiement', null);
         if (typeof window.showVoiceFlowIndicator === 'function') {
             window.showVoiceFlowIndicator('payment_mode');
         }
+        if (typeof window.showVoiceModeIndicator === 'function') {
+            window.showVoiceModeIndicator();
+        }
     }
+
+    if(isOnPOSPage()) renderPOS();
 }
-function posGoToStep1(){ posStep=1; delete window.posCommandeId; delete window.posVenteId; if(isOnPOSPage()) renderPOS(); 
-    // Si le micro est actif, repasser en mode recherche
+
+function posGoToStep1(){
+    posStep = 1;
+    window.posStep = 1;
+    delete window.posCommandeId; delete window.posVenteId;
+
+    // Revenir en mode recherche si le micro est actif
     var micBtn = document.getElementById('posMicBtn');
     if (micBtn && micBtn.classList.contains('recording')) {
         if (typeof window.setVoiceMode === 'function') {
@@ -195,7 +211,10 @@ function posGoToStep1(){ posStep=1; delete window.posCommandeId; delete window.p
             window.showVoiceFlowIndicator('product');
         }
     }
+
+    if(isOnPOSPage()) renderPOS();
 }
+
 function posSetPaymentMethod(m){ if((m==='credit'||m==='partiel')&&(!posCurrentClient||!posCurrentClient.id)){ alert('Client requis'); return; } posPaymentMethod=m; posAmountGiven=0; if(isOnPOSPage()) renderPOS(); }
 function posCalculateChange(){ var ai=document.getElementById('posAmountGiven'),cd=document.getElementById('posChangeDisplay'); if(!ai||!cd) return; var st=posCalculateTotal(),t=st-posDiscountMAD; posAmountGiven=parseFloat(ai.value)||0; var c=posAmountGiven-t; if(posAmountGiven>0) cd.innerHTML=c>=0?'<div class="pos-change-positive"><span>Rendu</span><span>'+c.toFixed(2)+' MAD</span></div>':'<div class="pos-change-negative"><span>Manquant</span><span>'+Math.abs(c).toFixed(2)+' MAD</span></div>'; else cd.innerHTML=''; }
 
@@ -317,22 +336,16 @@ async function posFinalizeSale(){
 
         // Proposer l'envoi WhatsApp
         if (typeof window.sendWhatsApp === 'function') {
-            // Sauvegarder l'ancienne closeModal pour la restaurer
             var originalCloseModal = window.closeModal;
-            // Nouvelle closeModal temporaire qui annule l'envoi WhatsApp et réinitialise le POS
             window.closeModal = function() {
-                // Réinitialiser le POS (comme un refus)
                 posResetCart();
                 if(isOnPOSPage()) renderPOS();
                 if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
-                // Restaurer closeModal
                 window.closeModal = originalCloseModal;
-                // Fermer la modale
                 var o = document.getElementById('modalOverlay');
                 if (o) o.classList.add('hidden');
                 window.editingId = null;
             };
-            // Construire la modale
             var modalHtml = '<p style="text-align:center;">Voulez-vous envoyer la facture par WhatsApp ?</p>';
             modalHtml += '<div style="display:flex;justify-content:center;gap:10px;margin-top:15px;">';
             modalHtml += '<button class="btn-save" id="whatsappYesBtn">✅ Oui</button>';
@@ -340,23 +353,17 @@ async function posFinalizeSale(){
             modalHtml += '</div>';
             openModal('📱 Envoyer la facture WhatsApp', modalHtml);
 
-            // Attacher les événements après ouverture
             setTimeout(function() {
                 var yesBtn = document.getElementById('whatsappYesBtn');
                 var noBtn = document.getElementById('whatsappNoBtn');
                 if (yesBtn) {
                     yesBtn.addEventListener('click', function() {
-                        // Restaurer closeModal
                         window.closeModal = originalCloseModal;
-                        // Fermer la modale normalement
                         closeModal();
-                        // Arrêter le micro avant l'envoi
                         if (typeof window.posStopVoiceSearch === 'function') {
                             window.posStopVoiceSearch();
                         }
-                        // Envoyer WhatsApp
                         window.sendWhatsApp(venteId);
-                        // Réinitialiser le POS après un court délai
                         setTimeout(function() {
                             posResetCart();
                             if(isOnPOSPage()) renderPOS();
@@ -366,10 +373,8 @@ async function posFinalizeSale(){
                 }
                 if (noBtn) {
                     noBtn.addEventListener('click', function() {
-                        // Restaurer closeModal
                         window.closeModal = originalCloseModal;
-                        // Fermer la modale et réinitialiser le POS
-                        closeModal(); // utilise la closeModal originale (ne reset plus)
+                        closeModal();
                         posResetCart();
                         if(isOnPOSPage()) renderPOS();
                         if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
@@ -377,7 +382,6 @@ async function posFinalizeSale(){
                 }
             }, 100);
         } else {
-            // Pas de fonction WhatsApp, on termine normalement
             posResetCart(); 
             if(isOnPOSPage()) renderPOS(); 
             if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
