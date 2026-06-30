@@ -293,23 +293,67 @@ async function posFinalizeSale(){
         
         var venteId = ventesRef.id;  // 🔥 Garder l'ID pour WhatsApp
 
-        // --- Message de confirmation et proposition WhatsApp ---
-        var msg='✅ Vente: '+fn+'\n💰 Total: '+t.toFixed(2)+' MAD'; 
-        if(posPaymentMethod==='espece' && posAmountGiven > t) 
-            msg+='\n💵 Rendu: '+change.toFixed(2)+' MAD'; 
-        if(statutPaiement==='crédit') msg+='\n📋 Crédit enregistré.'; 
-        if(statutPaiement==='partiel') msg+='\n📋 Reste: '+remaining.toFixed(2)+' MAD'; 
-        alert(msg);
-
         // Proposer l'envoi WhatsApp
         if (typeof window.sendWhatsApp === 'function') {
-            // On construit une modale de confirmation
+            // Sauvegarder l'ancienne closeModal pour la restaurer
+            var originalCloseModal = window.closeModal;
+            // Nouvelle closeModal temporaire qui annule l'envoi WhatsApp et réinitialise le POS
+            window.closeModal = function() {
+                // Réinitialiser le POS (comme un refus)
+                posResetCart();
+                if(isOnPOSPage()) renderPOS();
+                if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
+                // Restaurer closeModal
+                window.closeModal = originalCloseModal;
+                // Fermer la modale
+                var o = document.getElementById('modalOverlay');
+                if (o) o.classList.add('hidden');
+                window.editingId = null;
+            };
+            // Construire la modale
             var modalHtml = '<p style="text-align:center;">Voulez-vous envoyer la facture par WhatsApp ?</p>';
             modalHtml += '<div style="display:flex;justify-content:center;gap:10px;margin-top:15px;">';
-            modalHtml += '<button class="btn-save" onclick="window._whatsappConfirmYes(\'' + venteId + '\')">✅ Oui</button>';
-            modalHtml += '<button class="btn-cancel" onclick="closeModal(); window._whatsappConfirmNo()">❌ Non</button>';
+            modalHtml += '<button class="btn-save" id="whatsappYesBtn">✅ Oui</button>';
+            modalHtml += '<button class="btn-cancel" id="whatsappNoBtn">❌ Non</button>';
             modalHtml += '</div>';
             openModal('📱 Envoyer la facture WhatsApp', modalHtml);
+
+            // Attacher les événements après ouverture
+            setTimeout(function() {
+                var yesBtn = document.getElementById('whatsappYesBtn');
+                var noBtn = document.getElementById('whatsappNoBtn');
+                if (yesBtn) {
+                    yesBtn.addEventListener('click', function() {
+                        // Restaurer closeModal
+                        window.closeModal = originalCloseModal;
+                        // Fermer la modale normalement
+                        closeModal();
+                        // Arrêter le micro avant l'envoi
+                        if (typeof window.posStopVoiceSearch === 'function') {
+                            window.posStopVoiceSearch();
+                        }
+                        // Envoyer WhatsApp
+                        window.sendWhatsApp(venteId);
+                        // Réinitialiser le POS après un court délai
+                        setTimeout(function() {
+                            posResetCart();
+                            if(isOnPOSPage()) renderPOS();
+                            if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
+                        }, 500);
+                    });
+                }
+                if (noBtn) {
+                    noBtn.addEventListener('click', function() {
+                        // Restaurer closeModal
+                        window.closeModal = originalCloseModal;
+                        // Fermer la modale et réinitialiser le POS
+                        closeModal(); // utilise la closeModal originale (ne reset plus)
+                        posResetCart();
+                        if(isOnPOSPage()) renderPOS();
+                        if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
+                    });
+                }
+            }, 100);
         } else {
             // Pas de fonction WhatsApp, on termine normalement
             posResetCart(); 
@@ -323,31 +367,6 @@ async function posFinalizeSale(){
         if(fb){ fb.disabled=false; fb.innerHTML='<i class="fas fa-check-circle"></i> Finaliser'; } 
     }
 }
-
-// 🔥 Fonctions utilitaires pour la confirmation WhatsApp
-window._whatsappConfirmYes = function(venteId) {
-    closeModal(); // fermer la modale de confirmation
-    // Arrêter le micro avant l'envoi
-    if (typeof window.posStopVoiceSearch === 'function') {
-        window.posStopVoiceSearch();
-    }
-    // Envoyer WhatsApp (fonction corrigée dans admin-ventes.js)
-    window.sendWhatsApp(venteId);
-    // Réinitialiser le POS après un court délai pour laisser le temps à WhatsApp de s'ouvrir
-    setTimeout(function() {
-        posResetCart();
-        if(isOnPOSPage()) renderPOS();
-        if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
-    }, 500);
-};
-
-window._whatsappConfirmNo = function() {
-    // On ferme la modale (déjà fait par le bouton qui appelle closeModal())
-    // On réinitialise juste le POS
-    posResetCart();
-    if(isOnPOSPage()) renderPOS();
-    if(navigator.onLine) setTimeout(function(){ CacheDB.sync().catch(function(){}); },500);
-};
 
 function goBackToPOS(){ if(window.currentUserData&&(window.currentUserData.userData.role==='caissier'||window.currentUserData.userData.role==='admin')){ if(posCart.length>0&&posStep===1){ if(!confirm('⚠️ '+posCart.length+' article(s) dans le panier. Garder ?')) posResetCart(); } navigateTo('pos'); } }
 if(!window._posKeydownListenerAdded){ window._posKeydownListenerAdded=true; document.addEventListener('keydown',function(event){ if(event.key==='Escape'){ var cp=document.getElementById('pageTitle')?.textContent||''; if(cp!=='POS'&&cp!=='Dashboard'&&cp!=='') goBackToPOS(); } if(event.ctrlKey&&(event.key==='p'||event.key==='P')){ event.preventDefault(); if((document.getElementById('pageTitle')?.textContent||'')!=='POS') navigateTo('pos'); } }); }
