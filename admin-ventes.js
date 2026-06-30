@@ -381,7 +381,7 @@ function imprimerFacture(d, id) {
     setTimeout(function() { w.print(); }, 500);
 }
 
-// ==================== ENVOI WHATSAPP (COMPACT, COMPATIBLE) ====================
+// ==================== ENVOI WHATSAPP (VERSION CORRIGÉE) ====================
 async function sendWhatsApp(did) {
     try {
         const doc = await db.collection('ventes').doc(did).get();
@@ -389,34 +389,66 @@ async function sendWhatsApp(did) {
         const vente = doc.data();
 
         let phone = '';
-        
+
+        // 1. Chercher dans le cache local (posAllClients ou allClientsData)
+        const allClients = (window.posAllClients && window.posAllClients.length)
+            ? window.posAllClients
+            : (window.allClientsData || []);
+        let client = null;
+
         if (vente.clientId) {
+            client = allClients.find(c => c.id === vente.clientId);
+        } else if (vente.clientName) {
+            const normalized = (vente.clientName || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+            client = allClients.find(c => {
+                const full = ((c.nom || '') + ' ' + (c.prenom || ''))
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .trim();
+                return full === normalized;
+            });
+        }
+
+        if (client) {
+            phone = client.whatsapp || client.telephone || '';
+        }
+
+        // 2. Si pas trouvé dans le cache, essayer Firestore
+        if (!phone && vente.clientId) {
             try {
                 const clientDoc = await db.collection('clients').doc(vente.clientId).get();
                 if (clientDoc.exists) {
                     const cdata = clientDoc.data();
                     phone = cdata.whatsapp || cdata.telephone || '';
                 }
-            } catch(e) {}
-        }
-        
-        if (!phone && vente.clientName && window.posAllClients && window.posAllClients.length) {
-            const client = window.posAllClients.find(function(c) {
-                return (c.nom + ' ' + c.prenom).toLowerCase() === (vente.clientName || '').toLowerCase();
-            });
-            if (client) phone = client.whatsapp || client.telephone || '';
+            } catch (e) {}
         }
 
-        phone = phone.replace(/[\s\-\(\)]/g, '').replace(/^0+/, '');
-        if (!phone) { alert('❌ Aucun numéro WhatsApp trouvé.'); return; }
+        // Nettoyage du numéro
+        phone = phone.replace(/[^\d+]/g, '').trim();
+        if (phone.startsWith('0')) {
+            // Transformer en indicatif +212 (Maroc)
+            phone = '+212' + phone.substring(1);
+        } else if (!phone.startsWith('+')) {
+            phone = '+' + phone;
+        }
 
-        // Message compact
+        if (!phone || phone === '+') {
+            alert('❌ Aucun numéro WhatsApp trouvé.');
+            return;
+        }
+
+        // Construction du message
         var msg = '🧾 *FACTURE MIXMAX*\n';
         msg += '📄 ' + (vente.factureNum || did.substring(0, 8)) + '\n';
         msg += '📅 ' + (vente.createdAt ? new Date(vente.createdAt.seconds * 1000).toLocaleDateString('fr-FR') : '') + '\n';
         msg += '👤 ' + (vente.clientName || '-') + '\n';
         msg += '━━━━━━━━━━━\n';
-        
         if (vente.items) {
             vente.items.forEach(function(it) {
                 var opt = '';
@@ -426,24 +458,21 @@ async function sendWhatsApp(did) {
                 msg += it.quantite + 'x ' + it.nom + opt + ' = ' + ((it.prixVente || 0) * it.quantite).toFixed(2) + '\n';
             });
         }
-        
         msg += '━━━━━━━━━━━\n';
         if (vente.discountMAD > 0) msg += 'Remise: -' + vente.discountMAD.toFixed(2) + '\n';
         msg += '*💰 TOTAL: ' + vente.total.toFixed(2) + ' MAD*';
         if (vente.paymentMethod === 'crédit') msg += '\n📋 À payer: ' + (vente.remainingAmount || vente.total).toFixed(2);
         msg += '\n🙏 Merci ! 🛒 Mixmax';
 
-        // Ouvrir WhatsApp
         var url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg);
+
+        // Tenter d'ouvrir directement
         var w = window.open(url, '_blank');
         if (!w || w.closed) {
-            var a = document.createElement('a');
-            a.href = url;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            // Si le pop-up est bloqué, afficher un lien cliquable dans une modale
+            var modalHtml = '<p style="text-align:center;">Redirection vers WhatsApp...</p>';
+            modalHtml += '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;padding:12px;background:#25D366;color:#fff;border-radius:8px;font-weight:600;text-decoration:none;">Cliquez ici si la fenêtre ne s\'ouvre pas</a>';
+            openModal('📱 Envoyer WhatsApp', modalHtml);
         }
 
     } catch (e) {
@@ -471,4 +500,4 @@ window.printFacture = printFacture;
 window.imprimerFacture = imprimerFacture;
 window.sendWhatsApp = sendWhatsApp;
 
-console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec WhatsApp complet)');
+console.log('🛒 Mixmax Minimarket - Admin Ventes chargé (FINAL avec WhatsApp corrigé)');
