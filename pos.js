@@ -172,8 +172,30 @@ function posUpdateDiscountMAD(v){ posDiscountMAD=parseFloat(v)||0; if(posDiscoun
 function posUpdateQty(i,ch){ var it=posCart[i]; if(!it) return; var p=posProductsList.find(function(x){ return x.id===it.id; }),nq=it.quantite+ch; if(nq<=0) posCart.splice(i,1); else{ if(p&&p.stock!==undefined&&nq>p.stock){ alert('Max: '+p.stock); return; } it.quantite=nq; } updateCartOnly(); }
 function posRemoveItem(i){ posCart.splice(i,1); updateCartOnly(); }
 function posCalculateTotal(){ var t=0; for(var i=0;i<posCart.length;i++) t+=posCart[i].prixUnitaire*posCart[i].quantite; return t; }
-function posGoToStep2(){ if(posCart.length===0){ alert('Panier vide'); return; } posStep=2; if(isOnPOSPage()) renderPOS(); }
-function posGoToStep1(){ posStep=1; delete window.posCommandeId; delete window.posVenteId; if(isOnPOSPage()) renderPOS(); }
+function posGoToStep2(){ if(posCart.length===0){ alert('Panier vide'); return; } posStep=2; if(isOnPOSPage()) renderPOS(); 
+    // Si le micro est actif, passer automatiquement en mode paiement
+    var micBtn = document.getElementById('posMicBtn');
+    if (micBtn && micBtn.classList.contains('recording')) {
+        if (typeof window.setVoiceMode === 'function') {
+            window.setVoiceMode('payment', '🎤 Mode paiement', null);
+        }
+        if (typeof window.showVoiceFlowIndicator === 'function') {
+            window.showVoiceFlowIndicator('payment_mode');
+        }
+    }
+}
+function posGoToStep1(){ posStep=1; delete window.posCommandeId; delete window.posVenteId; if(isOnPOSPage()) renderPOS(); 
+    // Si le micro est actif, repasser en mode recherche
+    var micBtn = document.getElementById('posMicBtn');
+    if (micBtn && micBtn.classList.contains('recording')) {
+        if (typeof window.setVoiceMode === 'function') {
+            window.setVoiceMode('search', '🎤 Recherche vocale active', null);
+        }
+        if (typeof window.showVoiceFlowIndicator === 'function') {
+            window.showVoiceFlowIndicator('product');
+        }
+    }
+}
 function posSetPaymentMethod(m){ if((m==='credit'||m==='partiel')&&(!posCurrentClient||!posCurrentClient.id)){ alert('Client requis'); return; } posPaymentMethod=m; posAmountGiven=0; if(isOnPOSPage()) renderPOS(); }
 function posCalculateChange(){ var ai=document.getElementById('posAmountGiven'),cd=document.getElementById('posChangeDisplay'); if(!ai||!cd) return; var st=posCalculateTotal(),t=st-posDiscountMAD; posAmountGiven=parseFloat(ai.value)||0; var c=posAmountGiven-t; if(posAmountGiven>0) cd.innerHTML=c>=0?'<div class="pos-change-positive"><span>Rendu</span><span>'+c.toFixed(2)+' MAD</span></div>':'<div class="pos-change-negative"><span>Manquant</span><span>'+Math.abs(c).toFixed(2)+' MAD</span></div>'; else cd.innerHTML=''; }
 
