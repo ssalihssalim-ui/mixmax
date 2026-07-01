@@ -698,5 +698,8 @@ window.onProductAdded = function(pid) {
 window.selectAllCredits = selectAllCredits;
 window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
+// 🔥 AJOUTER CES DEUX LIGNES CI-DESSOUS :
+window.buildClientIndex = buildClientIndex;
+window.buildProductIndex = buildProductIndex;
 
 console.log('🎤 Module vocal – recherche produit instantanée OK');
