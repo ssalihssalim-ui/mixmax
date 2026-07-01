@@ -2,6 +2,9 @@
 // Contient : Catégories, Produits, Clients, Fournisseurs
 // Dépend de : admin.js (variables globales, fonctions utilitaires)
 
+// ========== INITIALISATION DE LA RECHERCHE PRODUIT ==========
+window.productSearchQuery = window.productSearchQuery || '';
+
 // ==================== CATÉGORIES ====================
 function loadCategoriesPage(c) {
     c.innerHTML = '<div class="content-card">' +
@@ -99,8 +102,12 @@ function updateIngredientUnit(selectEl) {
     if (stockItem) { unitSpan.textContent = stockItem.unite || ''; } else { unitSpan.textContent = ''; }
 }
 
+// ✅ AJOUT DE LA BARRE DE RECHERCHE
 function loadProductsPage(c) {
-    c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-box"></i> Produits</h3><div style="display:flex;gap:10px;flex-wrap:wrap;"><select id="categoryFilter" onchange="filterProducts()"><option value="">Toutes catégories</option></select><button class="btn-add" onclick="openProductForm()"><i class="fas fa-plus"></i> Nouveau</button></div></div>' +
+    c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-box"></i> Produits</h3><div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+        '<input type="text" id="productSearchInput" placeholder="🔍 Rechercher un produit..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:220px;" onkeyup="window.productSearchQuery = this.value.trim().toLowerCase(); window.currentPages.products=1; renderProductsTable();">' +
+        '<select id="categoryFilter" onchange="filterProducts()"><option value="">Toutes catégories</option></select>' +
+        '<button class="btn-add" onclick="openProductForm()"><i class="fas fa-plus"></i> Nouveau</button></div></div>' +
         '<div class="table-container"><table class="data-table" id="productsTable" style="font-size:0.7rem;"><thead><tr><th>Img</th>' +
         makeSortableHeader('products', 'nom', 'Nom', 'loadProducts') + makeSortableHeader('products', 'categorie', 'Catégorie', 'loadProducts') +
         makeSortableHeader('products', 'prixAchat', 'Achat', 'loadProducts') + makeSortableHeader('products', 'prixVente', 'Vente', 'loadProducts') +
@@ -128,9 +135,19 @@ async function loadProducts() {
     renderProductsTable();
 }
 
+// ✅ AJOUT DU FILTRE DE RECHERCHE DANS LE RENDU
 function renderProductsTable() {
     var tb = document.querySelector('#productsTable tbody'); if (!tb) return;
-    var data = allProductsData.slice(); if (selectedCategoryFilter) data = data.filter(function(d) { return d.categorie === selectedCategoryFilter; });
+    var data = allProductsData.slice();
+    if (selectedCategoryFilter) data = data.filter(function(d) { return d.categorie === selectedCategoryFilter; });
+    // Filtre de recherche par nom ou description
+    if (window.productSearchQuery) {
+        var q = window.productSearchQuery;
+        data = data.filter(function(d) {
+            return (d.nom || '').toLowerCase().indexOf(q) !== -1 ||
+                   (d.description || '').toLowerCase().indexOf(q) !== -1;
+        });
+    }
     data = applySort('products', data, 'nom'); var pageData = getPageData('products', data);
     tb.innerHTML = '';
     if (pageData.length === 0) { tb.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;">Aucun produit</td></tr>'; document.getElementById('productsPagination').innerHTML = ''; return; }
