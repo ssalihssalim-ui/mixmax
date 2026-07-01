@@ -1,4 +1,4 @@
-// ----- ADMIN-CREDITS.JS - MIXMAX MINIMARKET ==================== //
+// ==================== ADMIN-CREDITS.JS - MIXMAX MINIMARKET ====================
 // Gestion des crédits - Version corrigée (recherche description → nom officiel + suppression vocale)
 // Compatible avec la sélection multiple vocale (creditSelectAll)
 // CORRIGÉ : normalisation des accents et recherche robuste
@@ -121,7 +121,6 @@ function applyCreditsFilters() {
         var rawQuery = window.creditsSearch.trim();
         var q = normalize(rawQuery);
         
-        // Index des clients normalisé
         var clientsIndex = {};
         if (window.posAllClients) {
             window.posAllClients.forEach(function(c) {
@@ -136,10 +135,8 @@ function applyCreditsFilters() {
         
         filtered = filtered.filter(function(credit) {
             var creditName = normalize(credit.clientName || '');
-            // 1. Le nom du crédit contient exactement la recherche
             if (creditName.indexOf(q) !== -1) return true;
             
-            // 2. Chercher dans les infos du client associé (description, nom, prénom)
             var clientInfo = clientsIndex[creditName];
             if (clientInfo) {
                 if (clientInfo.description.indexOf(q) !== -1) return true;
@@ -147,7 +144,6 @@ function applyCreditsFilters() {
                 if (clientInfo.prenom.indexOf(q) !== -1) return true;
             }
             
-            // 3. Parcourir tous les clients si la description correspond (fallback)
             if (window.posAllClients) {
                 for (var i = 0; i < window.posAllClients.length; i++) {
                     var c = window.posAllClients[i];
@@ -175,7 +171,7 @@ function applyCreditsFilters() {
     renderCreditsTable();
 }
 
-// ========== RENDU DU TABLEAU (inchangé, avec creditSelectAll) ==========
+// ========== RENDU DU TABLEAU ==========
 function renderCreditsTable() {
     var cont = document.getElementById('creditsTableContainer');
     if (!cont) return;
@@ -341,7 +337,7 @@ function markCreditPaid(creditId) {
     renderCreditsTable();
 }
 
-// ========== RECHERCHE CLIENT DROPDOWN (CORRIGÉ avec normalisation) ==========
+// ========== RECHERCHE CLIENT DROPDOWN ==========
 function searchClientInCreditsDropdown(query) {
     var q = query.toLowerCase().trim();
     var dropdown = document.getElementById('creditsClientDropdown');
@@ -354,7 +350,6 @@ function searchClientInCreditsDropdown(query) {
         return;
     }
     
-    // Normalisation pour la recherche dans la liste des clients
     var normalizedQuery = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     var results = window.posAllClients.filter(function(c) {
         var nom = (c.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -367,7 +362,7 @@ function searchClientInCreditsDropdown(query) {
     
     if (results.length === 0) {
         if (dropdown) dropdown.style.display = 'none';
-        window.creditsSearch = query.trim(); // garder la recherche brute pour le filtrage
+        window.creditsSearch = query.trim();
         window.currentPages.credits = 1;
         applyCreditsFilters();
         return;
