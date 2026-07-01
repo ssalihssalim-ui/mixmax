@@ -1,4 +1,4 @@
-// ==================== SCRIPT.JS - MIXMAX MINIMARKET (COMPLET FINAL) ====================
+SCRIPT.JS - MIXMAX MINIMARKET (COMPLET FINAL) ====================
 // Script principal - Navigation instantanée optimisée
 
 // ========== VARIABLES GLOBALES ==========
@@ -343,60 +343,10 @@ async function initApp() {
     showLogin();
 }
 
-// ========== GESTION DU MENU MOBILE (AMÉLIORÉE) ==========
-function openSidebar() {
-    var s = document.getElementById('sidebar');
-    var o = document.getElementById('sidebarOverlay');
-    if (s) s.classList.add('open');
-    if (o) o.classList.add('active');
-}
+// ========== NAVIGATION ==========
+function toggleSidebar() { var s = document.getElementById('sidebar'), o = document.getElementById('sidebarOverlay'); if (s) s.classList.toggle('open'); if (o) o.classList.toggle('active'); }
 
-function closeSidebar() {
-    var s = document.getElementById('sidebar');
-    var o = document.getElementById('sidebarOverlay');
-    if (s) s.classList.remove('open');
-    if (o) o.classList.remove('active');
-}
-
-function toggleSidebar() {
-    var s = document.getElementById('sidebar');
-    if (s && s.classList.contains('open')) {
-        closeSidebar();
-    } else {
-        openSidebar();
-    }
-}
-
-function openClientSidebar() {
-    var s = document.getElementById('clientSidebar');
-    var o = document.getElementById('clientSidebarOverlay');
-    if (s) s.classList.add('open');
-    if (o) o.classList.add('active');
-}
-
-function closeClientSidebar() {
-    var s = document.getElementById('clientSidebar');
-    var o = document.getElementById('clientSidebarOverlay');
-    if (s) s.classList.remove('open');
-    if (o) o.classList.remove('active');
-}
-
-function toggleClientSidebar() {
-    var s = document.getElementById('clientSidebar');
-    if (s && s.classList.contains('open')) {
-        closeClientSidebar();
-    } else {
-        openClientSidebar();
-    }
-}
-
-// Fermeture avec la touche Échap
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closeSidebar();
-        closeClientSidebar();
-    }
-});
+function toggleClientSidebar() { var s = document.getElementById('clientSidebar'), o = document.getElementById('clientSidebarOverlay'); if (s) s.classList.toggle('open'); if (o) o.classList.toggle('active'); }
 
 function showAuthPage() { document.getElementById('authPage').classList.remove('hidden');
     document.getElementById('dashboardPage').classList.add('hidden');
@@ -477,8 +427,8 @@ function navigateTo(page) {
         content.innerHTML = '<div class="content-card"><h3>' + (titles[page] || 'Page') + '</h3><p style="text-align:center;padding:40px;">En développement</p></div>';
     }
 
-    // Fermer le menu après navigation
-    closeSidebar();
+    var s = document.getElementById('sidebar'),
+        o = document.getElementById('sidebarOverlay'); if (s && s.classList.contains('open')) { s.classList.remove('open'); if (o) o.classList.remove('active'); }
 }
 
 function updateSidebarUserInfo() { var el = document.getElementById('sidebarUserInfo'); if (el && window.currentUserData) { el.innerHTML = '<i class="fas fa-user-circle"></i> ' + window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom + ' <small style="color:#A67C52;">(' + window.currentUserData.userData.role + ')</small>'; } }
@@ -489,4 +439,4 @@ document.addEventListener('click', function(e) { var o = document.getElementById
 window.addEventListener('online', function() { console.log('✅ En ligne'); if (typeof CacheDB !== 'undefined' && CacheDB.sync) CacheDB.sync().catch(function(e) { console.warn(e); }); });
 window.addEventListener('offline', function() { console.warn('⚠️ Mode hors ligne'); });
 
-console.log('☕ Mixmax Minimarket - Script principal OK (navigation instantanée + menu amélioré)');
+console.log('☕ Mixmax Minimarket - Script principal OK (navigation instantanée)');
