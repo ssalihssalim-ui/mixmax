@@ -62,6 +62,10 @@ async function loadPosPage(c){
         if(cp.length){ posProductsList=cp.filter(x=>x.disponible!==false).map(x=>({...x,description:x.description||''})); productIndexBuilt=false; }
         if(cl.length){ posAllClients=cl.map(x=>({id:x.id,nom:x.nom,prenom:x.prenom,telephone:x.telephone,description:x.description||''})); posFilteredClients=[...posAllClients]; }
         if(isOnPOSPage()) renderPOS();
+
+        // 🔥 Pré-construire les index pour la reconnaissance vocale
+        if (typeof window.buildClientIndex === 'function') window.buildClientIndex();
+        if (typeof window.buildProductIndex === 'function') window.buildProductIndex();
     }catch(e){ console.error(e); }
     setTimeout(async function(){
         try{
@@ -70,6 +74,10 @@ async function loadPosPage(c){
             posProductsList=[]; ps.forEach(d=>{ let dd=d.data(); if(dd.disponible!==false){ let prod={id:d.id,nom:dd.nom||'',description:dd.description||'',prixVente:dd.prixVente||0,prixPromo:dd.prixPromo||0,prixAchat:dd.prixAchat||0,stock:dd.stock,categorie:dd.categorie||'',imageBase64:dd.imageBase64||''}; posProductsList.push(prod); CacheDB.set('products',d.id,prod); } }); productIndexBuilt=false;
             posAllClients=[]; cl.forEach(d=>{ let data=d.data(),cli={id:d.id,nom:data.nom,prenom:data.prenom,telephone:data.telephone,description:data.description||''}; posAllClients.push(cli); CacheDB.set('clients',d.id,cli); }); posFilteredClients=[...posAllClients];
             if(isOnPOSPage()) renderPOS();
+
+            // 🔥 Pré-construire les index pour la reconnaissance vocale
+            if (typeof window.buildClientIndex === 'function') window.buildClientIndex();
+            if (typeof window.buildProductIndex === 'function') window.buildProductIndex();
         }catch(e){ console.error(e); }
     },300);
     await posChargerCommandesTables(); await posChargerCommandesEnLigneCount();
