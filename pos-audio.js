@@ -1,4 +1,4 @@
-// ==================== POS-AUDIO.JS v9.4 – RECHERCHE PRODUIT INSTANTANÉE (POS + ADMIN) ====================
+// ==================== POS-AUDIO.JS v9.5 – RECHERCHE PRODUIT INSTANTANÉE (POS + ADMIN) ====================
 // Mixmax Minimarket – Reconnaissance vocale optimisée
 
 var voiceRecognition = null;
@@ -18,6 +18,10 @@ var clientIndexBuilt = false;
 // ========== INDEX PRODUIT (RAPIDE) ==========
 var productNameIndex = {};
 var productIndexBuilt = false;
+
+// ========== INDEX ADMIN PERMANENT ==========
+window.productAdminIndex = window.productAdminIndex || {};
+window.productAdminIndexBuilt = false;
 
 // ========== PAYMENT STATE MACHINE ==========
 window.voicePaymentState = 0; // 0 = client, 1 = payment_mode, 2 = amount
@@ -162,9 +166,34 @@ function fastFindProduct(query) {
     return [filtered[0]];
 }
 
-// ========== INDEX PRODUIT (ADMIN) – RAPIDE ==========
+// ========== INDEX ADMIN PERMANENT – AVEC DESCRIPTION ==========
+function buildProductAdminIndex() {
+    if (window.productAdminIndexBuilt || !window.allProductsData || !window.allProductsData.length) return;
+    window.productAdminIndex = {};
+    window.allProductsData.forEach(function(p) {
+        // Indexer le nom
+        var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        nom.split(/[\s,;.]+/).forEach(function(w) {
+            if (w.length < 2) return;
+            if (!window.productAdminIndex[w]) window.productAdminIndex[w] = [];
+            if (!window.productAdminIndex[w].includes(p)) window.productAdminIndex[w].push(p);
+        });
+        // Indexer la description
+        var desc = (p.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        desc.split(/[\s,;.]+/).forEach(function(w) {
+            if (w.length < 2) return;
+            if (!window.productAdminIndex[w]) window.productAdminIndex[w] = [];
+            if (!window.productAdminIndex[w].includes(p)) window.productAdminIndex[w].push(p);
+        });
+    });
+    window.productAdminIndexBuilt = true;
+}
+
 function fastFindProductAdmin(query) {
     if (!window.allProductsData || !window.allProductsData.length) return [];
+    // Construire l'index si nécessaire
+    if (!window.productAdminIndexBuilt) buildProductAdminIndex();
+
     var cleaned = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
     var mots = cleaned.split(/[\s,;.]+/);
     if (mots.length === 0) return [];
@@ -173,26 +202,19 @@ function fastFindProductAdmin(query) {
     var searchTerm = firstWord;
     if (mots.length >= 2) searchTerm = firstWord + ' ' + mots[1];
 
-    // Construire un index temporaire (ou permanent, pour l'instant juste pour cette recherche)
-    var adminIndex = {};
-    window.allProductsData.forEach(function(p) {
-        var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        nom.split(/[\s,;.]+/).forEach(function(w) {
-            if (w.length < 2) return;
-            if (!adminIndex[w]) adminIndex[w] = [];
-            adminIndex[w].push(p);
-        });
-    });
-
-    var candidates = adminIndex[firstWord] || [];
+    var candidates = (window.productAdminIndex[firstWord] || []).slice();
     if (candidates.length === 0) return [];
 
+    // Filtrer par le searchTerm dans le nom OU la description
     var filtered = candidates.filter(function(p) {
         var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        return nom.indexOf(searchTerm) !== -1;
+        var desc = (p.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return nom.indexOf(searchTerm) !== -1 || desc.indexOf(searchTerm) !== -1;
     });
 
-    if (filtered.length === 0) return [candidates[0]];
+    if (filtered.length === 0) {
+        return [candidates[0]];
+    }
 
     if (filtered.length === 1) return filtered;
 
@@ -629,5 +651,7 @@ window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
 window.buildClientIndex = buildClientIndex;
 window.buildProductIndex = buildProductIndex;
+window.buildProductAdminIndex = buildProductAdminIndex;
+window.fastFindProductAdmin = fastFindProductAdmin;
 
-console.log('🎤 Module vocal – recherche produit instantanée (POS + Admin) OK');
+console.log('🎤 Module vocal – recherche produit instantanée (POS + Admin, index permanent) OK');
