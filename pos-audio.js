@@ -483,20 +483,189 @@ function posStopVoiceSearch() {
     showVoiceResult('🎤 Micro désactivé');
 }
 
-// ========== CRÉDITS (conservé intégralement) ==========
-function activateCreditSelection() { /* ... idem ... */ }
-function selectCreditLine(n) { /* ... */ }
-function markCreditForPayment() { /* ... */ }
-function setCreditPaymentAmount(a) { /* ... */ }
-function validateCreditPayment() { /* ... */ }
-function closeCreditSelection() { /* ... */ }
-function selectAllCredits() { /* ... */ }
-function deselectAllCredits() { /* ... */ }
-async function deleteAllCredits() { /* ... */ }
-function deleteCreditByVoice(lineNumber) { /* ... */ }
-function deleteSelectedCredit() { /* ... */ }
-async function confirmDeleteCredit() { /* ... */ }
-function cancelDeleteCredit() { /* ... */ }
+// ========== CRÉDITS (FONCTIONS COMPLÈTES) ==========
+function activateCreditSelection() {
+    window.creditDeletePending = null;
+    window.creditSelectionMode = true;
+    window.creditSelectedIndex = -1;
+    window.creditSelectAll = false;
+    window.creditPaymentStep = 'idle';
+    if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
+    showVoiceResult('📋 Mode sélection');
+}
+
+function selectCreditLine(n) {
+    window.creditDeletePending = null;
+    var d = window.filteredCredits || window.allCreditsData || [];
+    var i = n - 1;
+    if (i < 0 || i >= d.length) { showVoiceResult('❌ Ligne ' + n); return; }
+    if (!window.creditSelectionMode) { showVoiceResult('⚠️ Sélectionnez d\'abord'); return; }
+    window.creditSelectedIndex = i;
+    window.creditSelectAll = false;
+    window.creditPaymentStep = 'selection';
+    window.creditPaymentAmount = 0;
+    if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
+    var c = d[i];
+    showVoiceResult('✅ Ligne ' + n + ' - ' + (c.clientName || '') + ' - ' + (c.remainingAmount || c.total || 0).toFixed(2) + ' MAD');
+}
+
+function markCreditForPayment() {
+    window.creditDeletePending = null;
+    if (window.creditSelectedIndex < 0) { showVoiceResult('⚠️ Aucune ligne'); return; }
+    var d = window.filteredCredits || window.allCreditsData || [];
+    var c = d[window.creditSelectedIndex];
+    if (!c) { showVoiceResult('❌ Introuvable'); return; }
+    if (c.paid) { showVoiceResult('⚠️ Déjà payé'); return; }
+    window.creditPaymentStep = 'payment';
+    window.creditPaymentAmount = 0;
+    var r = c.remainingAmount || c.total || 0;
+    showVoiceResult('💳 Restant: ' + r.toFixed(2) + ' MAD');
+    var z = document.getElementById('creditPaymentZone');
+    if (z) {
+        z.style.display = 'block';
+        var info = document.getElementById('creditPaymentInfo');
+        if (info) info.textContent = 'Client: ' + (c.clientName || 'Inconnu') + ' | Restant: ' + r.toFixed(2) + ' MAD';
+        var inp = document.getElementById('creditPaymentAmountInput');
+        if (inp) { inp.value = ''; inp.focus(); inp.select(); }
+    }
+}
+
+function setCreditPaymentAmount(a) {
+    if (window.creditSelectedIndex < 0) { showVoiceResult('⚠️ Aucun crédit'); return; }
+    if (a <= 0) { showVoiceResult('❌ Montant invalide'); return; }
+    window.creditPaymentAmount = a;
+    window.creditPaymentStep = 'amount';
+    var inp = document.getElementById('creditPaymentAmountInput');
+    if (inp) inp.value = a;
+    showVoiceResult('💰 ' + a.toFixed(2) + ' MAD');
+}
+
+function validateCreditPayment() {
+    if (window.creditSelectedIndex < 0) { showVoiceResult('⚠️ Aucun crédit'); return; }
+    var inp = document.getElementById('creditPaymentAmountInput');
+    var a = parseFloat(inp ? inp.value : window.creditPaymentAmount) || window.creditPaymentAmount || 0;
+    if (isNaN(a) || a <= 0) {
+        a = (window.filteredCredits || window.allCreditsData)[window.creditSelectedIndex]?.remainingAmount || (window.filteredCredits || window.allCreditsData)[window.creditSelectedIndex]?.total || 0;
+        if (a <= 0) { showVoiceResult('❌ Montant invalide'); return; }
+    }
+    var d = window.filteredCredits || window.allCreditsData || [];
+    var c = d[window.creditSelectedIndex];
+    if (!c) { showVoiceResult('❌ Introuvable'); return; }
+    var r = c.remainingAmount || c.total || 0;
+    if (a > r) { showVoiceResult('⚠️ > reste'); return; }
+    var nr = r - a;
+    var p = nr <= 0.01;
+    CacheDB.write('credits', c.id, {
+        paid: p,
+        remainingAmount: Math.max(0, nr),
+        amountGiven: (c.amountGiven || 0) + a,
+        paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, 'update').then(function() {
+        showVoiceResult(p ? '✅ Soldé !' : '✅ Payé. Reste: ' + nr.toFixed(2) + ' MAD');
+        window.creditPaymentStep = 'idle';
+        window.creditSelectedIndex = -1;
+        window.creditPaymentAmount = 0;
+        window.creditSelectionMode = false;
+        var z = document.getElementById('creditPaymentZone');
+        if (z) z.style.display = 'none';
+        if (typeof window.loadCredits === 'function') window.loadCredits();
+        CacheDB.sync();
+    }).catch(function(e) { showVoiceResult('❌ Erreur'); });
+}
+
+function closeCreditSelection() {
+    window.creditDeletePending = null;
+    window.creditSelectionMode = false;
+    window.creditSelectedIndex = -1;
+    window.creditSelectAll = false;
+    window.creditPaymentAmount = 0;
+    window.creditPaymentStep = 'idle';
+    var z = document.getElementById('creditPaymentZone');
+    if (z) z.style.display = 'none';
+    if (typeof window.applyCreditsFilters === 'function') {
+        window.creditsSearch = '';
+        window.currentPages.credits = 1;
+        window.filteredCredits = null;
+        window.applyCreditsFilters();
+    }
+    showVoiceResult('📋 Liste complète');
+}
+
+function selectAllCredits() {
+    window.creditSelectAll = true;
+    window.creditSelectedIndex = -1;
+    if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
+    showVoiceResult('✅ Tous sélectionnés');
+}
+
+function deselectAllCredits() {
+    window.creditSelectAll = false;
+    window.creditSelectedIndex = -1;
+    if (typeof window.renderCreditsTable === 'function') window.renderCreditsTable();
+    showVoiceResult('❌ Sélection annulée');
+}
+
+async function deleteAllCredits() {
+    var data = window.filteredCredits || window.allCreditsData || [];
+    if (data.length === 0) { showVoiceResult('⚠️ Aucun crédit à supprimer'); return; }
+    if (!confirm('Supprimer TOUS les crédits affichés (' + data.length + ') ?')) return;
+    try {
+        for (var i = 0; i < data.length; i++) {
+            await CacheDB.write('credits', data[i].id, null, 'delete');
+        }
+        window.allCreditsData = (window.allCreditsData || []).filter(function(c) {
+            return !data.some(function(d) { return d.id === c.id; });
+        });
+        if (typeof window.loadCredits === 'function') window.loadCredits();
+        window.creditSelectionMode = false;
+        window.creditSelectAll = false;
+        window.creditSelectedIndex = -1;
+        showVoiceResult('✅ ' + data.length + ' crédits supprimés');
+        CacheDB.sync();
+    } catch(e) { showVoiceResult('❌ Erreur suppression'); }
+}
+
+function deleteCreditByVoice(lineNumber) {
+    var data = window.filteredCredits || window.allCreditsData || [];
+    var i = lineNumber - 1;
+    if (i < 0 || i >= data.length) { showVoiceResult('❌ Ligne ' + lineNumber); return; }
+    var c = data[i];
+    if (!c) { showVoiceResult('❌ Crédit introuvable'); return; }
+    window.creditDeletePending = { lineNumber: lineNumber, credit: c };
+    showVoiceResult('🗑️ ' + (c.clientName || 'Inconnu') + ' ? Dites valide/annule');
+}
+
+function deleteSelectedCredit() {
+    if (window.creditSelectAll) { deleteAllCredits(); return; }
+    if (window.creditSelectedIndex < 0) { showVoiceResult('⚠️ Aucune ligne'); return; }
+    deleteCreditByVoice(window.creditSelectedIndex + 1);
+}
+
+async function confirmDeleteCredit() {
+    if (!window.creditDeletePending) { showVoiceResult('⚠️ Rien à supprimer'); return; }
+    var c = window.creditDeletePending.credit;
+    try {
+        if (typeof window.deleteCredit === 'function') {
+            await window.deleteCredit(c.id);
+        } else {
+            await db.collection('credits').doc(c.id).delete();
+            window.allCreditsData = (window.allCreditsData || []).filter(function(x) { return x.id !== c.id; });
+            if (typeof window.loadCredits === 'function') window.loadCredits();
+        }
+        window.creditSelectedIndex = -1;
+        window.creditSelectionMode = false;
+        showVoiceResult('✅ Supprimé');
+    } catch(e) { showVoiceResult('❌ Erreur'); }
+    window.creditDeletePending = null;
+}
+
+function cancelDeleteCredit() {
+    if (window.creditDeletePending) {
+        window.creditDeletePending = null;
+        showVoiceResult('↩️ Annulé');
+    }
+}
 
 // ========== EXPORTS ==========
 window.posToggleVoiceSearch = posToggleVoiceSearch;
