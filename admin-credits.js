@@ -1,4 +1,3 @@
-ADMIN-CREDITS.JS - MIXMAX MINIMARKET ====================
 // Gestion des crédits - Version corrigée (recherche description → nom officiel + suppression vocale)
 // Compatible avec la sélection multiple vocale (creditSelectAll)
 // CORRIGÉ : normalisation des accents et recherche robuste
