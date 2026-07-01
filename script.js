@@ -343,51 +343,58 @@ async function initApp() {
     showLogin();
 }
 
-// ========== NAVIGATION ==========
-// 🔥 MENU CORRIGÉ : ouverture/fermeture fiable
-function toggleSidebar() {
+// ========== GESTION DU MENU MOBILE (AMÉLIORÉE) ==========
+function openSidebar() {
     var s = document.getElementById('sidebar');
     var o = document.getElementById('sidebarOverlay');
-    if (!s || !o) return;
+    if (s) s.classList.add('open');
+    if (o) o.classList.add('active');
+}
 
-    if (s.classList.contains('open')) {
-        s.classList.remove('open');
-        o.classList.remove('active');
+function closeSidebar() {
+    var s = document.getElementById('sidebar');
+    var o = document.getElementById('sidebarOverlay');
+    if (s) s.classList.remove('open');
+    if (o) o.classList.remove('active');
+}
+
+function toggleSidebar() {
+    var s = document.getElementById('sidebar');
+    if (s && s.classList.contains('open')) {
+        closeSidebar();
     } else {
-        s.classList.add('open');
-        o.classList.add('active');
+        openSidebar();
     }
+}
+
+function openClientSidebar() {
+    var s = document.getElementById('clientSidebar');
+    var o = document.getElementById('clientSidebarOverlay');
+    if (s) s.classList.add('open');
+    if (o) o.classList.add('active');
+}
+
+function closeClientSidebar() {
+    var s = document.getElementById('clientSidebar');
+    var o = document.getElementById('clientSidebarOverlay');
+    if (s) s.classList.remove('open');
+    if (o) o.classList.remove('active');
 }
 
 function toggleClientSidebar() {
     var s = document.getElementById('clientSidebar');
-    var o = document.getElementById('clientSidebarOverlay');
-    if (!s || !o) return;
-
-    if (s.classList.contains('open')) {
-        s.classList.remove('open');
-        o.classList.remove('active');
+    if (s && s.classList.contains('open')) {
+        closeClientSidebar();
     } else {
-        s.classList.add('open');
-        o.classList.add('active');
+        openClientSidebar();
     }
 }
 
-// 🔥 FERMETURE AVEC LA TOUCHE ÉCHAP
+// Fermeture avec la touche Échap
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-        var sidebar = document.getElementById('sidebar');
-        var overlay = document.getElementById('sidebarOverlay');
-        if (sidebar && sidebar.classList.contains('open')) {
-            sidebar.classList.remove('open');
-            if (overlay) overlay.classList.remove('active');
-        }
-        var clientSidebar = document.getElementById('clientSidebar');
-        var clientOverlay = document.getElementById('clientSidebarOverlay');
-        if (clientSidebar && clientSidebar.classList.contains('open')) {
-            clientSidebar.classList.remove('open');
-            if (clientOverlay) clientOverlay.classList.remove('active');
-        }
+        closeSidebar();
+        closeClientSidebar();
     }
 });
 
@@ -470,8 +477,8 @@ function navigateTo(page) {
         content.innerHTML = '<div class="content-card"><h3>' + (titles[page] || 'Page') + '</h3><p style="text-align:center;padding:40px;">En développement</p></div>';
     }
 
-    var s = document.getElementById('sidebar'),
-        o = document.getElementById('sidebarOverlay'); if (s && s.classList.contains('open')) { s.classList.remove('open'); if (o) o.classList.remove('active'); }
+    // Fermer le menu après navigation
+    closeSidebar();
 }
 
 function updateSidebarUserInfo() { var el = document.getElementById('sidebarUserInfo'); if (el && window.currentUserData) { el.innerHTML = '<i class="fas fa-user-circle"></i> ' + window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom + ' <small style="color:#A67C52;">(' + window.currentUserData.userData.role + ')</small>'; } }
@@ -482,4 +489,4 @@ document.addEventListener('click', function(e) { var o = document.getElementById
 window.addEventListener('online', function() { console.log('✅ En ligne'); if (typeof CacheDB !== 'undefined' && CacheDB.sync) CacheDB.sync().catch(function(e) { console.warn(e); }); });
 window.addEventListener('offline', function() { console.warn('⚠️ Mode hors ligne'); });
 
-console.log('☕ Mixmax Minimarket - Script principal OK (navigation instantanée + menu corrigé)');
+console.log('☕ Mixmax Minimarket - Script principal OK (navigation instantanée + menu amélioré)');
