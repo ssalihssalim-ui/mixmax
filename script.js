@@ -481,6 +481,68 @@ function navigateTo(page) {
     closeSidebar();
 }
 
+// ========== FALLBACK PAGE CRÉDITS (si admin-credits.js non chargé) ==========
+window.loadCreditsPage = window.loadCreditsPage || async function(c) {
+    window.creditsPeriod = 'all';
+    window.creditsSearch = '';
+    window.creditSelectionMode = false;
+    window.creditSelectedIndex = -1;
+    window.creditPaymentAmount = 0;
+    window.creditPaymentStep = 'idle';
+    window.creditSelectAll = false;
+
+    if (!window.sortOrders.credits) window.sortOrders.credits = {};
+    if (!window.sortOrders.credits.createdAt) window.sortOrders.credits.createdAt = 'desc';
+    
+    c.innerHTML = '<div class="content-card">' +
+        '<div class="card-header">' +
+        '<h3><i class="fas fa-credit-card"></i> Crédits</h3>' +
+        '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
+        '<div style="position:relative;">' +
+        '<input type="text" id="creditsSearchInput" placeholder="🔍 Rechercher (client, description)..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:250px;" onkeyup="searchClientInCreditsDropdown(this.value)" onfocus="searchClientInCreditsDropdown(this.value)" autocomplete="off">' +
+        '<div id="creditsClientDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:2px solid #e2e8f0;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:50;box-shadow:0 5px 15px rgba(0,0,0,0.1);"></div>' +
+        '</div>' +
+        '<input type="text" id="creditsVoiceDisplay" placeholder="🎤 Audio..." style="padding:8px 12px; border:2px solid #16a34a; border-radius:8px; width:180px; background:#f0fdf4; color:#14532d; font-weight:600;" readonly>' +
+        '<select id="creditsPeriodSelect" style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px;" onchange="window.creditsPeriod = this.value; window.currentPages.credits=1; applyCreditsFilters();">' + getPeriodOptions('all') + '</select>' +
+        '<button class="btn-add" onclick="loadCredits()"><i class="fas fa-sync"></i> Actualiser</button>' +
+        '</div></div>' +
+        '<div id="creditPaymentZone" style="display:none; background:#f0fdf4; border:2px solid #16a34a; border-radius:12px; padding:12px 16px; margin-bottom:15px;">' +
+        '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">' +
+        '<div><strong>💳 Paiement en cours</strong><br><span id="creditPaymentInfo" style="font-size:0.85rem; color:#14532d;">Aucun crédit sélectionné</span></div>' +
+        '<div style="display:flex; align-items:center; gap:10px;">' +
+        '<label style="font-weight:600; font-size:0.9rem;">Montant :</label>' +
+        '<input type="number" id="creditPaymentAmountInput" placeholder="0.00" step="0.01" style="width:120px; padding:6px 10px; border:2px solid #16a34a; border-radius:8px; font-size:0.9rem;" onfocus="this.select();">' +
+        '<button class="btn-save" onclick="validateCreditPayment()" style="padding:6px 14px; font-size:0.85rem; margin:0;"><i class="fas fa-check"></i> Valider</button>' +
+        '<button class="btn-cancel" onclick="closeCreditSelection()" style="padding:6px 14px; font-size:0.85rem; margin:0;">Annuler</button>' +
+        '</div></div></div>' +
+        '<div id="creditsTableContainer"><p style="text-align:center;padding:40px;">Chargement...</p></div>' +
+        '<div id="creditsPagination" style="margin-top:10px;"></div>' +
+        '</div>';
+    
+    // Fonction de chargement des crédits intégrée
+    async function loadCreditsLocal() {
+        try {
+            const snapshot = await db.collection('credits').orderBy('createdAt', 'desc').limit(2000).get();
+            window.allCreditsData = [];
+            snapshot.forEach(function(dc) {
+                var d = dc.data();
+                d.id = dc.id;
+                window.allCreditsData.push(d);
+            });
+        } catch (e) {
+            console.error('Erreur chargement crédits:', e);
+        }
+        window.currentPages.credits = 1;
+        if (typeof applyCreditsFilters === 'function') {
+            applyCreditsFilters();
+        } else {
+            document.getElementById('creditsTableContainer').innerHTML = '<p style="text-align:center;padding:40px;">Impossible de charger les crédits.</p>';
+        }
+    }
+    window.loadCredits = window.loadCredits || loadCreditsLocal;
+    loadCreditsLocal();
+};
+
 function updateSidebarUserInfo() { var el = document.getElementById('sidebarUserInfo'); if (el && window.currentUserData) { el.innerHTML = '<i class="fas fa-user-circle"></i> ' + window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom + ' <small style="color:#A67C52;">(' + window.currentUserData.userData.role + ')</small>'; } }
 
 function updateClientSidebarInfo() { var el = document.getElementById('clientSidebarInfo'); if (el && window.currentUserData) { el.innerHTML = '<i class="fas fa-user-circle"></i> ' + window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom; } }
@@ -489,4 +551,4 @@ document.addEventListener('click', function(e) { var o = document.getElementById
 window.addEventListener('online', function() { console.log('✅ En ligne'); if (typeof CacheDB !== 'undefined' && CacheDB.sync) CacheDB.sync().catch(function(e) { console.warn(e); }); });
 window.addEventListener('offline', function() { console.warn('⚠️ Mode hors ligne'); });
 
-console.log('☕ Mixmax Minimarket - Script principal OK (navigation instantanée + menu amélioré)');
+console.log('☕ Mixmax Minimarket - Script principal OK (navigation instantanée + menu amélioré + fallback crédits)');
