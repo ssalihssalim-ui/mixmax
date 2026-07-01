@@ -343,7 +343,7 @@ async function initApp() {
     showLogin();
 }
 
-// ========== GESTION DU MENU MOBILE (AMÉLIORÉE) ==========
+// ========== GESTION DU MENU MOBILE ==========
 function openSidebar() {
     var s = document.getElementById('sidebar');
     var o = document.getElementById('sidebarOverlay');
@@ -367,6 +367,7 @@ function toggleSidebar() {
     }
 }
 
+// Version client
 function openClientSidebar() {
     var s = document.getElementById('clientSidebar');
     var o = document.getElementById('clientSidebarOverlay');
@@ -390,7 +391,28 @@ function toggleClientSidebar() {
     }
 }
 
-// Fermeture avec la touche Échap
+// 🔥 Gestionnaire global : fermer le menu si on clique en dehors (contenu, overlay, etc.)
+document.addEventListener('click', function(e) {
+    var sidebar = document.getElementById('sidebar');
+    var overlay = document.getElementById('sidebarOverlay');
+    var toggleBtn = document.querySelector('#dashboardPage .mobile-menu-btn');
+    if (sidebar && sidebar.classList.contains('open')) {
+        // Si le clic n'est ni dans le menu, ni sur le bouton toggle
+        if (!sidebar.contains(e.target) && e.target !== toggleBtn && !toggleBtn.contains(e.target)) {
+            closeSidebar();
+        }
+    }
+    var clientSidebar = document.getElementById('clientSidebar');
+    var clientOverlay = document.getElementById('clientSidebarOverlay');
+    var clientToggleBtn = document.querySelector('#clientPage .mobile-menu-btn');
+    if (clientSidebar && clientSidebar.classList.contains('open')) {
+        if (!clientSidebar.contains(e.target) && e.target !== clientToggleBtn && !clientToggleBtn.contains(e.target)) {
+            closeClientSidebar();
+        }
+    }
+});
+
+// Fermer aussi avec Échap
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeSidebar();
