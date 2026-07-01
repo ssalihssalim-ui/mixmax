@@ -125,41 +125,51 @@ function buildProductIndex() {
     productIndexBuilt = true;
 }
 
+// 🔥 NOUVELLE VERSION : UNIQUEMENT LE PREMIER + DEUXIÈME MOT
 function fastFindProduct(query) {
     buildProductIndex();
     if (!query) return [];
+
     var cleaned = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
     var mots = cleaned.split(/[\s,;.]+/);
     if (mots.length === 0) return [];
 
-    // Premier mot pour une recherche exacte et immédiate
+    // Prendre uniquement le premier mot et éventuellement le deuxième
     var firstWord = mots[0];
+    var searchTerm = firstWord;
+    if (mots.length >= 2) {
+        searchTerm = firstWord + ' ' + mots[1];
+    }
+    // Ignorer tous les mots suivants
+
+    // Chercher les candidats à partir du premier mot (index)
     var candidates = productNameIndex[firstWord] || [];
+    if (candidates.length === 0) return [];
 
-    if (candidates.length === 1) return candidates;
+    // Filtrer ceux dont le nom normalisé contient la chaîne de recherche (1 ou 2 mots)
+    var filtered = candidates.filter(function(p) {
+        var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return nom.indexOf(searchTerm) !== -1;
+    });
 
-    if (candidates.length > 1) {
-        // Chercher le nom exact (le produit dont le nom complet correspond exactement à la recherche)
-        var exact = candidates.find(function(p) {
-            var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-            return nom === cleaned;
-        });
-        if (exact) return [exact];
-        // Sinon, on prend le plus court comme le plus probable
-        candidates.sort(function(a, b) { return (a.nom||'').length - (b.nom||'').length; });
+    if (filtered.length === 0) {
+        // Si aucun avec la chaîne 2 mots (ou 1 mot), on prend le premier mot seul (comme avant)
         return [candidates[0]];
     }
 
-    // Aucun résultat avec le premier mot : fallback sur toute la liste (recherche traditionnelle)
-    var products = window.posProductsList || [];
-    var best = null, bestLen = 0;
-    products.forEach(function(p) {
+    // S'il y a exactement un résultat, on le retourne
+    if (filtered.length === 1) return filtered;
+
+    // Plusieurs candidats : chercher un nom exact
+    var exact = filtered.find(function(p) {
         var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        var desc = (p.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        if (nom.includes(cleaned) && nom.length > bestLen) { best = p; bestLen = nom.length; }
-        if (desc.includes(cleaned) && desc.length > bestLen) { best = p; bestLen = desc.length; }
+        return nom === searchTerm;
     });
-    return best ? [best] : [];
+    if (exact) return [exact];
+
+    // Sinon, le plus court est le plus probable
+    filtered.sort(function(a, b) { return (a.nom||'').length - (b.nom||'').length; });
+    return [filtered[0]];
 }
 
 // ========== COMMANDES ==========
@@ -698,7 +708,6 @@ window.onProductAdded = function(pid) {
 window.selectAllCredits = selectAllCredits;
 window.deselectAllCredits = deselectAllCredits;
 window.deleteAllCredits = deleteAllCredits;
-// 🔥 AJOUTER CES DEUX LIGNES CI-DESSOUS :
 window.buildClientIndex = buildClientIndex;
 window.buildProductIndex = buildProductIndex;
 
