@@ -344,9 +344,52 @@ async function initApp() {
 }
 
 // ========== NAVIGATION ==========
-function toggleSidebar() { var s = document.getElementById('sidebar'), o = document.getElementById('sidebarOverlay'); if (s) s.classList.toggle('open'); if (o) o.classList.toggle('active'); }
+// 🔥 MENU CORRIGÉ : ouverture/fermeture fiable
+function toggleSidebar() {
+    var s = document.getElementById('sidebar');
+    var o = document.getElementById('sidebarOverlay');
+    if (!s || !o) return;
 
-function toggleClientSidebar() { var s = document.getElementById('clientSidebar'), o = document.getElementById('clientSidebarOverlay'); if (s) s.classList.toggle('open'); if (o) o.classList.toggle('active'); }
+    if (s.classList.contains('open')) {
+        s.classList.remove('open');
+        o.classList.remove('active');
+    } else {
+        s.classList.add('open');
+        o.classList.add('active');
+    }
+}
+
+function toggleClientSidebar() {
+    var s = document.getElementById('clientSidebar');
+    var o = document.getElementById('clientSidebarOverlay');
+    if (!s || !o) return;
+
+    if (s.classList.contains('open')) {
+        s.classList.remove('open');
+        o.classList.remove('active');
+    } else {
+        s.classList.add('open');
+        o.classList.add('active');
+    }
+}
+
+// 🔥 FERMETURE AVEC LA TOUCHE ÉCHAP
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebarOverlay');
+        if (sidebar && sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+            if (overlay) overlay.classList.remove('active');
+        }
+        var clientSidebar = document.getElementById('clientSidebar');
+        var clientOverlay = document.getElementById('clientSidebarOverlay');
+        if (clientSidebar && clientSidebar.classList.contains('open')) {
+            clientSidebar.classList.remove('open');
+            if (clientOverlay) clientOverlay.classList.remove('active');
+        }
+    }
+});
 
 function showAuthPage() { document.getElementById('authPage').classList.remove('hidden');
     document.getElementById('dashboardPage').classList.add('hidden');
@@ -439,4 +482,4 @@ document.addEventListener('click', function(e) { var o = document.getElementById
 window.addEventListener('online', function() { console.log('✅ En ligne'); if (typeof CacheDB !== 'undefined' && CacheDB.sync) CacheDB.sync().catch(function(e) { console.warn(e); }); });
 window.addEventListener('offline', function() { console.warn('⚠️ Mode hors ligne'); });
 
-console.log('☕ Mixmax Minimarket - Script principal OK (navigation instantanée)');
+console.log('☕ Mixmax Minimarket - Script principal OK (navigation instantanée + menu corrigé)');
