@@ -1,4 +1,4 @@
-// ==================== POS-AUDIO.JS v9.3 – RECHERCHE PRODUIT INSTANTANÉE ====================
+// ==================== POS-AUDIO.JS v9.4 – RECHERCHE PRODUIT INSTANTANÉE (POS + ADMIN) ====================
 // Mixmax Minimarket – Reconnaissance vocale optimisée
 
 var voiceRecognition = null;
@@ -100,7 +100,7 @@ function fastFindClient(query) {
 
 function invalidateClientIndex() { clientIndexBuilt = false; clientSearchIndex = {}; }
 
-// ========== INDEX PRODUIT (RAPIDE) – DEUX PREMIERS MOTS UNIQUEMENT ==========
+// ========== INDEX PRODUIT (RAPIDE) – POUR POS ==========
 function buildProductIndex() {
     if (productIndexBuilt || !window.posProductsList?.length) return;
     productNameIndex = {};
@@ -149,6 +149,50 @@ function fastFindProduct(query) {
     if (filtered.length === 0) {
         return [candidates[0]];
     }
+
+    if (filtered.length === 1) return filtered;
+
+    var exact = filtered.find(function(p) {
+        var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return nom === searchTerm;
+    });
+    if (exact) return [exact];
+
+    filtered.sort(function(a, b) { return (a.nom||'').length - (b.nom||'').length; });
+    return [filtered[0]];
+}
+
+// ========== INDEX PRODUIT (ADMIN) – RAPIDE ==========
+function fastFindProductAdmin(query) {
+    if (!window.allProductsData || !window.allProductsData.length) return [];
+    var cleaned = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    var mots = cleaned.split(/[\s,;.]+/);
+    if (mots.length === 0) return [];
+
+    var firstWord = mots[0];
+    var searchTerm = firstWord;
+    if (mots.length >= 2) searchTerm = firstWord + ' ' + mots[1];
+
+    // Construire un index temporaire (ou permanent, pour l'instant juste pour cette recherche)
+    var adminIndex = {};
+    window.allProductsData.forEach(function(p) {
+        var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        nom.split(/[\s,;.]+/).forEach(function(w) {
+            if (w.length < 2) return;
+            if (!adminIndex[w]) adminIndex[w] = [];
+            adminIndex[w].push(p);
+        });
+    });
+
+    var candidates = adminIndex[firstWord] || [];
+    if (candidates.length === 0) return [];
+
+    var filtered = candidates.filter(function(p) {
+        var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return nom.indexOf(searchTerm) !== -1;
+    });
+
+    if (filtered.length === 0) return [candidates[0]];
 
     if (filtered.length === 1) return filtered;
 
@@ -221,9 +265,8 @@ function parseVoiceCommand(transcript) {
     if (cleaned.includes('catégories')) return { type: 'navigate', page: 'categories' };
     if (cleaned.includes('point de vente') || cleaned.includes('pos') || cleaned.includes('caisse') || cleaned.includes('encaissement')) return { type: 'navigate', page: 'pos' };
 
-    // RECHERCHE PRODUIT – étendue aux pages POS, Dashboard, ET Produits
+    // RECHERCHE PRODUIT – POS / Admin
     if (voiceMode === 'search') {
-        // Sur POS/Dashboard : comportement normal avec catégorie
         if ((currentPage === 'POS' || currentPage === 'Dashboard') && (window.posStep || 0) === 1) {
             var products = window.posProductsList || [];
             if (products.length) {
@@ -237,13 +280,9 @@ function parseVoiceCommand(transcript) {
             if (cleaned.includes('efface') || cleaned.includes('vider')) return { type: 'clear' };
             if (cleaned.includes('termine') || cleaned.includes('terminer') || cleaned.includes('fin')) return { type: 'finalize' };
         }
-        // Sur la page Produits (admin) : recherche dans la liste
         else if (currentPage === 'Produits') {
-            var productsAdmin = window.allProductsData || [];
-            if (productsAdmin.length) {
-                var bestAdmin = fastFindProduct(cleaned)[0]; // même fonction
-                if (bestAdmin) return { type: 'search_product', product: bestAdmin, page: 'products' };
-            }
+            var bestAdmin = fastFindProductAdmin(cleaned)[0];
+            if (bestAdmin) return { type: 'search_product', product: bestAdmin, page: 'products' };
         }
     }
 
@@ -463,6 +502,7 @@ function posStartVoiceRecording() {
                 }
             }
         } else {
+            // Chercher d'abord l'input du POS
             var si = document.getElementById('posSearchInput');
             if (si) {
                 if (final) {
@@ -474,6 +514,21 @@ function posStartVoiceRecording() {
                 } else if (interim && interim !== lastInterim) {
                     si.value = interim + ' ✍️';
                     lastInterim = interim;
+                }
+            } else {
+                // Si pas de posSearchInput, chercher l'input de la page Produits (admin)
+                var pi = document.getElementById('productSearchInput');
+                if (pi) {
+                    if (final) {
+                        pi.value = final;
+                        showProcessingIndicator();
+                        var cmd = parseVoiceCommand(final);
+                        if (cmd.type !== 'ignore') handleVoiceCommand(cmd);
+                        hideVoiceFlowIndicator();
+                    } else if (interim && interim !== lastInterim) {
+                        pi.value = interim + ' ✍️';
+                        lastInterim = interim;
+                    }
                 }
             }
         }
@@ -575,4 +630,4 @@ window.deleteAllCredits = deleteAllCredits;
 window.buildClientIndex = buildClientIndex;
 window.buildProductIndex = buildProductIndex;
 
-console.log('🎤 Module vocal – recherche produit instantanée OK');
+console.log('🎤 Module vocal – recherche produit instantanée (POS + Admin) OK');
