@@ -184,7 +184,7 @@ function parseVoiceCommand(transcript) {
         return { type: 'ignore' };
     }
 
-    // MODE PAIEMENT (étape 2)
+    // MODE PAIEMENT (étape 2) – uniquement sur POS
     if (voiceMode === 'payment' || (currentPage === 'POS' && (window.posStep || 0) === 2)) {
         switch (window.voicePaymentState) {
             case 0:
@@ -211,7 +211,7 @@ function parseVoiceCommand(transcript) {
         }
     }
 
-    // NAVIGATION – "liste des produits" ajouté
+    // NAVIGATION
     if (cleaned.includes('crédits') || cleaned.includes('impayés') || cleaned.includes('liste des crédits') || cleaned.includes('dettes') || cleaned.includes('ardoises')) return { type: 'navigate', page: 'credits' };
     if (cleaned.includes('ventes') || cleaned.includes('vente') || cleaned.includes('historique ventes') || cleaned.includes('recettes')) return { type: 'navigate', page: 'ventes' };
     if (cleaned.includes('dashboard') || cleaned.includes('accueil') || cleaned.includes('home') || cleaned.includes('sommaire')) return { type: 'navigate', page: 'dashboard' };
@@ -221,19 +221,30 @@ function parseVoiceCommand(transcript) {
     if (cleaned.includes('catégories')) return { type: 'navigate', page: 'categories' };
     if (cleaned.includes('point de vente') || cleaned.includes('pos') || cleaned.includes('caisse') || cleaned.includes('encaissement')) return { type: 'navigate', page: 'pos' };
 
-    // RECHERCHE PRODUIT (étape 1)
-    if ((currentPage === 'POS' || currentPage === 'Dashboard') && voiceMode === 'search' && (window.posStep || 0) === 1) {
-        var products = window.posProductsList || [];
-        if (products.length) {
-            var best = fastFindProduct(cleaned)[0];
-            if (best) return { type: 'search_product', product: best };
+    // RECHERCHE PRODUIT – étendue aux pages POS, Dashboard, ET Produits
+    if (voiceMode === 'search') {
+        // Sur POS/Dashboard : comportement normal avec catégorie
+        if ((currentPage === 'POS' || currentPage === 'Dashboard') && (window.posStep || 0) === 1) {
+            var products = window.posProductsList || [];
+            if (products.length) {
+                var best = fastFindProduct(cleaned)[0];
+                if (best) return { type: 'search_product', product: best, page: 'pos' };
+            }
+            // commandes panier
+            if (cleaned.includes('passe') || cleaned.includes('passer') || cleaned.includes('suivant')) return { type: 'next' };
+            if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('confirmer') || cleaned.includes('ok')) return { type: 'validate' };
+            if (cleaned.includes('annule') || cleaned.includes('annuler')) return { type: 'cancel' };
+            if (cleaned.includes('efface') || cleaned.includes('vider')) return { type: 'clear' };
+            if (cleaned.includes('termine') || cleaned.includes('terminer') || cleaned.includes('fin')) return { type: 'finalize' };
         }
-        if (cleaned.includes('passe') || cleaned.includes('passer') || cleaned.includes('suivant')) return { type: 'next' };
-        if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('confirmer') || cleaned.includes('ok')) return { type: 'validate' };
-        if (cleaned.includes('annule') || cleaned.includes('annuler')) return { type: 'cancel' };
-        if (cleaned.includes('efface') || cleaned.includes('vider')) return { type: 'clear' };
-        if (cleaned.includes('termine') || cleaned.includes('terminer') || cleaned.includes('fin')) return { type: 'finalize' };
-        return { type: 'ignore' };
+        // Sur la page Produits (admin) : recherche dans la liste
+        else if (currentPage === 'Produits') {
+            var productsAdmin = window.allProductsData || [];
+            if (productsAdmin.length) {
+                var bestAdmin = fastFindProduct(cleaned)[0]; // même fonction
+                if (bestAdmin) return { type: 'search_product', product: bestAdmin, page: 'products' };
+            }
+        }
     }
 
     return { type: 'ignore' };
@@ -252,29 +263,44 @@ function handleVoiceCommand(cmd) {
     var cp = document.getElementById('pageTitle')?.textContent || '';
     switch (cmd.type) {
         case 'search_product':
-            var searchInput = document.getElementById('posSearchInput');
-            if (searchInput && cmd.product) {
-                searchInput.value = cmd.product.nom;
-
-                if (cmd.product.categorie && typeof window.posFilterCategory === 'function') {
-                    window.posFilterCategory(cmd.product.categorie);
-                }
-
-                setTimeout(function() {
-                    var cards = document.querySelectorAll('.pos-product-card');
-                    for (var i = 0; i < cards.length; i++) {
-                        var card = cards[i];
-                        var nameEl = card.querySelector('.pos-product-name');
-                        if (nameEl && nameEl.textContent.trim().toLowerCase() === cmd.product.nom.toLowerCase()) {
-                            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            card.style.boxShadow = '0 0 0 3px #A67C52';
-                            setTimeout(function() { card.style.boxShadow = ''; }, 1500);
-                            break;
-                        }
+            // Si la commande vient de la page Produits (admin)
+            if (cmd.page === 'products' || cp === 'Produits') {
+                var adminInput = document.getElementById('productSearchInput');
+                if (adminInput && cmd.product) {
+                    adminInput.value = cmd.product.nom;
+                    window.productSearchQuery = cmd.product.nom.toLowerCase().trim();
+                    if (typeof renderProductsTable === 'function') {
+                        renderProductsTable();
                     }
-                }, 300);
+                    showVoiceResult('🔍 ' + cmd.product.nom + ' – filtré');
+                }
+            }
+            // Comportement POS (inchangé)
+            else {
+                var searchInput = document.getElementById('posSearchInput');
+                if (searchInput && cmd.product) {
+                    searchInput.value = cmd.product.nom;
 
-                showVoiceResult('🔍 ' + cmd.product.nom + ' – cliquez pour ajouter');
+                    if (cmd.product.categorie && typeof window.posFilterCategory === 'function') {
+                        window.posFilterCategory(cmd.product.categorie);
+                    }
+
+                    setTimeout(function() {
+                        var cards = document.querySelectorAll('.pos-product-card');
+                        for (var i = 0; i < cards.length; i++) {
+                            var card = cards[i];
+                            var nameEl = card.querySelector('.pos-product-name');
+                            if (nameEl && nameEl.textContent.trim().toLowerCase() === cmd.product.nom.toLowerCase()) {
+                                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                card.style.boxShadow = '0 0 0 3px #A67C52';
+                                setTimeout(function() { card.style.boxShadow = ''; }, 1500);
+                                break;
+                            }
+                        }
+                    }, 300);
+
+                    showVoiceResult('🔍 ' + cmd.product.nom + ' – cliquez pour ajouter');
+                }
             }
             hideVoiceFlowIndicator();
             break;
