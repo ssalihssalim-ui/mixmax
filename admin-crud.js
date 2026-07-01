@@ -102,7 +102,7 @@ function updateIngredientUnit(selectEl) {
     if (stockItem) { unitSpan.textContent = stockItem.unite || ''; } else { unitSpan.textContent = ''; }
 }
 
-// ✅ AJOUT DE LA BARRE DE RECHERCHE
+// ✅ BARRE DE RECHERCHE
 function loadProductsPage(c) {
     c.innerHTML = '<div class="content-card"><div class="card-header"><h3><i class="fas fa-box"></i> Produits</h3><div style="display:flex;gap:10px;flex-wrap:wrap;">' +
         '<input type="text" id="productSearchInput" placeholder="🔍 Rechercher un produit..." style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; width:220px;" onkeyup="window.productSearchQuery = this.value.trim().toLowerCase(); window.currentPages.products=1; renderProductsTable();">' +
@@ -126,19 +126,22 @@ async function loadCategoriesInFilter() {
 function filterProducts() { selectedCategoryFilter = document.getElementById('categoryFilter').value; currentPages.products = 1; renderProductsTable(); }
 
 async function loadProducts() {
-    currentPages.products = 1; allProductsData = [];
+    currentPages.products = 1; 
+    // 🔥 Remplacé par window.allProductsData
+    window.allProductsData = [];
     try {
         const snapshot = await db.collection('products').get();
-        snapshot.forEach(d => { let dd = d.data(); dd.id = d.id; let prix = (dd.prixPromo && dd.prixPromo > 0) ? dd.prixPromo : (dd.prixVente || 0); dd.profit = (prix - (dd.prixAchat || 0)); allProductsData.push(dd); });
-        for (let doc of allProductsData) await CacheDB.set('products', doc.id, doc);
+        snapshot.forEach(d => { let dd = d.data(); dd.id = d.id; let prix = (dd.prixPromo && dd.prixPromo > 0) ? dd.prixPromo : (dd.prixVente || 0); dd.profit = (prix - (dd.prixAchat || 0)); window.allProductsData.push(dd); });
+        for (let doc of window.allProductsData) await CacheDB.set('products', doc.id, doc);
     } catch (e) { console.error(e); }
     renderProductsTable();
 }
 
-// ✅ AJOUT DU FILTRE DE RECHERCHE DANS LE RENDU
+// ✅ RENDU AVEC FILTRE DE RECHERCHE
 function renderProductsTable() {
     var tb = document.querySelector('#productsTable tbody'); if (!tb) return;
-    var data = allProductsData.slice();
+    // 🔥 Utiliser window.allProductsData
+    var data = window.allProductsData.slice();
     if (selectedCategoryFilter) data = data.filter(function(d) { return d.categorie === selectedCategoryFilter; });
     // Filtre de recherche par nom ou description
     if (window.productSearchQuery) {
@@ -193,8 +196,21 @@ function saveProduct() {
     var sf = function(img) {
         var d = { nom: n, categorie: document.getElementById('prodCat').value, prixAchat: parseFloat(document.getElementById('prodPA').value) || 0, prixVente: parseFloat(document.getElementById('prodPV').value) || 0, prixPromo: parseFloat(document.getElementById('prodPromo').value) || 0, stock: parseInt(document.getElementById('prodStock').value) || 0, vendues: 0, ca: 0, tempsPrep: document.getElementById('prodTemps').value, disponible: document.getElementById('prodDispo').value === '1', description: document.getElementById('prodDesc').value, ingredients: ingredients };
         if (img) d.imageBase64 = img;
-        if (editingId) { CacheDB.write('products', editingId, d, 'update').then(function() { var idx = allProductsData.findIndex(function(x) { return x.id === editingId; }); if (idx !== -1) allProductsData[idx] = Object.assign({}, allProductsData[idx], d, { id: editingId }); closeModal(); renderProductsTable(); CacheDB.sync(); }); }
-        else { CacheDB.write('products', null, d, 'add').then(function(newId) { d.id = newId; allProductsData.push(d); closeModal(); renderProductsTable(); CacheDB.sync(); }); }
+        if (editingId) { 
+            CacheDB.write('products', editingId, d, 'update').then(function() { 
+                // 🔥 Mise à jour dans window.allProductsData
+                var idx = window.allProductsData.findIndex(function(x) { return x.id === editingId; }); 
+                if (idx !== -1) window.allProductsData[idx] = Object.assign({}, window.allProductsData[idx], d, { id: editingId }); 
+                closeModal(); renderProductsTable(); CacheDB.sync(); 
+            }); 
+        }
+        else { 
+            CacheDB.write('products', null, d, 'add').then(function(newId) { 
+                d.id = newId; 
+                window.allProductsData.push(d); 
+                closeModal(); renderProductsTable(); CacheDB.sync(); 
+            }); 
+        }
     };
     if (f) fileToBase64(f, sf); else sf(null);
 }
@@ -328,4 +344,4 @@ function saveFournisseur() {
 function editFournisseur(id) { db.collection('fournisseurs').doc(id).get().then(function(doc) { if (doc.exists) { editingId = id; currentCollection = 'fournisseurs'; openFournisseurForm(doc.data()); } }); }
 function deleteFournisseur(id) { if (confirm('Supprimer ce fournisseur ?')) { CacheDB.write('fournisseurs', id, null, 'delete').then(function() { alert('Supprimé'); loadFournisseurs(); CacheDB.sync(); }); } }
 
-console.log('🛒 Mixmax Minimarket - Admin CRUD chargé');
+console.log('🛒 Mixmax Minimarket - Admin CRUD chargé (allProductsData global)');
