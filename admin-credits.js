@@ -1,11 +1,10 @@
 // ==================== ADMIN-CREDITS.JS - MIXMAX MINIMARKET ====================
-// Gestion des crédits - Version corrigée
-// Compatible avec la sélection multiple vocale
+// Gestion des crédits - Sélection multiple, suppression groupée, période vocale
 
 window.creditsPeriod = window.creditsPeriod || 'all';
 window.creditsSearch = window.creditsSearch || '';
-window.creditSelectionMode = false;
-window.creditSelectedIndex = -1;
+window.creditSelectionMode = false;               // Mode sélection multiple
+window.creditSelectedIds = window.creditSelectedIds || [];   // IDs sélectionnés
 window.creditPaymentAmount = 0;
 window.creditPaymentStep = 'idle';
 window.allCreditsData = window.allCreditsData || [];
@@ -19,7 +18,7 @@ async function loadCreditsPage(c) {
     window.creditsPeriod = 'all';
     window.creditsSearch = '';
     window.creditSelectionMode = false;
-    window.creditSelectedIndex = -1;
+    window.creditSelectedIds = [];
     window.creditPaymentAmount = 0;
     window.creditPaymentStep = 'idle';
     window.creditSelectAll = false;
@@ -58,6 +57,8 @@ async function loadCreditsPage(c) {
         '<input type="text" id="creditsVoiceDisplay" placeholder="🎤 Audio..." style="padding:8px 12px; border:2px solid #16a34a; border-radius:8px; width:180px; background:#f0fdf4; color:#14532d; font-weight:600;" readonly>' +
         '<select id="creditsPeriodSelect" style="padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px;" onchange="window.creditsPeriod = this.value; window.currentPages.credits=1; applyCreditsFilters();">' + getPeriodOptions('all') + '</select>' +
         '<button class="btn-add" onclick="loadCredits()"><i class="fas fa-sync"></i> Actualiser</button>' +
+        '<button id="toggleSelectionBtn" class="btn-add" onclick="toggleCreditSelectionMode()"><i class="fas fa-check-square"></i> Sélectionner</button>' +
+        '<button id="deleteSelectedBtn" class="btn-delete" onclick="deleteSelectedCredits()" style="display:none; background:#fee2e2; color:#b91c1c;"><i class="fas fa-trash"></i> Supprimer sélection</button>' +
         '</div></div>' +
         '<div id="creditPaymentZone" style="display:none; background:#f0fdf4; border:2px solid #16a34a; border-radius:12px; padding:12px 16px; margin-bottom:15px;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">' +
@@ -170,7 +171,7 @@ function renderCreditsTable() {
         '<th>Actions</th>';
     
     if (window.creditSelectionMode) {
-        h += '<th style="width:40px;">✅</th>';
+        h += '<th style="width:40px;">☑️</th>';
     }
     h += '</thead><tbody>';
     
@@ -190,10 +191,13 @@ function renderCreditsTable() {
         var isAdmin = window.currentUserData && window.currentUserData.userData.role === 'admin';
         if (isAdmin) {
             actions += '<button class="btn-edit" onclick="editCredit(\'' + d.id + '\')"><i class="fas fa-edit"></i></button> ';
-            actions += '<button class="btn-delete" onclick="if(confirm(\'Supprimer définitivement ce crédit ?\')) deleteCredit(\'' + d.id + '\')"><i class="fas fa-trash"></i></button>';
+            if (!window.creditSelectionMode) {
+                // Bouton supprimer unitaire (caché en mode sélection multiple)
+                actions += '<button class="btn-delete" onclick="if(confirm(\'Supprimer définitivement ce crédit ?\')) deleteCredit(\'' + d.id + '\')"><i class="fas fa-trash"></i></button>';
+            }
         }
         
-        var isSelected = (window.creditSelectAll) ? true : (window.creditSelectedIndex === index);
+        var isSelected = window.creditSelectedIds.includes(d.id);
         var rowClass = isSelected ? ' style="background:#fef3c7; border-left:4px solid #d97706;"' : '';
         
         h += '<tr' + rowClass + '>' +
@@ -209,7 +213,7 @@ function renderCreditsTable() {
         
         if (window.creditSelectionMode) {
             var checked = isSelected ? 'checked' : '';
-            h += '<td><input type="checkbox" class="credit-select-check" data-index="' + index + '" ' + checked + ' onclick="toggleCreditCheckbox(' + index + ')"></td>';
+            h += '<td><input type="checkbox" class="credit-select-check" data-id="' + d.id + '" ' + checked + ' onchange="toggleCreditSelection(\'' + d.id + '\')"></td>';
         }
         h += '</tr>';
     });
@@ -228,6 +232,7 @@ function updateCreditPaymentZone() {
     var info = document.getElementById('creditPaymentInfo');
     if (!zone || !info) return;
     
+    // Paiement unitaire : on garde l'ancienne logique basée sur creditSelectedIndex (pour markCreditPaid)
     if (window.creditSelectedIndex >= 0 && window.creditPaymentStep !== 'idle') {
         var data = window.filteredCredits || window.allCreditsData;
         var credit = data[window.creditSelectedIndex];
@@ -247,17 +252,81 @@ function updateCreditPaymentZone() {
     zone.style.display = 'none';
 }
 
-function toggleCreditCheckbox(index) {
-    var data = window.filteredCredits || window.allCreditsData;
-    if (index < 0 || index >= data.length) return;
-    
-    window.creditSelectedIndex = index;
+// ---------- NOUVELLES FONCTIONS DE SÉLECTION MULTIPLE ----------
+function toggleCreditSelectionMode() {
+    window.creditSelectionMode = !window.creditSelectionMode;
+    window.creditSelectedIds = [];
     window.creditSelectAll = false;
-    window.creditPaymentStep = 'selection';
-    window.creditPaymentAmount = 0;
+
+    var selectBtn = document.getElementById('toggleSelectionBtn');
+    var deleteBtn = document.getElementById('deleteSelectedBtn');
+    if (selectBtn) {
+        if (window.creditSelectionMode) {
+            selectBtn.innerHTML = '<i class="fas fa-times-circle"></i> Annuler';
+        } else {
+            selectBtn.innerHTML = '<i class="fas fa-check-square"></i> Sélectionner';
+        }
+    }
+    if (deleteBtn) {
+        deleteBtn.style.display = window.creditSelectionMode ? 'inline-block' : 'none';
+    }
+    // Désactiver la zone de paiement si elle était ouverte
+    closeCreditSelection();
     renderCreditsTable();
 }
 
+function toggleCreditSelection(id) {
+    var idx = window.creditSelectedIds.indexOf(id);
+    if (idx === -1) {
+        window.creditSelectedIds.push(id);
+    } else {
+        window.creditSelectedIds.splice(idx, 1);
+    }
+    updateDeleteButtonVisibility();
+    // Re-rendre uniquement la table pour refléter la sélection (sans tout reconstruire)
+    renderCreditsTable();
+}
+
+function updateDeleteButtonVisibility() {
+    var deleteBtn = document.getElementById('deleteSelectedBtn');
+    if (deleteBtn) {
+        if (window.creditSelectedIds.length === 0) {
+            deleteBtn.style.display = 'none';
+        } else {
+            deleteBtn.style.display = 'inline-block';
+        }
+    }
+}
+
+function deleteSelectedCredits() {
+    if (window.creditSelectedIds.length === 0) {
+        alert('Aucun crédit sélectionné.');
+        return;
+    }
+    if (!confirm('Supprimer définitivement les ' + window.creditSelectedIds.length + ' crédits sélectionnés ?')) return;
+
+    var promises = window.creditSelectedIds.map(function(id) {
+        return db.collection('credits').doc(id).delete().then(function() {
+            window.allCreditsData = window.allCreditsData.filter(function(c) { return c.id !== id; });
+        });
+    });
+
+    Promise.all(promises).then(function() {
+        alert('✅ ' + window.creditSelectedIds.length + ' crédit(s) supprimé(s).');
+        window.creditSelectedIds = [];
+        window.creditSelectionMode = false;
+        var selectBtn = document.getElementById('toggleSelectionBtn');
+        var deleteBtn = document.getElementById('deleteSelectedBtn');
+        if (selectBtn) selectBtn.innerHTML = '<i class="fas fa-check-square"></i> Sélectionner';
+        if (deleteBtn) deleteBtn.style.display = 'none';
+        loadCredits();
+        CacheDB.sync();
+    }).catch(function(e) {
+        alert('❌ Erreur: ' + e.message);
+    });
+}
+
+// ---------- ANCIENNE FONCTION PAIEMENT UNITAIRE (conservée) ----------
 function markCreditPaid(creditId) {
     var data = window.filteredCredits || window.allCreditsData || [];
     var index = data.findIndex(function(c) { return c.id === creditId; });
@@ -267,11 +336,16 @@ function markCreditPaid(creditId) {
         return;
     }
     
+    // On conserve l'ancien mécanisme à index unique pour le paiement
     window.creditSelectedIndex = index;
     window.creditSelectAll = false;
     window.creditPaymentStep = 'payment';
     window.creditPaymentAmount = 0;
-    window.creditSelectionMode = true;
+    // On désactive le mode sélection multiple si actif
+    if (window.creditSelectionMode) {
+        toggleCreditSelectionMode(); // quitter le mode sélection
+    }
+    window.creditSelectionMode = true; // active l'affichage de la zone de paiement
     
     var zone = document.getElementById('creditPaymentZone');
     var info = document.getElementById('creditPaymentInfo');
@@ -291,6 +365,10 @@ function markCreditPaid(creditId) {
     }
     renderCreditsTable();
 }
+
+// Le reste des fonctions (searchClientInCreditsDropdown, selectCreditClient, editCredit, saveEditCredit, deleteCredit, validateCreditPayment, closeCreditSelection) reste inchangé...
+
+// ... (je les inclus telles quelles pour que le fichier soit complet)
 
 function searchClientInCreditsDropdown(query) {
     var q = query.toLowerCase().trim();
@@ -497,12 +575,18 @@ async function validateCreditPayment() {
 function closeCreditSelection() {
     window.creditSelectionMode = false;
     window.creditSelectedIndex = -1;
+    window.creditSelectedIds = [];
     window.creditSelectAll = false;
     window.creditPaymentAmount = 0;
     window.creditPaymentStep = 'idle';
     
     var zone = document.getElementById('creditPaymentZone');
     if (zone) zone.style.display = 'none';
+    
+    var selectBtn = document.getElementById('toggleSelectionBtn');
+    var deleteBtn = document.getElementById('deleteSelectedBtn');
+    if (selectBtn) selectBtn.innerHTML = '<i class="fas fa-check-square"></i> Sélectionner';
+    if (deleteBtn) deleteBtn.style.display = 'none';
     
     window.creditsSearch = '';
     window.currentPages.credits = 1;
@@ -518,12 +602,12 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// Exports
 window.loadCreditsPage = loadCreditsPage;
 window.loadCredits = loadCredits;
 window.applyCreditsFilters = applyCreditsFilters;
 window.renderCreditsTable = renderCreditsTable;
 window.updateCreditPaymentZone = updateCreditPaymentZone;
-window.toggleCreditCheckbox = toggleCreditCheckbox;
 window.markCreditPaid = markCreditPaid;
 window.selectCreditClient = selectCreditClient;
 window.searchClientInCreditsDropdown = searchClientInCreditsDropdown;
@@ -534,4 +618,10 @@ window.validateCreditPayment = validateCreditPayment;
 window.closeCreditSelection = closeCreditSelection;
 window.normalize = normalize;
 
-console.log('🛒 Mixmax Minimarket - Admin Credits chargé');
+// Nouvelles fonctions
+window.toggleCreditSelectionMode = toggleCreditSelectionMode;
+window.toggleCreditSelection = toggleCreditSelection;
+window.deleteSelectedCredits = deleteSelectedCredits;
+window.updateDeleteButtonVisibility = updateDeleteButtonVisibility;
+
+console.log('🛒 Mixmax Minimarket - Admin Credits chargé (sélection multiple + période vocale)');
