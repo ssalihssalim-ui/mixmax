@@ -1,15 +1,12 @@
 // ==================== ADMIN-CREDITS.JS - MIXMAX MINIMARKET ====================
-// Gestion des crédits - Version corrigée
-// Compatible avec la sélection multiple vocale
+// Gestion des crédits - Version épurée (sans sélection multiple ni checkboxes)
 
 window.creditsPeriod = window.creditsPeriod || 'all';
 window.creditsSearch = window.creditsSearch || '';
-window.creditSelectionMode = false;
-window.creditSelectedIndex = -1;
+window.creditSelectedIndex = -1;            // pour le paiement unitaire (surbrillance)
 window.creditPaymentAmount = 0;
 window.creditPaymentStep = 'idle';
 window.allCreditsData = window.allCreditsData || [];
-window.creditSelectAll = window.creditSelectAll || false;
 
 function normalize(str) {
     return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -18,11 +15,9 @@ function normalize(str) {
 async function loadCreditsPage(c) {
     window.creditsPeriod = 'all';
     window.creditsSearch = '';
-    window.creditSelectionMode = false;
     window.creditSelectedIndex = -1;
     window.creditPaymentAmount = 0;
     window.creditPaymentStep = 'idle';
-    window.creditSelectAll = false;
 
     if (!window.sortOrders.credits) window.sortOrders.credits = {};
     if (!window.sortOrders.credits.createdAt) window.sortOrders.credits.createdAt = 'desc';
@@ -41,7 +36,6 @@ async function loadCreditsPage(c) {
                     description: data.description || ''
                 });
             });
-            console.log('✅ Clients chargés:', window.posAllClients.length);
         } catch(e) {
             console.error('Erreur chargement clients:', e);
         }
@@ -167,12 +161,7 @@ function renderCreditsTable() {
         makeSortableHeader('credits', 'remainingAmount', 'Restant', 'renderCreditsTable') +
         makeSortableHeader('credits', 'paymentMethod', 'Mode', 'renderCreditsTable') +
         makeSortableHeader('credits', 'vendeur', 'Vendeur', 'renderCreditsTable') +
-        '<th>Actions</th>';
-    
-    if (window.creditSelectionMode) {
-        h += '<th style="width:40px;">✅</th>';
-    }
-    h += '</thead><tbody>';
+        '<th>Actions</th></thead><tbody>';
     
     pageData.forEach(function(d, index) {
         var reste = d.remainingAmount || d.total || 0;
@@ -193,7 +182,8 @@ function renderCreditsTable() {
             actions += '<button class="btn-delete" onclick="if(confirm(\'Supprimer définitivement ce crédit ?\')) deleteCredit(\'' + d.id + '\')"><i class="fas fa-trash"></i></button>';
         }
         
-        var isSelected = (window.creditSelectAll) ? true : (window.creditSelectedIndex === index);
+        // Mise en surbrillance si c'est le crédit sélectionné pour paiement
+        var isSelected = (window.creditSelectedIndex === index && window.creditPaymentStep !== 'idle');
         var rowClass = isSelected ? ' style="background:#fef3c7; border-left:4px solid #d97706;"' : '';
         
         h += '<tr' + rowClass + '>' +
@@ -205,13 +195,8 @@ function renderCreditsTable() {
             '<td style="color:#ef4444;"><strong>' + reste.toFixed(2) + '</strong></td>' +
             '<td>' + mode + '</td>' +
             '<td>' + escapeHtml(d.vendeur || '-') + '</td>' +
-            '<td>' + actions + '</td>';
-        
-        if (window.creditSelectionMode) {
-            var checked = isSelected ? 'checked' : '';
-            h += '<td><input type="checkbox" class="credit-select-check" data-index="' + index + '" ' + checked + ' onclick="toggleCreditCheckbox(' + index + ')"></td>';
-        }
-        h += '</tr>';
+            '<td>' + actions + '</td>' +
+            '</tr>';
     });
     
     h += '</tbody></table></div>';
@@ -247,17 +232,6 @@ function updateCreditPaymentZone() {
     zone.style.display = 'none';
 }
 
-function toggleCreditCheckbox(index) {
-    var data = window.filteredCredits || window.allCreditsData;
-    if (index < 0 || index >= data.length) return;
-    
-    window.creditSelectedIndex = index;
-    window.creditSelectAll = false;
-    window.creditPaymentStep = 'selection';
-    window.creditPaymentAmount = 0;
-    renderCreditsTable();
-}
-
 function markCreditPaid(creditId) {
     var data = window.filteredCredits || window.allCreditsData || [];
     var index = data.findIndex(function(c) { return c.id === creditId; });
@@ -268,11 +242,10 @@ function markCreditPaid(creditId) {
     }
     
     window.creditSelectedIndex = index;
-    window.creditSelectAll = false;
     window.creditPaymentStep = 'payment';
     window.creditPaymentAmount = 0;
-    window.creditSelectionMode = true;
     
+    // Afficher la zone de paiement
     var zone = document.getElementById('creditPaymentZone');
     var info = document.getElementById('creditPaymentInfo');
     if (zone) {
@@ -481,7 +454,6 @@ async function validateCreditPayment() {
         window.creditPaymentStep = 'idle';
         window.creditSelectedIndex = -1;
         window.creditPaymentAmount = 0;
-        window.creditSelectionMode = false;
         
         var zone = document.getElementById('creditPaymentZone');
         if (zone) zone.style.display = 'none';
@@ -495,9 +467,7 @@ async function validateCreditPayment() {
 }
 
 function closeCreditSelection() {
-    window.creditSelectionMode = false;
     window.creditSelectedIndex = -1;
-    window.creditSelectAll = false;
     window.creditPaymentAmount = 0;
     window.creditPaymentStep = 'idle';
     
@@ -518,12 +488,12 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// Exports
 window.loadCreditsPage = loadCreditsPage;
 window.loadCredits = loadCredits;
 window.applyCreditsFilters = applyCreditsFilters;
 window.renderCreditsTable = renderCreditsTable;
 window.updateCreditPaymentZone = updateCreditPaymentZone;
-window.toggleCreditCheckbox = toggleCreditCheckbox;
 window.markCreditPaid = markCreditPaid;
 window.selectCreditClient = selectCreditClient;
 window.searchClientInCreditsDropdown = searchClientInCreditsDropdown;
@@ -534,4 +504,4 @@ window.validateCreditPayment = validateCreditPayment;
 window.closeCreditSelection = closeCreditSelection;
 window.normalize = normalize;
 
-console.log('🛒 Mixmax Minimarket - Admin Credits chargé');
+console.log('🛒 Mixmax Minimarket - Admin Credits chargé (sans sélection multiple)');
