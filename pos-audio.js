@@ -171,14 +171,12 @@ function buildProductAdminIndex() {
     if (window.productAdminIndexBuilt || !window.allProductsData || !window.allProductsData.length) return;
     window.productAdminIndex = {};
     window.allProductsData.forEach(function(p) {
-        // Indexer le nom
         var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         nom.split(/[\s,;.]+/).forEach(function(w) {
             if (w.length < 2) return;
             if (!window.productAdminIndex[w]) window.productAdminIndex[w] = [];
             if (!window.productAdminIndex[w].includes(p)) window.productAdminIndex[w].push(p);
         });
-        // Indexer la description
         var desc = (p.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         desc.split(/[\s,;.]+/).forEach(function(w) {
             if (w.length < 2) return;
@@ -191,7 +189,6 @@ function buildProductAdminIndex() {
 
 function fastFindProductAdmin(query) {
     if (!window.allProductsData || !window.allProductsData.length) return [];
-    // Construire l'index si nécessaire
     if (!window.productAdminIndexBuilt) buildProductAdminIndex();
 
     var cleaned = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -205,7 +202,6 @@ function fastFindProductAdmin(query) {
     var candidates = (window.productAdminIndex[firstWord] || []).slice();
     if (candidates.length === 0) return [];
 
-    // Filtrer par le searchTerm dans le nom OU la description
     var filtered = candidates.filter(function(p) {
         var nom = (p.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         var desc = (p.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -295,8 +291,6 @@ function parseVoiceCommand(transcript) {
                 var best = fastFindProduct(cleaned)[0];
                 if (best) return { type: 'search_product', product: best, page: 'pos' };
             }
-            // commandes panier
-            // ✅ MODIFICATION ICI : ajout de "passé", "z", "go"
             if (cleaned.includes('passe') || cleaned.includes('passer') || cleaned.includes('passé') || cleaned.includes('z') || cleaned.includes('suivant') || cleaned === 'z' || cleaned.includes('go')) return { type: 'next' };
             if (cleaned.includes('valide') || cleaned.includes('validé') || cleaned.includes('valider') || cleaned.includes('confirmer') || cleaned.includes('ok')) return { type: 'validate' };
             if (cleaned.includes('annule') || cleaned.includes('annuler')) return { type: 'cancel' };
@@ -325,7 +319,6 @@ function handleVoiceCommand(cmd) {
     var cp = document.getElementById('pageTitle')?.textContent || '';
     switch (cmd.type) {
         case 'search_product':
-            // Si la commande vient de la page Produits (admin)
             if (cmd.page === 'products' || cp === 'Produits') {
                 var adminInput = document.getElementById('productSearchInput');
                 if (adminInput && cmd.product) {
@@ -337,16 +330,13 @@ function handleVoiceCommand(cmd) {
                     showVoiceResult('🔍 ' + cmd.product.nom + ' – filtré');
                 }
             }
-            // Comportement POS (inchangé)
             else {
                 var searchInput = document.getElementById('posSearchInput');
                 if (searchInput && cmd.product) {
                     searchInput.value = cmd.product.nom;
-
                     if (cmd.product.categorie && typeof window.posFilterCategory === 'function') {
                         window.posFilterCategory(cmd.product.categorie);
                     }
-
                     setTimeout(function() {
                         var cards = document.querySelectorAll('.pos-product-card');
                         for (var i = 0; i < cards.length; i++) {
@@ -360,7 +350,6 @@ function handleVoiceCommand(cmd) {
                             }
                         }
                     }, 300);
-
                     showVoiceResult('🔍 ' + cmd.product.nom + ' – cliquez pour ajouter');
                 }
             }
@@ -502,8 +491,6 @@ function posStartVoiceRecording() {
             if (vd) {
                 if (final) {
                     var cleaned = final.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-                    // Détection des commandes de période
                     var periodMap = {
                         'aujourd\'hui': 'today',
                         'ce jour': 'today',
@@ -521,7 +508,6 @@ function posStartVoiceRecording() {
                         'tout': 'all',
                         'toutes les dates': 'all'
                     };
-
                     var periodCommand = null;
                     for (var key in periodMap) {
                         if (cleaned.includes(key)) {
@@ -529,9 +515,7 @@ function posStartVoiceRecording() {
                             break;
                         }
                     }
-
                     if (periodCommand) {
-                        // Changer le select sans toucher à la barre de recherche
                         var periodSelect = document.getElementById('creditsPeriodSelect');
                         if (periodSelect) {
                             periodSelect.value = periodCommand;
@@ -545,9 +529,8 @@ function posStartVoiceRecording() {
                             }
                         }
                         lastInterim = '';
-                        vd.value = ''; // effacer le champ vocal
+                        vd.value = '';
                     } else {
-                        // Comportement normal : recherche client ou autre commande
                         vd.value = final;
                         showProcessingIndicator();
                         var cmd = parseVoiceCommand(final);
@@ -574,7 +557,6 @@ function posStartVoiceRecording() {
                 }
             }
         } else {
-            // Chercher d'abord l'input du POS
             var si = document.getElementById('posSearchInput');
             if (si) {
                 if (final) {
@@ -588,7 +570,6 @@ function posStartVoiceRecording() {
                     lastInterim = interim;
                 }
             } else {
-                // Si pas de posSearchInput, chercher l'input de la page Produits (admin)
                 var pi = document.getElementById('productSearchInput');
                 if (pi) {
                     if (final) {
@@ -653,39 +634,14 @@ function posStopVoiceSearch() {
     showVoiceResult('🎤 Micro désactivé');
 }
 
-// ========== CRÉDITS (FONCTIONS COMPLÈTES) ==========
-function activateCreditSelection() { /* code complet déjà présent */ }
-function selectCreditLine(n) { /* ... */ }
-function markCreditForPayment() { /* ... */ }
-function setCreditPaymentAmount(a) { /* ... */ }
-function validateCreditPayment() { /* ... */ }
-function closeCreditSelection() { /* ... */ }
-function selectAllCredits() { /* ... */ }
-function deselectAllCredits() { /* ... */ }
-async function deleteAllCredits() { /* ... */ }
-function deleteCreditByVoice(lineNumber) { /* ... */ }
-function deleteSelectedCredit() { /* ... */ }
-async function confirmDeleteCredit() { /* ... */ }
-function cancelDeleteCredit() { /* ... */ }
-
 // ========== EXPORTS ==========
 window.posToggleVoiceSearch = posToggleVoiceSearch;
 window.showVoiceResult = showVoiceResult;
 window.setVoiceMode = setVoiceMode;
 window.showVoiceModeIndicator = showVoiceModeIndicator;
-window.activateCreditSelection = activateCreditSelection;
-window.selectCreditLine = selectCreditLine;
-window.markCreditForPayment = markCreditForPayment;
-window.setCreditPaymentAmount = setCreditPaymentAmount;
-window.validateCreditPayment = validateCreditPayment;
-window.closeCreditSelection = closeCreditSelection;
 window.parseVoiceCommand = parseVoiceCommand;
 window.handleVoiceCommand = handleVoiceCommand;
 window.invalidateClientIndex = invalidateClientIndex;
-window.deleteCreditByVoice = deleteCreditByVoice;
-window.deleteSelectedCredit = deleteSelectedCredit;
-window.confirmDeleteCredit = confirmDeleteCredit;
-window.cancelDeleteCredit = cancelDeleteCredit;
 window.showVoiceFlowIndicator = showVoiceFlowIndicator;
 window.hideVoiceFlowIndicator = hideVoiceFlowIndicator;
 window.showProcessingIndicator = showProcessingIndicator;
@@ -696,9 +652,6 @@ window.onProductAdded = function(pid) {
     hideVoiceFlowIndicator();
     setTimeout(function() { showVoiceFlowIndicator('quantity'); }, 100);
 };
-window.selectAllCredits = selectAllCredits;
-window.deselectAllCredits = deselectAllCredits;
-window.deleteAllCredits = deleteAllCredits;
 window.buildClientIndex = buildClientIndex;
 window.buildProductIndex = buildProductIndex;
 window.buildProductAdminIndex = buildProductAdminIndex;
