@@ -496,15 +496,64 @@ function posStartVoiceRecording() {
             else interim += t;
         }
         var cp = document.getElementById('pageTitle')?.textContent || '';
+
         if (cp === 'Crédits') {
             var vd = document.getElementById('creditsVoiceDisplay');
             if (vd) {
                 if (final) {
-                    vd.value = final;
-                    showProcessingIndicator();
-                    var cmd = parseVoiceCommand(final);
-                    if (cmd.type !== 'ignore') handleVoiceCommand(cmd);
-                    hideVoiceFlowIndicator();
+                    var cleaned = final.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+                    // Détection des commandes de période
+                    var periodMap = {
+                        'aujourd\'hui': 'today',
+                        'ce jour': 'today',
+                        'cette semaine': '7',
+                        '7 jours': '7',
+                        'semaine': '7',
+                        'ce mois': '30',
+                        '30 jours': '30',
+                        'mois': '30',
+                        '3 mois': '90',
+                        'trimestre': '90',
+                        'cette annee': '365',
+                        '1 an': '365',
+                        'annee': '365',
+                        'tout': 'all',
+                        'toutes les dates': 'all'
+                    };
+
+                    var periodCommand = null;
+                    for (var key in periodMap) {
+                        if (cleaned.includes(key)) {
+                            periodCommand = periodMap[key];
+                            break;
+                        }
+                    }
+
+                    if (periodCommand) {
+                        // Changer le select sans toucher à la barre de recherche
+                        var periodSelect = document.getElementById('creditsPeriodSelect');
+                        if (periodSelect) {
+                            periodSelect.value = periodCommand;
+                            window.creditsPeriod = periodCommand;
+                            window.currentPages.credits = 1;
+                            if (typeof applyCreditsFilters === 'function') {
+                                applyCreditsFilters();
+                            }
+                            if (typeof showVoiceResult === 'function') {
+                                showVoiceResult('📅 Période: ' + periodCommand);
+                            }
+                        }
+                        lastInterim = '';
+                        vd.value = ''; // effacer le champ vocal
+                    } else {
+                        // Comportement normal : recherche client ou autre commande
+                        vd.value = final;
+                        showProcessingIndicator();
+                        var cmd = parseVoiceCommand(final);
+                        if (cmd.type !== 'ignore') handleVoiceCommand(cmd);
+                        hideVoiceFlowIndicator();
+                    }
                 } else if (interim && interim !== lastInterim) {
                     vd.value = interim + ' ✍️';
                     lastInterim = interim;
