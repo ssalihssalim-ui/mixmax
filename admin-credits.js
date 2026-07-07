@@ -245,7 +245,6 @@ function markCreditPaid(creditId) {
     window.creditPaymentStep = 'payment';
     window.creditPaymentAmount = 0;
     
-    // Afficher la zone de paiement
     var zone = document.getElementById('creditPaymentZone');
     var info = document.getElementById('creditPaymentInfo');
     if (zone) {
@@ -504,4 +503,4 @@ window.validateCreditPayment = validateCreditPayment;
 window.closeCreditSelection = closeCreditSelection;
 window.normalize = normalize;
 
-console.log('🛒 Mixmax Minimarket - Admin Credits chargé (sans sélection multiple)');
+console.log('🛒 Mixmax Minimarket - Admin Credits chargé (épuré)');
