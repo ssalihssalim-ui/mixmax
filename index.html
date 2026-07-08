@@ -167,5 +167,18 @@
             navigator.serviceWorker.register('sw.js').then(reg => console.log('SW ✓', reg)).catch(err => console.error('SW ✗', err));
         }
     </script>
+    <script>
+window.toggleSelectAllCredits = function() { return false; };
+(function() {
+    function removeBtn() {
+        document.querySelectorAll('button').forEach(function(btn) {
+            var onclick = btn.getAttribute('onclick') || '';
+            if (onclick.indexOf('toggleSelectAllCredits') !== -1) btn.remove();
+        });
+    }
+    removeBtn();
+    new MutationObserver(removeBtn).observe(document.body, {childList:true, subtree:true});
+})();
+</script>
 </body>
 </html>
