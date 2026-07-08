@@ -1,14 +1,14 @@
 // ==================== ADMIN-CREDITS.JS - MIXMAX MINIMARKET ====================
-// Gestion des crédits – Sélection multiple + Hors ligne
+// Gestion des crédits – Affichage immédiat, sélection multiple, hors ligne
 
 window.creditsPeriod = window.creditsPeriod || 'all';
 window.creditsSearch = window.creditsSearch || '';
-window.creditSelectionMode = false;
-window.creditSelectedIds = [];
+window.creditSelectionMode = false;               // mode sélection multiple
+window.creditSelectedIds = [];                    // IDs cochés
 window.creditPaymentAmount = 0;
 window.creditPaymentStep = 'idle';
 window.allCreditsData = window.allCreditsData || [];
-window.creditSelectAll = false;
+window.creditSelectAll = false;                  // inutilisé, conservé pour compatibilité
 
 function normalize(str) {
     return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -26,7 +26,7 @@ async function loadCreditsPage(c) {
     if (!window.sortOrders.credits) window.sortOrders.credits = {};
     if (!window.sortOrders.credits.createdAt) window.sortOrders.credits.createdAt = 'desc';
 
-    // Chargement des clients pour le dropdown
+    // Chargement des clients pour le dropdown (optionnel, ne bloque pas l'affichage des crédits)
     if (!window.posAllClients || window.posAllClients.length === 0) {
         const cachedClients = await CacheDB.getAll('clients');
         if (cachedClients.length) {
@@ -61,6 +61,7 @@ async function loadCreditsPage(c) {
         }
     }
 
+    // Construction de l'interface
     c.innerHTML = '<div class="content-card">' +
         '<div class="card-header">' +
         '<h3><i class="fas fa-credit-card"></i> Crédits</h3>' +
@@ -88,6 +89,7 @@ async function loadCreditsPage(c) {
         '<div id="creditsPagination" style="margin-top:10px;"></div>' +
         '</div>';
 
+    // Lancement immédiat du chargement des crédits (ne dépend pas des clients)
     loadCredits();
 }
 
@@ -110,10 +112,10 @@ async function loadCredits() {
         if (!window.sortOrders.credits) window.sortOrders.credits = {};
         if (!window.sortOrders.credits.createdAt) window.sortOrders.credits.createdAt = 'desc';
         window.currentPages.credits = 1;
-        applyCreditsFilters();
+        applyCreditsFilters(); // Affiche immédiatement
     }
 
-    // 2. Si en ligne, synchroniser
+    // 2. Si en ligne, synchroniser avec Firestore
     if (navigator.onLine) {
         try {
             const snapshot = await db.collection('credits').orderBy('createdAt', 'desc').limit(2000).get();
@@ -130,6 +132,7 @@ async function loadCredits() {
                 });
             }
 
+            // Mise en cache
             for (let doc of window.allCreditsData) {
                 await CacheDB.set('credits', doc.id, doc);
             }
@@ -648,4 +651,4 @@ window.toggleCreditSelection = toggleCreditSelection;
 window.deleteSelectedCredits = deleteSelectedCredits;
 window.updateDeleteButtonVisibility = updateDeleteButtonVisibility;
 
-console.log('🛒 Mixmax Minimarket - Admin Credits chargé (sélection multiple, hors ligne)');
+console.log('🛒 Mixmax Minimarket - Admin Credits chargé (affichage immédiat, sélection multiple, hors ligne)');
