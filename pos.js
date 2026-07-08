@@ -1,7 +1,7 @@
 // ==================== POS.JS - LOGIQUE MÉTIER (FINAL OPTIMISÉ) ====================
 // Mixmax Minimarket - Point de vente complet avec virtualisation
 // Améliorations : client = Passager par défaut, montant donné = total par défaut
-// ✅ Ajout du champ date/heure de vente personnalisable
+// ✅ Ajout du champ date/heure de vente personnalisable (corrigé)
 
 var posCart = [];
 var posStep = 1;
@@ -64,7 +64,6 @@ async function loadPosPage(c){
         if(cl.length){ posAllClients=cl.map(x=>({id:x.id,nom:x.nom,prenom:x.prenom,telephone:x.telephone,description:x.description||''})); posFilteredClients=[...posAllClients]; }
         if(isOnPOSPage()) renderPOS();
 
-        // 🔥 Pré-construire les index pour la reconnaissance vocale
         if (typeof window.buildClientIndex === 'function') window.buildClientIndex();
         if (typeof window.buildProductIndex === 'function') window.buildProductIndex();
     }catch(e){ console.error(e); }
@@ -76,7 +75,6 @@ async function loadPosPage(c){
             posAllClients=[]; cl.forEach(d=>{ let data=d.data(),cli={id:d.id,nom:data.nom,prenom:data.prenom,telephone:data.telephone,description:data.description||''}; posAllClients.push(cli); CacheDB.set('clients',d.id,cli); }); posFilteredClients=[...posAllClients];
             if(isOnPOSPage()) renderPOS();
 
-            // 🔥 Pré-construire les index pour la reconnaissance vocale
             if (typeof window.buildClientIndex === 'function') window.buildClientIndex();
             if (typeof window.buildProductIndex === 'function') window.buildProductIndex();
         }catch(e){ console.error(e); }
@@ -97,7 +95,6 @@ function filterProductGrid(){
     var grid=document.getElementById('posProductGrid')||document.querySelector('.pos-products-grid'); if(!grid) return;
     var f=fastSearch(posSearchQuery); if(posSelectedCategory!=='all') f=f.filter(function(p){ return p.categorie===posSelectedCategory; }); f.sort(function(a,b){ return (a.nom||'').localeCompare(b.nom||''); });
     
-    // ✅ Virtualisation
     var totalProducts = f.length;
     var displayProducts = f.slice(0, posProductOffset + posProductBatchSize);
     posHasMoreProducts = (posProductOffset + posProductBatchSize) < totalProducts;
@@ -166,14 +163,29 @@ function buildFullPOS(c){
         if(posCart.length===0){ h+='<div class="pos-cart-empty"><i class="fas fa-shopping-basket"></i><p>Panier vide</p></div>'; }
         else{ for(var k=0;k<posCart.length;k++){ var it=posCart[k],opts=''; if(it.interdits&&it.interdits.length) opts+=' <span style="color:#ef4444;font-size:0.6rem;">🚫'+escapeHtml(it.interdits.join(','))+'</span>'; if(it.epice&&it.epice!=='Normal') opts+=' <span style="color:#d97706;">🌶️'+escapeHtml(it.epice)+'</span>'; if(it.sel&&it.sel!=='Normal') opts+=' <span style="color:#4f46e5;">🧂'+escapeHtml(it.sel)+'</span>'; h+='<div class="pos-cart-item"><div class="pos-cart-item-info"><span class="pos-cart-item-name">'+escapeHtml(it.nom)+opts+'</span><span class="pos-cart-item-price">'+it.prixUnitaire.toFixed(2)+' MAD/u</span></div><div class="pos-cart-item-actions"><button class="pos-qty-btn" onclick="posUpdateQty('+k+',-1)"><i class="fas fa-minus"></i></button><span class="pos-qty-value">'+it.quantite+'</span><button class="pos-qty-btn" onclick="posUpdateQty('+k+',1)"><i class="fas fa-plus"></i></button><button class="pos-remove-btn" onclick="posRemoveItem('+k+')"><i class="fas fa-times"></i></button></div><span class="pos-cart-item-total">'+(it.prixUnitaire*it.quantite).toFixed(2)+' MAD</span></div>'; } }
         h+='</div><div style="padding:8px 0;display:flex;gap:8px;"><label>Remise:</label><input type="number" id="posDiscountMAD" value="'+posDiscountMAD+'" min="0" step="0.01" onchange="posUpdateDiscountMAD(this.value)" style="width:80px;padding:4px 8px;border:2px solid #e2e8f0;border-radius:6px;"></div><div class="pos-cart-footer">'+(posDiscountMAD>0?'<div style="display:flex;justify-content:space-between;"><span>Sous-total</span><span>'+st.toFixed(2)+'</span></div><div style="display:flex;justify-content:space-between;color:#ef4444;"><span>Remise</span><span>-'+posDiscountMAD.toFixed(2)+'</span></div>':'')+'<div class="pos-cart-total-row"><span>Total</span><span>'+t.toFixed(2)+' MAD</span></div><button class="pos-validate-btn" onclick="posGoToStep2()" '+(posCart.length===0?'disabled':'')+'><i class="fas fa-check-circle"></i> Valider</button></div>';
-    }else{
-        var canCredit=posCurrentClient&&posCurrentClient.id;
-        h+='<div class="pos-cart-header"><h3><i class="fas fa-credit-card"></i> Paiement</h3><button class="pos-back-btn" onclick="posGoToStep1()"><i class="fas fa-arrow-left"></i> Retour</button></div><div class="pos-payment-form"><div style="margin-bottom:4px;"><label>Client</label><div style="position:relative;"><input type="text" id="posClientSearchInput" placeholder="🔍 Cliquez et tapez..." onkeyup="posSearchClient(this.value)" onfocus="if(this.value)posSearchClient(this.value)" autocomplete="off" value="'+(posCurrentClient?escapeHtml(posCurrentClient.name):'')+'" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"><div id="posClientDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:2px solid #e2e8f0;border-radius:0 0 8px 8px;max-height:150px;overflow-y:auto;z-index:50;"></div></div></div><div style="margin:2px 0;font-size:0.7rem;text-align:center;">— OU —</div><div style="margin-bottom:4px;"><label>Table</label><input type="text" id="posTableNum" value="'+escapeHtml(posCurrentTable)+'" onchange="posSetTable(this.value)" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"></div><div style="margin-bottom:4px;"><div style="padding:8px;background:#f8fafc;border-radius:8px;"><div>Articles: '+posCart.length+'</div>'+(posDiscountMAD>0?'<div style="color:#ef4444;">Remise: -'+posDiscountMAD.toFixed(2)+'</div>':'')+'<div style="font-size:1.1rem;font-weight:700;">Total: '+t.toFixed(2)+' MAD</div></div></div><div style="margin-bottom:4px;"><label>Vendeur</label><input type="text" id="posVendeur" value="'+(window.currentUserData?escapeHtml(window.currentUserData.userData.prenom+' '+window.currentUserData.userData.nom):'')+'" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"></div>' +
-        // ✅ AJOUT DU CHAMP DATE/HEURE
-        '<div style="margin-bottom:4px;"><label>Date et heure de vente</label><input type="datetime-local" id="posDateVente" value="" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"></div>' +
-        '<div style="margin-bottom:4px;"><div style="display:flex;gap:6px;"><button class="pos-payment-btn '+(posPaymentMethod==='espece'?'active':'')+'" onclick="posSetPaymentMethod(\'espece\')"><i class="fas fa-money-bill-wave"></i> Espèces</button><button class="pos-payment-btn '+(posPaymentMethod==='credit'?'active':'')+'" onclick="posSetPaymentMethod(\'credit\')" id="posCreditBtn" '+(canCredit?'':'disabled style="opacity:0.4;"')+'><i class="fas fa-credit-card"></i> Crédit</button><button class="pos-payment-btn '+(posPaymentMethod==='partiel'?'active':'')+'" onclick="posSetPaymentMethod(\'partiel\')" id="posPartielBtn" '+(canCredit?'':'disabled style="opacity:0.4;"')+'><i class="fas fa-hand-holding-usd"></i> Partiel</button></div></div>';
-        if(posPaymentMethod==='espece'||posPaymentMethod==='partiel') h+='<div style="margin-bottom:4px;"><label>Montant donné</label><input type="number" id="posAmountGiven" placeholder="0.00" value="'+(posAmountGiven>0?posAmountGiven:'')+'" onkeyup="posCalculateChange()" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"><div id="posChangeDisplay"></div></div>';
-        h+='<button class="pos-finalize-btn" onclick="posFinalizeSale()" style="width:100%;padding:12px;margin-top:8px;background:#2E7D32;color:#fff;border:none;border-radius:12px;font-weight:700;"><i class="fas fa-check-circle"></i> Finaliser</button></div>';
+    } else {
+        var canCredit = posCurrentClient && posCurrentClient.id;
+        h += '<div class="pos-cart-header"><h3><i class="fas fa-credit-card"></i> Paiement</h3><button class="pos-back-btn" onclick="posGoToStep1()"><i class="fas fa-arrow-left"></i> Retour</button></div>' +
+            '<div class="pos-payment-form">' +
+            '<div style="margin-bottom:4px;"><label>Client</label><div style="position:relative;"><input type="text" id="posClientSearchInput" placeholder="🔍 Cliquez et tapez..." onkeyup="posSearchClient(this.value)" onfocus="if(this.value)posSearchClient(this.value)" autocomplete="off" value="' + (posCurrentClient ? escapeHtml(posCurrentClient.name) : '') + '" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"><div id="posClientDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:2px solid #e2e8f0;border-radius:0 0 8px 8px;max-height:150px;overflow-y:auto;z-index:50;"></div></div></div>' +
+            '<div style="margin:2px 0;font-size:0.7rem;text-align:center;">— OU —</div>' +
+            '<div style="margin-bottom:4px;"><label>Table</label><input type="text" id="posTableNum" value="' + escapeHtml(posCurrentTable) + '" onchange="posSetTable(this.value)" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"></div>' +
+            '<div style="margin-bottom:4px;"><div style="padding:8px;background:#f8fafc;border-radius:8px;"><div>Articles: ' + posCart.length + '</div>' + (posDiscountMAD > 0 ? '<div style="color:#ef4444;">Remise: -' + posDiscountMAD.toFixed(2) + '</div>' : '') + '<div style="font-size:1.1rem;font-weight:700;">Total: ' + t.toFixed(2) + ' MAD</div></div></div>' +
+            '<div style="margin-bottom:4px;"><label>Vendeur</label><input type="text" id="posVendeur" value="' + (window.currentUserData ? escapeHtml(window.currentUserData.userData.prenom + ' ' + window.currentUserData.userData.nom) : '') + '" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"></div>' +
+            // ✅ Champ date/heure (corrigé et bien concaténé)
+            '<div style="margin-bottom:4px;"><label>Date et heure de vente</label><input type="datetime-local" id="posDateVente" value="" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"></div>' +
+            '<div style="margin-bottom:4px;"><div style="display:flex;gap:6px;">' +
+            '<button class="pos-payment-btn ' + (posPaymentMethod === 'espece' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'espece\')"><i class="fas fa-money-bill-wave"></i> Espèces</button>' +
+            '<button class="pos-payment-btn ' + (posPaymentMethod === 'credit' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'credit\')" id="posCreditBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;"') + '><i class="fas fa-credit-card"></i> Crédit</button>' +
+            '<button class="pos-payment-btn ' + (posPaymentMethod === 'partiel' ? 'active' : '') + '" onclick="posSetPaymentMethod(\'partiel\')" id="posPartielBtn" ' + (canCredit ? '' : 'disabled style="opacity:0.4;"') + '><i class="fas fa-hand-holding-usd"></i> Partiel</button>' +
+            '</div></div>';
+
+        if (posPaymentMethod === 'espece' || posPaymentMethod === 'partiel') {
+            h += '<div style="margin-bottom:4px;"><label>Montant donné</label><input type="number" id="posAmountGiven" placeholder="0.00" value="' + (posAmountGiven > 0 ? posAmountGiven : '') + '" onkeyup="posCalculateChange()" style="width:100%;padding:8px;border:2px solid #e2e8f0;border-radius:8px;"><div id="posChangeDisplay"></div></div>';
+        }
+
+        h += '<button class="pos-finalize-btn" onclick="posFinalizeSale()" style="width:100%;padding:12px;margin-top:8px;background:#2E7D32;color:#fff;border:none;border-radius:12px;font-weight:700;"><i class="fas fa-check-circle"></i> Finaliser</button>' +
+            '</div>';
     }
     h+='</div></div>'; c.innerHTML=h; filterProductGrid(); if(posStep===2) setTimeout(posCalculateChange,200);
 }
@@ -185,16 +197,14 @@ function posUpdateQty(i,ch){ var it=posCart[i]; if(!it) return; var p=posProduct
 function posRemoveItem(i){ posCart.splice(i,1); updateCartOnly(); }
 function posCalculateTotal(){ var t=0; for(var i=0;i<posCart.length;i++) t+=posCart[i].prixUnitaire*posCart[i].quantite; return t; }
 
-// ✅ CORRECTION ICI : forcer le mode paiement au clic sur Valider
 function posGoToStep2(){
     if(posCart.length===0){ alert('Panier vide'); return; }
     posStep = 2;
     window.posStep = 2;
 
-    // Annuler le mode quantité et forcer le mode paiement
     if (typeof window.setVoiceMode === 'function') {
         if (typeof window.lastAddedProductId !== 'undefined') {
-            window.lastAddedProductId = null; // Sortir du mode quantité
+            window.lastAddedProductId = null;
         }
         window.setVoiceMode('payment', '🎤 Mode paiement', null);
         if (typeof window.showVoiceFlowIndicator === 'function') {
@@ -213,7 +223,6 @@ function posGoToStep1(){
     window.posStep = 1;
     delete window.posCommandeId; delete window.posVenteId;
 
-    // Revenir en mode recherche si le micro est actif
     var micBtn = document.getElementById('posMicBtn');
     if (micBtn && micBtn.classList.contains('recording')) {
         if (typeof window.setVoiceMode === 'function') {
@@ -236,7 +245,6 @@ async function posFinalizeSale(){
     if(isFinalizing) return; 
     var st=posCalculateTotal(), t=st-posDiscountMAD;
     
-    // ✅ 1. Si ni client ni table → client = Passager
     if(!posCurrentClient && !posCurrentTable){ 
         posCurrentClient = { id: null, name: 'Passager' };
     }
@@ -248,7 +256,6 @@ async function posFinalizeSale(){
         alert('Client requis pour crédit/partiel.'); return; 
     }
     
-    // ✅ 2. Si le montant donné n'est pas saisi → utiliser le total
     if(posPaymentMethod==='espece' || posPaymentMethod==='partiel'){ 
         var amountInput = document.getElementById('posAmountGiven');
         var givenAmount = parseFloat(amountInput ? amountInput.value : 0) || 0;
@@ -285,7 +292,6 @@ async function posFinalizeSale(){
             statutPaiement='partiel'; 
             change = Math.max(0, posAmountGiven - t); 
         } else { 
-            // espèces
             change = posAmountGiven - t; 
         }
         
@@ -350,9 +356,8 @@ async function posFinalizeSale(){
         if(posCurrentClient && posCurrentClient.id && paid) 
             updateClientFidelityAsync(posCurrentClient.id, t, profitTotal);
         
-        var venteId = ventesRef.id;  // 🔥 Garder l'ID pour WhatsApp
+        var venteId = ventesRef.id;
 
-        // Proposer l'envoi WhatsApp
         if (typeof window.sendWhatsApp === 'function') {
             var originalCloseModal = window.closeModal;
             window.closeModal = function() {
