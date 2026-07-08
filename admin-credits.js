@@ -1,5 +1,5 @@
 // ==================== ADMIN-CREDITS.JS - MIXMAX MINIMARKET ====================
-// Gestion des crédits - Version épurée (sans sélection multiple ni checkboxes)
+// Gestion des crédits – Version épurée (aucune sélection multiple)
 
 window.creditsPeriod = window.creditsPeriod || 'all';
 window.creditsSearch = window.creditsSearch || '';
@@ -182,7 +182,7 @@ function renderCreditsTable() {
             actions += '<button class="btn-delete" onclick="if(confirm(\'Supprimer définitivement ce crédit ?\')) deleteCredit(\'' + d.id + '\')"><i class="fas fa-trash"></i></button>';
         }
         
-        // Mise en surbrillance si c'est le crédit sélectionné pour paiement
+        // Surbrillance pour le crédit en cours de paiement
         var isSelected = (window.creditSelectedIndex === index && window.creditPaymentStep !== 'idle');
         var rowClass = isSelected ? ' style="background:#fef3c7; border-left:4px solid #d97706;"' : '';
         
@@ -503,4 +503,4 @@ window.validateCreditPayment = validateCreditPayment;
 window.closeCreditSelection = closeCreditSelection;
 window.normalize = normalize;
 
-console.log('🛒 Mixmax Minimarket - Admin Credits chargé (épuré)');
+console.log('🛒 Mixmax Minimarket - Admin Credits chargé (sans sélection multiple)');
